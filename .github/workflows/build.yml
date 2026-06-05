@@ -23,6 +23,13 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
+      - name: Setup Android SDK
+        run: |
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-35" "build-tools;35.0.0" --channel=0
+
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
@@ -33,10 +40,10 @@ jobs:
           cache-read-only: ${{ github.event_name == 'pull_request' }}
 
       - name: Build Debug APK
-        run: ./gradlew assembleDebug
+        run: ./gradlew assembleDebug --stacktrace
 
       - name: Build Release APK
-        run: ./gradlew assembleRelease
+        run: ./gradlew assembleRelease --stacktrace
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
@@ -44,6 +51,7 @@ jobs:
           name: nav-ble-relay-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 7
+        if: success()
 
       - name: Upload Release APK
         uses: actions/upload-artifact@v4
@@ -51,3 +59,4 @@ jobs:
           name: nav-ble-relay-release
           path: app/build/outputs/apk/release/app-release-unsigned.apk
           retention-days: 7
+        if: success()

@@ -21,7 +21,7 @@
     <application
         android:name=".NavBleApp"
         android:allowBackup="true"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@drawable/ic_navigation"
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.NavBleRelay"
