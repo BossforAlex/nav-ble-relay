@@ -29,32 +29,65 @@ MAX_FD="maximum"
 
 warn () {
     echo "$*"
-}
+} >&2
 
 die () {
     echo
     echo "$*"
     echo
     exit 1
-}
+} >&2
 
-OS_NAME=$(uname -s)
-case "$OS_NAME" in
-    CYGWIN* | MINGW* | MSYS* )
-        CLASSPATH=$(cygpath --path --mixed "$APP_HOME"/gradle/wrapper/gradle-wrapper.jar)
-        ;;
-    * )
-        CLASSPATH="$APP_HOME/gradle/wrapper/gradle-wrapper.jar"
-        ;;
-esac
+# Determine the Java command to use to start the JVM.
+if [ -n "$JAVA_HOME" ] ; then
+    if [ -x "$JAVA_HOME/jre/sh/java" ] ; then
+        JAVACMD="$JAVA_HOME/jre/sh/java"
+    else
+        JAVACMD="$JAVA_HOME/bin/java"
+    fi
+    if [ ! -x "$JAVACMD" ] ; then
+        die "ERROR: JAVA_HOME is set to an invalid directory: $JAVA_HOME
 
-WRAPPER_LAUNCHER=org.gradle.wrapper.GradleWrapperMain
+Please set the JAVA_HOME variable in your environment to match the
+location of your Java installation."
+    fi
+else
+    JAVACMD="java"
+    which java >/dev/null 2>&1 || die "ERROR: JAVA_HOME is not set and no 'java' command could be found in your PATH.
 
-exec "$JAVACMD" \
-    $DEFAULT_JVM_OPTS \
-    $JAVA_OPTS \
-    $GRADLE_OPTS \
-    "-Dorg.gradle.appname=$APP_BASE_NAME" \
-    -classpath "$CLASSPATH" \
-    "$WRAPPER_LAUNCHER" \
-    "$@"
+Please set the JAVA_HOME variable in your environment to match the
+location of your Java installation."
+fi
+
+# Increase the maximum file descriptors if we can.
+if [ "$(uname)" = "Darwin" ] && [ "$MAX_FD" = "maximum" ]; then
+    MAX_FD_LIMIT=$(ulimit -H -n)
+    if [ $? -eq 0 ]; then
+        if [ "$MAX_FD" = "maximum" -o "$MAX_FD" = "max" ]; then
+            MAX_FD="$MAX_FD_LIMIT"
+        fi
+        ulimit -n $MAX_FD
+        if [ $? -ne 0 ]; then
+            warn "Could not set maximum file descriptor limit: $MAX_FD"
+        fi
+    else
+        warn "Could not query maximum file descriptor limit: $MAX_FD_LIMIT"
+    fi
+fi
+
+# For Darwin, add options to specify how the application appears in the dock
+if [ "$(uname)" = "Darwin" ]; then
+    GRADLE_OPTS="$GRADLE_OPTS -Xdock:name=$APP_NAME -Xdock:icon=$APP_HOME/media/gradle.icns"
+fi
+
+# For Cygwin or MSYS, switch paths to Windows format before running java
+if [ "$(uname -s | grep -c CYGWIN)" -gt 0 ] || [ "$(uname -s | grep -c MSYS)" -gt 0 ] ; then
+    APP_HOME=$(cygpath --path --mixed "$APP_HOME")
+    CLASSPATH=$(cygpath --path --mixed "$CLASSPATH")
+    JAVACMD=$(cygpath --unix "$JAVACMD")
+fi
+
+# Collect all arguments for the java command
+eval set -- $DEFAULT_JVM_OPTS $JAVA_OPTS $GRADLE_OPTS "\"-Dorg.gradle.appname=$APP_BASE_NAME\"" -classpath "\"$APP_HOME/gradle/wrapper/gradle-wrapper.jar\"" org.gradle.wrapper.GradleWrapperMain "$@"
+
+exec "$JAVACMD" "$@"

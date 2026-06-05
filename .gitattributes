@@ -1,0 +1,15 @@
+# 自动检测文本文件，规范化行尾
+* text=auto
+
+# Shell 脚本和 Gradle Wrapper 必须使用 LF，否则在 Linux (CI) 上无法执行
+gradlew text eol=lf
+*.sh text eol=lf
+
+# Windows 批处理文件使用 CRLF
+*.bat text eol=crlf
+
+# 二进制文件不做转换
+gradle/wrapper/gradle-wrapper.jar binary
+*.png binary
+*.jpg binary
+*.ico binary
