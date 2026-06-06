@@ -1,13 +1,17 @@
 package com.navblerelay.ble
 
+import android.Manifest
 import android.bluetooth.*
 import android.bluetooth.le.AdvertiseCallback
 import android.bluetooth.le.AdvertiseData
 import android.bluetooth.le.AdvertiseSettings
 import android.bluetooth.le.BluetoothLeAdvertiser
 import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.ParcelUuid
 import android.util.Log
+import androidx.core.content.ContextCompat
 import java.util.UUID
 import org.json.JSONObject
 import com.navblerelay.protocol.*
@@ -57,6 +61,12 @@ class BleGattServer(private val context: Context) {
             return
         }
 
+        // 检查蓝牙权限
+        if (!hasBluetoothPermission()) {
+            onError?.invoke("缺少蓝牙权限")
+            return
+        }
+
         gattServer = bluetoothManager.openGattServer(context, gattServerCallback)
         addService()
         startAdvertising()
@@ -68,6 +78,15 @@ class BleGattServer(private val context: Context) {
         gattServer?.close()
         connectedDevice = null
         Log.i(TAG, "BLE GATT Server stopped")
+    }
+
+    private fun hasBluetoothPermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) ==
+                    PackageManager.PERMISSION_GRANTED
+        } else {
+            true
+        }
     }
 
     // ── 添加 GATT 服务 ───────────────────────────────────

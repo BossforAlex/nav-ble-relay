@@ -1,5 +1,6 @@
 package com.navblerelay.service
 
+import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -8,9 +9,11 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
+import androidx.core.content.ContextCompat
 import com.navblerelay.MainActivity
 import com.navblerelay.R
 import com.navblerelay.ble.BleGattServer
@@ -47,35 +50,49 @@ class NavBleService : Service() {
         }
     }
 
-    private lateinit var broadcastReceiver: NavBroadcastReceiver
-    private lateinit var bleServer: BleGattServer
+    private var broadcastReceiver: NavBroadcastReceiver? = null
+    private var bleServer: BleGattServer? = null
 
     override fun onCreate() {
         super.onCreate()
         Log.i(TAG, "Service onCreate")
 
-        createNotificationChannel()
-        startForeground(NOTIFICATION_ID, createNotification())
+        try {
+            createNotificationChannel()
+            startForeground(NOTIFICATION_ID, createNotification())
+            Log.i(TAG, "Foreground notification started")
 
-        bleServer = BleGattServer(this)
-        bleServer.onDeviceConnected = { device ->
-            Log.i(TAG, "ESP32 connected: ${device.address}")
-            updateNotification("已连接: ${device.address}")
-        }
-        bleServer.onDeviceDisconnected = { device ->
-            Log.i(TAG, "ESP32 disconnected: ${device.address}")
-            updateNotification("等待 ESP32 连接...")
-        }
-        bleServer.onError = { msg ->
-            Log.e(TAG, "BLE error: $msg")
-        }
+            bleServer = BleGattServer(this).apply {
+                onDeviceConnected = { device ->
+                    Log.i(TAG, "ESP32 connected: ${device.address}")
+                    updateNotification("已连接: ${device.address}")
+                }
+                onDeviceDisconnected = { device ->
+                    Log.i(TAG, "ESP32 disconnected: ${device.address}")
+                    updateNotification("等待 ESP32 连接...")
+                }
+                onError = { msg ->
+                    Log.e(TAG, "BLE error: $msg")
+                }
+            }
 
-        bleServer.start()
-        registerBroadcastReceiver()
+            // 检查蓝牙权限后再启动 BLE
+            if (hasBluetoothPermission()) {
+                bleServer?.start()
+            } else {
+                Log.w(TAG, "缺少 BLUETOOTH_CONNECT 权限，跳过 BLE 启动")
+            }
+
+            registerBroadcastReceiver()
+        } catch (e: Exception) {
+            Log.e(TAG, "Service onCreate failed", e)
+            stopSelf()
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
+            Log.i(TAG, "Received stop action")
             stopSelf()
             return START_NOT_STICKY
         }
@@ -87,25 +104,38 @@ class NavBleService : Service() {
     override fun onDestroy() {
         Log.i(TAG, "Service onDestroy")
         try {
-            unregisterReceiver(broadcastReceiver)
+            broadcastReceiver?.let { unregisterReceiver(it) }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to unregister receiver", e)
         }
-        bleServer.stop()
+        try {
+            bleServer?.stop()
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to stop BLE server", e)
+        }
         super.onDestroy()
+    }
+
+    private fun hasBluetoothPermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) ==
+                    PackageManager.PERMISSION_GRANTED
+        } else {
+            true
+        }
     }
 
     // ── 广播注册 ─────────────────────────────────────────
 
     private fun registerBroadcastReceiver() {
-        broadcastReceiver = NavBroadcastReceiver()
+        val receiver = NavBroadcastReceiver()
 
-        broadcastReceiver.onGuideInfo = { info: GuideInfo ->
-            bleServer.sendGuideInfo(info)
+        receiver.onGuideInfo = { info: GuideInfo ->
+            bleServer?.sendGuideInfo(info)
         }
 
-        broadcastReceiver.onMapState = { state, crossMap ->
-            bleServer.sendMapState(state, crossMap)
+        receiver.onMapState = { state, crossMap ->
+            bleServer?.sendMapState(state, crossMap)
             when (state) {
                 AmapAutoProtocol.STATE_START_NAV -> updateNotification("导航中...")
                 AmapAutoProtocol.STATE_STOP_NAV -> updateNotification("导航已结束")
@@ -113,23 +143,25 @@ class NavBleService : Service() {
             }
         }
 
-        broadcastReceiver.onDriveWay = { info ->
-            bleServer.sendDriveWay(info)
+        receiver.onDriveWay = { info ->
+            bleServer?.sendDriveWay(info)
         }
 
-        broadcastReceiver.onTmcSegment = { info ->
-            bleServer.sendTmcSegment(info)
+        receiver.onTmcSegment = { info ->
+            bleServer?.sendTmcSegment(info)
         }
 
-        broadcastReceiver.onLocation = { info ->
-            bleServer.sendLocation(info)
+        receiver.onLocation = { info ->
+            bleServer?.sendLocation(info)
         }
+
+        broadcastReceiver = receiver
 
         val filter = IntentFilter(AmapAutoProtocol.ACTION_SEND)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(broadcastReceiver, filter, Context.RECEIVER_EXPORTED)
+            registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
         } else {
-            registerReceiver(broadcastReceiver, filter)
+            registerReceiver(receiver, filter)
         }
         Log.i(TAG, "BroadcastReceiver registered for ${AmapAutoProtocol.ACTION_SEND}")
     }
@@ -184,31 +216,42 @@ class NavBleService : Service() {
     }
 
     private fun updateNotification(text: String) {
-        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        val pendingIntent = PendingIntent.getActivity(
-            this, 0,
-            Intent(this, MainActivity::class.java),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+        try {
+            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val pendingIntent = PendingIntent.getActivity(
+                this, 0,
+                Intent(this, MainActivity::class.java),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
 
-        val notification = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            Notification.Builder(this, CHANNEL_ID)
-                .setContentTitle("导航BLE转发")
-                .setContentText(text)
-                .setSmallIcon(R.drawable.ic_navigation)
-                .setContentIntent(pendingIntent)
-                .setOngoing(true)
-                .build()
-        } else {
-            @Suppress("DEPRECATION")
-            Notification.Builder(this)
-                .setContentTitle("导航BLE转发")
-                .setContentText(text)
-                .setSmallIcon(R.drawable.ic_navigation)
-                .setContentIntent(pendingIntent)
-                .setOngoing(true)
-                .build()
+            val stopIntent = PendingIntent.getService(
+                this, 0,
+                Intent(this, NavBleService::class.java).apply { action = ACTION_STOP },
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            val notification = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                Notification.Builder(this, CHANNEL_ID)
+                    .setContentTitle("导航BLE转发")
+                    .setContentText(text)
+                    .setSmallIcon(R.drawable.ic_navigation)
+                    .setContentIntent(pendingIntent)
+                    .addAction(android.R.drawable.ic_media_pause, "停止", stopIntent)
+                    .setOngoing(true)
+                    .build()
+            } else {
+                @Suppress("DEPRECATION")
+                Notification.Builder(this)
+                    .setContentTitle("导航BLE转发")
+                    .setContentText(text)
+                    .setSmallIcon(R.drawable.ic_navigation)
+                    .setContentIntent(pendingIntent)
+                    .setOngoing(true)
+                    .build()
+            }
+            manager.notify(NOTIFICATION_ID, notification)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to update notification", e)
         }
-        manager.notify(NOTIFICATION_ID, notification)
     }
 }

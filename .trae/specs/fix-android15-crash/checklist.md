@@ -1,4 +1,4 @@
-- [ ] AndroidManifest.xml 添加了 `neverForLocation` 和 `maxSdkVersion="30"` 到位置权限
-- [ ] MainActivity 在启动服务前请求运行时权限
-- [ ] NavBleService 广播接收器使用 `RECEIVER_EXPORTED`
-- [ ] 编译通过，无语法错误
+- [x] AndroidManifest.xml 添加了 `neverForLocation` 和 `maxSdkVersion="30"` 到位置权限
+- [x] MainActivity 在启动服务前请求运行时权限
+- [x] NavBleService 广播接收器使用 `RECEIVER_EXPORTED`
+- [x] 编译通过，无语法错误
