@@ -6,19 +6,15 @@
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" android:usesPermissionFlags="neverForLocation" />
-    <!-- Android 12 以下蓝牙需要精确位置权限 -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30" />
-    <!-- 前台服务 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
-    <!-- 通知 -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- 高德地图车机版广播接收权限 -->
     <uses-permission android:name="com.autonavi.amapauto.permission.RECEIVE_BROADCAST" />
     <uses-permission android:name="autonavi.permission.RECEIVE_BROADCAST" />
 
-    <!-- 要求 BLE 硬件支持 -->
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />
     <uses-feature android:name="android.hardware.location" android:required="false" />
 
@@ -46,16 +42,24 @@
             android:exported="false"
             android:foregroundServiceType="connectedDevice" />
 
-        <!-- 静态注册广播接收器：Android 14+ 必须通过 manifest 声明才能接收跨应用广播 -->
+        <!-- 静态注册广播接收器 -->
         <receiver
             android:name=".receiver.NavBroadcastReceiver"
-            android:exported="true">
+            android:exported="true"
+            android:priority="999">
             <intent-filter>
                 <action android:name="AUTONAVI_STANDARD_BROADCAST_SEND" />
                 <action android:name="AUTONAVI_STANDARD_BROADCAST_RECV" />
                 <action android:name="com.autonavi.amapauto.ACTION_STANDARD_BROADCAST_SEND" />
                 <action android:name="com.autonavi.amapauto.ACTION_STANDARD_BROADCAST_RECV" />
                 <action android:name="com.autonavi.amapauto.action.STANDARD_BROADCAST" />
+                <action android:name="com.autonavi.action.STANDARD_BROADCAST_SEND" />
+                <action android:name="com.autonavi.minimap.ACTION_BROADCAST" />
+                <action android:name="com.autonavi.minimap.action.NAV_INFO" />
+                <action android:name="com.autonavi.action.NAVIGATION_INFO" />
+                <action android:name="AUTONAVI_NAVI_INFO" />
+                <action android:name="AutonaviNaviInfo" />
+                <action android:name="com.autonavi.autonavi.action.BROADCAST_SEND" />
             </intent-filter>
         </receiver>
 

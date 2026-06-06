@@ -1,434 +1,384 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="#F5F5F5">
+    android:background="#F5F5F5"
+    android:padding="12dp"
+    android:focusableInTouchMode="true">
 
-    <!-- 顶部标题栏 -->
+    <!-- 标题栏 -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:padding="12dp"
-        android:background="#1976D2">
-
-        <ImageView
-            android:layout_width="36dp"
-            android:layout_height="36dp"
-            android:src="@drawable/ic_navigation"
-            android:contentDescription="@string/app_name"
-            android:tint="#FFFFFF" />
+        android:paddingBottom="8dp">
 
         <TextView
-            android:id="@+id/title_text"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="导航BLE转发"
-            android:textSize="18sp"
-            android:textColor="#FFFFFF"
-            android:textStyle="bold"
-            android:layout_marginStart="12dp" />
-    </LinearLayout>
-
-    <!-- 控制按钮卡片 -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:padding="12dp"
-        android:background="#FFFFFF">
-
-        <Button
-            android:id="@+id/btn_start"
-            android:layout_width="0dp"
-            android:layout_height="48dp"
-            android:layout_weight="1"
-            android:text="启动服务"
-            android:textSize="16sp"
-            android:textColor="#FFFFFF"
-            android:backgroundTint="#1976D2" />
-
-        <Button
-            android:id="@+id/btn_stop"
-            android:layout_width="0dp"
-            android:layout_height="48dp"
-            android:layout_weight="1"
-            android:text="停止服务"
-            android:textSize="16sp"
-            android:textColor="#FFFFFF"
-            android:backgroundTint="#F44336"
-            android:layout_marginStart="12dp" />
-    </LinearLayout>
-
-    <!-- 状态栏 -->
-    <LinearLayout
-        android:id="@+id/status_bar"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:paddingStart="16dp"
-        android:paddingEnd="16dp"
-        android:paddingTop="8dp"
-        android:paddingBottom="4dp"
-        android:background="#E3F2FD"
-        android:gravity="center_vertical">
+            android:text="NavBleRelay 导航仪表盘"
+            android:textSize="20sp"
+            android:textColor="#212121"
+            android:textStyle="bold" />
 
         <View
             android:id="@+id/status_dot"
-            android:layout_width="12dp"
-            android:layout_height="12dp"
-            android:background="@drawable/status_dot_red" />
+            android:layout_width="14dp"
+            android:layout_height="14dp"
+            android:background="@drawable/status_dot_red"
+            android:layout_marginEnd="6dp" />
 
         <TextView
             android:id="@+id/status_text"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="服务未启动"
-            android:textSize="14sp"
-            android:textColor="#37474F"
-            android:layout_marginStart="8dp" />
-
-        <TextView
-            android:id="@+id/ble_status"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="BLE: 未连接"
-            android:textSize="12sp"
-            android:textColor="#90A4AE" />
+            android:text="未启动"
+            android:textSize="13sp"
+            android:textColor="#757575" />
     </LinearLayout>
 
-    <!-- 广播接收状态 -->
+    <!-- 控制卡片 -->
     <LinearLayout
-        android:id="@+id/broadcast_status_bar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:paddingStart="16dp"
-        android:paddingEnd="16dp"
-        android:paddingTop="0dp"
-        android:paddingBottom="8dp"
-        android:background="#E3F2FD"
-        android:gravity="center_vertical"
-        android:visibility="gone">
+        android:orientation="vertical"
+        android:background="@drawable/card_bg"
+        android:elevation="4dp"
+        android:layout_marginBottom="10dp">
 
         <TextView
-            android:id="@+id/broadcast_status"
-            android:layout_width="match_parent"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="广播: 等待中..."
-            android:textSize="11sp"
-            android:textColor="#78909C" />
+            android:text="🔧 服务控制"
+            android:textSize="14sp"
+            android:textColor="#616161"
+            android:textStyle="bold"
+            android:layout_marginBottom="10dp" />
+
+        <Button
+            android:id="@+id/btn_start"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:text="▶ 启动服务"
+            android:textSize="16sp"
+            android:textColor="#FFFFFF"
+            android:backgroundTint="#4CAF50"
+            app:cornerRadius="8dp"
+            android:layout_marginBottom="8dp" />
+
+        <Button
+            android:id="@+id/btn_stop"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:text="⏹ 停止服务"
+            android:textSize="16sp"
+            android:textColor="#FFFFFF"
+            android:backgroundTint="#F44336"
+            app:cornerRadius="8dp"
+            android:enabled="false" />
+
+        <Button
+            android:id="@+id/btn_test_broadcast"
+            android:layout_width="match_parent"
+            android:layout_height="40dp"
+            android:text="📡 测试广播接收"
+            android:textSize="14sp"
+            android:textColor="#FFFFFF"
+            android:backgroundTint="#FF9800"
+            app:cornerRadius="8dp"
+            android:layout_marginTop="6dp"
+            android:visibility="gone" />
     </LinearLayout>
 
-    <!-- 滚动内容区 -->
+    <!-- 状态卡片 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="@drawable/card_bg"
+        android:elevation="3dp"
+        android:layout_marginBottom="10dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="📊 连接状态"
+            android:textSize="14sp"
+            android:textColor="#616161"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="BLE:"
+                android:textSize="13sp"
+                android:textColor="#757575"
+                android:layout_marginEnd="8dp" />
+
+            <TextView
+                android:id="@+id/ble_status"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="未连接"
+                android:textSize="13sp"
+                android:textColor="#90A4AE" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/broadcast_status_row"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="6dp"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="广播:"
+                android:textSize="13sp"
+                android:textColor="#757575"
+                android:layout_marginEnd="8dp" />
+
+            <TextView
+                android:id="@+id/broadcast_status"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="等待中..."
+                android:textSize="13sp"
+                android:textColor="#FFC107" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- 数据卡片容器 -->
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:padding="12dp">
+        android:fillViewport="false"
+        android:overScrollMode="ifContentScrolls">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
-            <!-- 导航状态卡片 -->
+            <!-- 卡片: 导航状态 -->
             <LinearLayout
-                android:id="@+id/card_map_state"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:background="#FFFFFF"
-                android:padding="16dp"
-                android:layout_marginBottom="12dp"
-                android:elevation="1dp">
+                android:background="@drawable/card_bg"
+                android:elevation="2dp"
+                android:layout_marginBottom="8dp">
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="● 导航状态"
+                    android:text="🗺 导航状态"
                     android:textSize="14sp"
                     android:textColor="#1976D2"
                     android:textStyle="bold"
-                    android:layout_marginBottom="8dp" />
-
-                <TextView
-                    android:id="@+id/tv_map_state"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="等待导航数据..."
-                    android:textSize="16sp"
-                    android:textColor="#212121" />
-            </LinearLayout>
-
-            <!-- 引导信息卡片 -->
-            <LinearLayout
-                android:id="@+id/card_guide"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:background="#FFFFFF"
-                android:padding="16dp"
-                android:layout_marginBottom="12dp"
-                android:elevation="1dp">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="● 引导信息"
-                    android:textSize="14sp"
-                    android:textColor="#1976D2"
-                    android:textStyle="bold"
-                    android:layout_marginBottom="8dp" />
-
-                <TextView
-                    android:id="@+id/tv_road"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="当前道路: --"
-                    android:textSize="15sp"
-                    android:textColor="#212121"
-                    android:layout_marginBottom="4dp" />
-
-                <TextView
-                    android:id="@+id/tv_turn"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="转向: --"
-                    android:textSize="14sp"
-                    android:textColor="#424242"
-                    android:layout_marginBottom="4dp" />
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:layout_marginTop="4dp">
-
-                    <TextView
-                        android:id="@+id/tv_distance"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="剩余: --"
-                        android:textSize="13sp"
-                        android:textColor="#616161" />
-
-                    <TextView
-                        android:id="@+id/tv_time"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="预计: --"
-                        android:textSize="13sp"
-                        android:textColor="#616161" />
-                </LinearLayout>
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:layout_marginTop="4dp">
-
-                    <TextView
-                        android:id="@+id/tv_speed"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="车速: --"
-                        android:textSize="13sp"
-                        android:textColor="#616161" />
-
-                    <TextView
-                        android:id="@+id/tv_speed_limit"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="限速: --"
-                        android:textSize="13sp"
-                        android:textColor="#616161" />
-                </LinearLayout>
-
-                <TextView
-                    android:id="@+id/tv_road_type"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="道路类型: --"
-                    android:textSize="13sp"
-                    android:textColor="#616161"
-                    android:layout_marginTop="4dp" />
-            </LinearLayout>
-
-            <!-- 电子眼及服务区卡片 -->
-            <LinearLayout
-                android:id="@+id/card_camera"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:background="#FFFFFF"
-                android:padding="16dp"
-                android:layout_marginBottom="12dp"
-                android:elevation="1dp">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="● 电子眼 &amp; 服务区"
-                    android:textSize="14sp"
-                    android:textColor="#1976D2"
-                    android:textStyle="bold"
-                    android:layout_marginBottom="8dp" />
-
-                <TextView
-                    android:id="@+id/tv_camera"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="电子眼: --"
-                    android:textSize="14sp"
-                    android:textColor="#212121"
-                    android:layout_marginBottom="4dp" />
-
-                <TextView
-                    android:id="@+id/tv_traffic_light"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="红绿灯: --"
-                    android:textSize="13sp"
-                    android:textColor="#616161"
-                    android:layout_marginBottom="4dp" />
-
-                <TextView
-                    android:id="@+id/tv_sapa"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="服务区: --"
-                    android:textSize="13sp"
-                    android:textColor="#616161" />
-            </LinearLayout>
-
-            <!-- 车道信息卡片 -->
-            <LinearLayout
-                android:id="@+id/card_lane"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:background="#FFFFFF"
-                android:padding="16dp"
-                android:layout_marginBottom="12dp"
-                android:elevation="1dp">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="● 车道指引"
-                    android:textSize="14sp"
-                    android:textColor="#1976D2"
-                    android:textStyle="bold"
-                    android:layout_marginBottom="8dp" />
-
-                <TextView
-                    android:id="@+id/tv_lane"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="等待数据..."
-                    android:textSize="14sp"
-                    android:textColor="#212121" />
-            </LinearLayout>
-
-            <!-- 路况光柱图卡片 -->
-            <LinearLayout
-                android:id="@+id/card_tmc"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:background="#FFFFFF"
-                android:padding="16dp"
-                android:layout_marginBottom="12dp"
-                android:elevation="1dp">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="● 路况光柱"
-                    android:textSize="14sp"
-                    android:textColor="#1976D2"
-                    android:textStyle="bold"
-                    android:layout_marginBottom="8dp" />
-
-                <TextView
-                    android:id="@+id/tv_tmc"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="等待数据..."
-                    android:textSize="13sp"
-                    android:textColor="#212121" />
-
-                <LinearLayout
-                    android:id="@+id/tmc_bar"
-                    android:layout_width="match_parent"
-                    android:layout_height="20dp"
-                    android:orientation="horizontal"
-                    android:layout_marginTop="8dp"
-                    android:background="#E0E0E0" />
-            </LinearLayout>
-
-            <!-- 定位信息卡片 -->
-            <LinearLayout
-                android:id="@+id/card_location"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:background="#FFFFFF"
-                android:padding="16dp"
-                android:layout_marginBottom="12dp"
-                android:elevation="1dp">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="● 定位信息"
-                    android:textSize="14sp"
-                    android:textColor="#1976D2"
-                    android:textStyle="bold"
-                    android:layout_marginBottom="8dp" />
+                    android:layout_marginBottom="6dp" />
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="horizontal">
-
-                    <TextView
-                        android:id="@+id/tv_bearing"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="方位角: --"
-                        android:textSize="13sp"
-                        android:textColor="#616161" />
-
-                    <TextView
-                        android:id="@+id/tv_accuracy"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="精度: --"
-                        android:textSize="13sp"
-                        android:textColor="#616161" />
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="状态:" android:textSize="13sp" android:textColor="#757575" />
+                    <TextView android:id="@+id/map_state" android:layout_width="0dp"
+                        android:layout_height="wrap_content" android:layout_weight="1"
+                        android:text="-" android:textSize="13sp" android:textColor="#212121"
+                        android:layout_marginStart="8dp" />
                 </LinearLayout>
 
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_marginTop="3dp">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="路口:" android:textSize="13sp" android:textColor="#757575" />
+                    <TextView android:id="@+id/cross_map" android:layout_width="0dp"
+                        android:layout_height="wrap_content" android:layout_weight="1"
+                        android:text="-" android:textSize="13sp" android:textColor="#212121"
+                        android:layout_marginStart="8dp" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- 卡片: 引导信息 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/card_bg"
+                android:elevation="2dp"
+                android:layout_marginBottom="8dp">
+
                 <TextView
-                    android:id="@+id/tv_provider"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="定位来源: --"
-                    android:textSize="12sp"
-                    android:textColor="#9E9E9E"
-                    android:layout_marginTop="4dp" />
+                    android:text="🧭 引导信息"
+                    android:textSize="14sp"
+                    android:textColor="#1976D2"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="6dp" />
+
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="当前道路:" android:textSize="13sp" android:textColor="#757575" />
+                    <TextView android:id="@+id/cur_road" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="-" android:textSize="13sp" android:textColor="#212121" android:layout_marginStart="8dp" />
+                </LinearLayout>
+
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="3dp">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="下一道路:" android:textSize="13sp" android:textColor="#757575" />
+                    <TextView android:id="@+id/next_road" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="-" android:textSize="13sp" android:textColor="#212121" android:layout_marginStart="8dp" />
+                </LinearLayout>
+
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="3dp">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="剩余距离:" android:textSize="13sp" android:textColor="#757575" />
+                    <TextView android:id="@+id/route_remain" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="-" android:textSize="13sp" android:textColor="#212121" android:layout_marginStart="8dp" />
+                </LinearLayout>
+
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="3dp">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="当前速度:" android:textSize="13sp" android:textColor="#757575" />
+                    <TextView android:id="@+id/cur_speed" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="-" android:textSize="13sp" android:textColor="#212121" android:layout_marginStart="8dp" />
+                </LinearLayout>
+
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="3dp">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="限速:" android:textSize="13sp" android:textColor="#757575" />
+                    <TextView android:id="@+id/limited_speed" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="-" android:textSize="13sp" android:textColor="#212121" android:layout_marginStart="8dp" />
+                </LinearLayout>
+
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="3dp">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="摄像头距离:" android:textSize="13sp" android:textColor="#757575" />
+                    <TextView android:id="@+id/camera_dist" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="-" android:textSize="13sp" android:textColor="#212121" android:layout_marginStart="8dp" />
+                </LinearLayout>
+
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="3dp">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="服务区:" android:textSize="13sp" android:textColor="#757575" />
+                    <TextView android:id="@+id/sapa_dist" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="-" android:textSize="13sp" android:textColor="#212121" android:layout_marginStart="8dp" />
+                </LinearLayout>
+
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="3dp">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="红绿灯:" android:textSize="13sp" android:textColor="#757575" />
+                    <TextView android:id="@+id/traffic_light" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="-" android:textSize="13sp" android:textColor="#212121" android:layout_marginStart="8dp" />
+                </LinearLayout>
             </LinearLayout>
+
+            <!-- 卡片: 车道指引 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/card_bg"
+                android:elevation="2dp"
+                android:layout_marginBottom="8dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="🛣 车道指引"
+                    android:textSize="14sp"
+                    android:textColor="#1976D2"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="6dp" />
+
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="车道数:" android:textSize="13sp" android:textColor="#757575" />
+                    <TextView android:id="@+id/drive_way_size" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="-" android:textSize="13sp" android:textColor="#212121" android:layout_marginStart="8dp" />
+                </LinearLayout>
+
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="3dp">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="车道详情:" android:textSize="13sp" android:textColor="#757575" />
+                    <TextView android:id="@+id/drive_way_detail" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="-" android:textSize="13sp" android:textColor="#212121" android:layout_marginStart="8dp" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- 卡片: 路况光柱 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/card_bg"
+                android:elevation="2dp"
+                android:layout_marginBottom="8dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="🚦 路况光柱"
+                    android:textSize="14sp"
+                    android:textColor="#1976D2"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="6dp" />
+
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="总距离:" android:textSize="13sp" android:textColor="#757575" />
+                    <TextView android:id="@+id/tmc_total" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="-" android:textSize="13sp" android:textColor="#212121" android:layout_marginStart="8dp" />
+                </LinearLayout>
+
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="3dp">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="剩余:" android:textSize="13sp" android:textColor="#757575" />
+                    <TextView android:id="@+id/tmc_remain" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="-" android:textSize="13sp" android:textColor="#212121" android:layout_marginStart="8dp" />
+                </LinearLayout>
+
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="3dp">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="段数:" android:textSize="13sp" android:textColor="#757575" />
+                    <TextView android:id="@+id/tmc_segments" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="-" android:textSize="13sp" android:textColor="#212121" android:layout_marginStart="8dp" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- 卡片: 定位信息 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/card_bg"
+                android:elevation="2dp"
+                android:layout_marginBottom="8dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="📍 定位信息"
+                    android:textSize="14sp"
+                    android:textColor="#1976D2"
+                    android:textStyle="bold"
+                    android:layout_marginBottom="6dp" />
+
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="速度:" android:textSize="13sp" android:textColor="#757575" />
+                    <TextView android:id="@+id/loc_speed" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="-" android:textSize="13sp" android:textColor="#212121" android:layout_marginStart="8dp" />
+                </LinearLayout>
+
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="3dp">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="方位:" android:textSize="13sp" android:textColor="#757575" />
+                    <TextView android:id="@+id/loc_bearing" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="-" android:textSize="13sp" android:textColor="#212121" android:layout_marginStart="8dp" />
+                </LinearLayout>
+
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="3dp">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="精度:" android:textSize="13sp" android:textColor="#757575" />
+                    <TextView android:id="@+id/loc_accuracy" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="-" android:textSize="13sp" android:textColor="#212121" android:layout_marginStart="8dp" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- 底部留白 -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="16dp" />
 
         </LinearLayout>
     </ScrollView>
