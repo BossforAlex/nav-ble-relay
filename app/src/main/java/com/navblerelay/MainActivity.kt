@@ -51,12 +51,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvProvider: TextView
 
     private val handler = Handler(Looper.getMainLooper())
-    private val refreshRunnable = object : Runnable {
-        override fun run() {
-            refreshUI()
-            handler.postDelayed(this, 1000)
-        }
-    }
+    private var needRefresh = false
 
     private val requiredPermissions = buildList {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -124,12 +119,23 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        handler.post(refreshRunnable)
+        NavDataHolder.onDataChanged = {
+            handler.removeCallbacks(checkRefreshRunnable)
+            handler.post(checkRefreshRunnable)
+        }
+        // 进入页面时立即刷新一次
+        handler.post { refreshUI() }
     }
 
     override fun onPause() {
         super.onPause()
-        handler.removeCallbacks(refreshRunnable)
+        NavDataHolder.onDataChanged = null
+        handler.removeCallbacks(checkRefreshRunnable)
+    }
+
+    // 防抖刷新：有数据变化时延迟 200ms 后再刷新，避免频繁更新
+    private val checkRefreshRunnable = Runnable {
+        refreshUI()
     }
 
     private fun hasAllPermissions(): Boolean {
@@ -149,8 +155,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun setServiceRunning(running: Boolean) {
         if (running) {
-            statusDot.setBackgroundResource(R.drawable.status_dot_green)
-            statusText.text = "服务运行中"
+            statusDot.setBackgroundResource(R.drawable.status_dot_yellow)
+            statusText.text = "服务运行中，等待BLE连接..."
             btnStart.isEnabled = false
             btnStop.isEnabled = true
         } else {
@@ -158,18 +164,28 @@ class MainActivity : AppCompatActivity() {
             statusText.text = "服务未启动"
             btnStart.isEnabled = true
             btnStop.isEnabled = false
+            bleStatus.text = "BLE: 未连接"
+            bleStatus.setTextColor(Color.parseColor("#90A4AE"))
             resetAllData()
         }
     }
 
     private fun refreshUI() {
         // BLE 连接状态
-        if (NavDataHolder.bleConnected) {
+        val isConnected = NavDataHolder.bleConnected
+        if (isConnected) {
+            statusDot.setBackgroundResource(R.drawable.status_dot_green)
             bleStatus.text = "BLE: 已连接"
             bleStatus.setTextColor(Color.parseColor("#4CAF50"))
-        } else {
+        } else if (btnStart.isEnabled) {
+            // 服务未启动
             bleStatus.text = "BLE: 未连接"
             bleStatus.setTextColor(Color.parseColor("#90A4AE"))
+        } else {
+            // 服务已启动但未连接
+            statusDot.setBackgroundResource(R.drawable.status_dot_yellow)
+            bleStatus.text = "BLE: 等待连接"
+            bleStatus.setTextColor(Color.parseColor("#FFC107"))
         }
 
         // 导航状态

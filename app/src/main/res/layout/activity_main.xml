@@ -39,8 +39,7 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:padding="12dp"
-        android:background="#FFFFFF"
-        android:elevation="2dp">
+        android:background="#FFFFFF">
 
         <Button
             android:id="@+id/btn_start"
