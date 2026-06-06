@@ -25,9 +25,18 @@ class NavBroadcastReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         val keyType = intent.getIntExtra("KEY_TYPE", -1)
-        if (keyType == -1) return
+        Log.i(TAG, "收到广播: action=${intent.action}, KEY_TYPE=$keyType")
 
-        Log.d(TAG, "Received broadcast: KEY_TYPE=$keyType")
+        if (keyType == -1) {
+            // 打印所有 extra 用于调试
+            val extras = intent.extras
+            if (extras != null) {
+                for (key in extras.keySet()) {
+                    Log.d(TAG, "  extra: $key = ${extras.get(key)}")
+                }
+            }
+            return
+        }
 
         when (keyType) {
             AmapAutoProtocol.KEY_GUIDE_INFO -> parseGuideInfo(intent)
