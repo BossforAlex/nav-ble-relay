@@ -127,7 +127,7 @@ class NavBleService : Service() {
 
         val filter = IntentFilter(AmapAutoProtocol.ACTION_SEND)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(broadcastReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+            registerReceiver(broadcastReceiver, filter, Context.RECEIVER_EXPORTED)
         } else {
             registerReceiver(broadcastReceiver, filter)
         }
