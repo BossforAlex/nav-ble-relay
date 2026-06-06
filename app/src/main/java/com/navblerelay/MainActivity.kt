@@ -107,6 +107,7 @@ class MainActivity : AppCompatActivity() {
         tvProvider = findViewById(R.id.tv_provider)
 
         btnStart.setOnClickListener {
+            Toast.makeText(this, "正在启动服务...", Toast.LENGTH_SHORT).show()
             if (hasAllPermissions()) {
                 startService()
             } else {
@@ -115,6 +116,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         btnStop.setOnClickListener {
+            Toast.makeText(this, "正在停止服务...", Toast.LENGTH_SHORT).show()
             NavBleService.stop(this)
             setServiceRunning(false)
         }
@@ -137,8 +139,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startService() {
-        NavBleService.start(this)
-        setServiceRunning(true)
+        try {
+            NavBleService.start(this)
+            setServiceRunning(true)
+        } catch (e: Exception) {
+            Toast.makeText(this, "启动失败: ${e.message}", Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun setServiceRunning(running: Boolean) {
