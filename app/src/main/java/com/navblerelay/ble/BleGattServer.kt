@@ -8,6 +8,7 @@ import android.bluetooth.le.BluetoothLeAdvertiser
 import android.content.Context
 import android.os.ParcelUuid
 import android.util.Log
+import java.util.UUID
 import org.json.JSONObject
 import com.navblerelay.protocol.*
 

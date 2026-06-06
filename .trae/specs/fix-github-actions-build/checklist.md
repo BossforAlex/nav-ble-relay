@@ -1,0 +1,6 @@
+- [x] `actions/checkout` 使用 v4 版本
+- [x] `actions/setup-java` 使用 v4 版本
+- [x] `actions/upload-artifact` 使用 v4 版本
+- [x] `gradle/actions/setup-gradle` 使用 v4 版本
+- [x] Android SDK 安装使用 `android-actions/setup-android@v3`，不再依赖手动 sdkmanager 命令
+- [x] 工作流 YAML 语法正确，无格式错误
