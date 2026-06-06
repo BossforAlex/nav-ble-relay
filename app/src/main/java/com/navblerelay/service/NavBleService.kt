@@ -168,13 +168,36 @@ class NavBleService : Service() {
 
         broadcastReceiver = receiver
 
-        val filter = IntentFilter(AmapAutoProtocol.ACTION_SEND)
+        // 注册所有已知的高德广播 Action
+        val filter = IntentFilter()
+        for (action in NavBroadcastReceiver.ALL_ACTIONS) {
+            filter.addAction(action)
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
         } else {
             registerReceiver(receiver, filter)
         }
-        Log.i(TAG, "BroadcastReceiver registered for ${AmapAutoProtocol.ACTION_SEND}")
+        Log.i(TAG, "BroadcastReceiver registered for ${NavBroadcastReceiver.ALL_ACTIONS.size} actions")
+
+        // 发送自检广播，验证接收器是否正常工作
+        sendSelfTestBroadcast()
+    }
+
+    /**
+     * 发送一条自检广播，验证 NavBroadcastReceiver 是否已正确注册。
+     * 如果 logcat 中出现 "收到广播: action=com.navblerelay.SELF_TEST" 则说明接收器正常。
+     */
+    private fun sendSelfTestBroadcast() {
+        try {
+            val intent = Intent("com.navblerelay.SELF_TEST")
+            intent.setPackage(packageName)
+            intent.putExtra("KEY_TYPE", 0) // 用 0 作为自检标记，不会触发任何解析
+            sendBroadcast(intent)
+            Log.i(TAG, "自检广播已发送，检查 logcat 中 NavBroadcastReceiver 是否收到")
+        } catch (e: Exception) {
+            Log.w(TAG, "自检广播发送失败", e)
+        }
     }
 
     // ── 通知栏 ──────────────────────────────────────────

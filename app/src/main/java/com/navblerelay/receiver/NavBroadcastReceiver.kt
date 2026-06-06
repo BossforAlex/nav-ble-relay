@@ -10,11 +10,25 @@ import org.json.JSONObject
 /**
  * 监听高德地图车机版发送的导航广播
  * Action: AUTONAVI_STANDARD_BROADCAST_SEND
+ *
+ * 支持两种使用方式：
+ * 1. 代码动态注册（通过回调传递给 Service）
+ * 2. Manifest 静态注册（直接写入 NavDataHolder 单例）
  */
 class NavBroadcastReceiver : BroadcastReceiver() {
 
     companion object {
         private const val TAG = "NavBroadcastReceiver"
+
+        /** 所有已知的高德广播 Action */
+        val ALL_ACTIONS = arrayOf(
+            "AUTONAVI_STANDARD_BROADCAST_SEND",
+            "AUTONAVI_STANDARD_BROADCAST_RECV",
+            "com.autonavi.amapauto.ACTION_STANDARD_BROADCAST_SEND",
+            "com.autonavi.amapauto.ACTION_STANDARD_BROADCAST_RECV",
+            "com.autonavi.amapauto.action.STANDARD_BROADCAST",
+            "com.autonavi.action.STANDARD_BROADCAST_SEND"
+        )
     }
 
     var onGuideInfo: ((GuideInfo) -> Unit)? = null
@@ -25,7 +39,12 @@ class NavBroadcastReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         val keyType = intent.getIntExtra("KEY_TYPE", -1)
-        Log.i(TAG, "收到广播: action=${intent.action}, KEY_TYPE=$keyType")
+        val action = intent.action ?: "null"
+        Log.i(TAG, "收到广播: action=$action, KEY_TYPE=$keyType")
+
+        // 记录接收时间
+        NavDataHolder.broadcastReceived = System.currentTimeMillis()
+        NavDataHolder.lastBroadcastAction = action
 
         if (keyType == -1) {
             // 打印所有 extra 用于调试
@@ -83,7 +102,12 @@ class NavBroadcastReceiver : BroadcastReceiver() {
             curPointNum = intent.getIntExtra("CUR_POINT_NUM", 0)
         )
         Log.d(TAG, "GuideInfo parsed: icon=${info.icon}, road=${info.curRoadName}")
-        onGuideInfo?.invoke(info)
+        // 回调优先；若无回调（manifest 注册），则直接写入单例
+        if (onGuideInfo != null) {
+            onGuideInfo?.invoke(info)
+        } else {
+            NavDataHolder.guideInfo = info
+        }
     }
 
     // ── 地图状态 ─────────────────────────────────────────
@@ -94,7 +118,12 @@ class NavBroadcastReceiver : BroadcastReceiver() {
             intent.getIntExtra("EXTRA_CROSS_MAP", 0).toString()
         } else null
         Log.d(TAG, "MapState: state=$state")
-        onMapState?.invoke(state, crossMap)
+        if (onMapState != null) {
+            onMapState?.invoke(state, crossMap)
+        } else {
+            NavDataHolder.mapState = state
+            NavDataHolder.crossMap = crossMap
+        }
     }
 
     // ── 车道信息 ─────────────────────────────────────────
@@ -118,7 +147,12 @@ class NavBroadcastReceiver : BroadcastReceiver() {
                     )
                 }
             }
-            onDriveWay?.invoke(DriveWayInfo(enabled, size, lanes))
+            val info = DriveWayInfo(enabled, size, lanes)
+            if (onDriveWay != null) {
+                onDriveWay?.invoke(info)
+            } else {
+                NavDataHolder.driveWayInfo = info
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to parse drive way", e)
         }
@@ -145,16 +179,19 @@ class NavBroadcastReceiver : BroadcastReceiver() {
                     )
                 }
             }
-            onTmcSegment?.invoke(
-                TmcSegmentInfo(
-                    enabled = root.optBoolean("tmc_segment_enabled", false),
-                    size = root.optInt("tmc_segment_size", 0),
-                    totalDistance = root.optInt("total_distance", 0),
-                    residualDistance = root.optInt("residual_distance", 0),
-                    finishDistance = root.optInt("finish_distance", 0),
-                    segments = segments
-                )
+            val info = TmcSegmentInfo(
+                enabled = root.optBoolean("tmc_segment_enabled", false),
+                size = root.optInt("tmc_segment_size", 0),
+                totalDistance = root.optInt("total_distance", 0),
+                residualDistance = root.optInt("residual_distance", 0),
+                finishDistance = root.optInt("finish_distance", 0),
+                segments = segments
             )
+            if (onTmcSegment != null) {
+                onTmcSegment?.invoke(info)
+            } else {
+                NavDataHolder.tmcSegmentInfo = info
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to parse TMC segment", e)
         }
@@ -166,15 +203,18 @@ class NavBroadcastReceiver : BroadcastReceiver() {
         val json = intent.getStringExtra("EXTRA_LOCATION_INFO") ?: return
         try {
             val root = JSONObject(json)
-            onLocation?.invoke(
-                LocationInfo(
-                    bearing = root.optInt("bearing", 0),
-                    accuracy = root.optInt("accuracy", 0),
-                    speed = root.optInt("speed", 0),
-                    time = root.optLong("time", 0L),
-                    provider = root.optString("provider", "")
-                )
+            val info = LocationInfo(
+                bearing = root.optInt("bearing", 0),
+                accuracy = root.optInt("accuracy", 0),
+                speed = root.optInt("speed", 0),
+                time = root.optLong("time", 0L),
+                provider = root.optString("provider", "")
             )
+            if (onLocation != null) {
+                onLocation?.invoke(info)
+            } else {
+                NavDataHolder.locationInfo = info
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to parse location", e)
         }

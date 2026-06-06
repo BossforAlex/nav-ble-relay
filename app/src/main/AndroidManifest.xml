@@ -14,6 +14,10 @@
     <!-- 通知 -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- 高德地图车机版广播接收权限 -->
+    <uses-permission android:name="com.autonavi.amapauto.permission.RECEIVE_BROADCAST" />
+    <uses-permission android:name="autonavi.permission.RECEIVE_BROADCAST" />
+
     <!-- 要求 BLE 硬件支持 -->
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />
     <uses-feature android:name="android.hardware.location" android:required="false" />
@@ -41,6 +45,19 @@
             android:name=".service.NavBleService"
             android:exported="false"
             android:foregroundServiceType="connectedDevice" />
+
+        <!-- 静态注册广播接收器：Android 14+ 必须通过 manifest 声明才能接收跨应用广播 -->
+        <receiver
+            android:name=".receiver.NavBroadcastReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="AUTONAVI_STANDARD_BROADCAST_SEND" />
+                <action android:name="AUTONAVI_STANDARD_BROADCAST_RECV" />
+                <action android:name="com.autonavi.amapauto.ACTION_STANDARD_BROADCAST_SEND" />
+                <action android:name="com.autonavi.amapauto.ACTION_STANDARD_BROADCAST_RECV" />
+                <action android:name="com.autonavi.amapauto.action.STANDARD_BROADCAST" />
+            </intent-filter>
+        </receiver>
 
     </application>
 

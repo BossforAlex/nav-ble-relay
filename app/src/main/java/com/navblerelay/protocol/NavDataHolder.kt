@@ -62,6 +62,20 @@ object NavDataHolder {
             notifyChange()
         }
 
+    /** 最近一次收到广播的时间戳（用于判断广播接收器是否正常工作） */
+    var broadcastReceived: Long = 0L
+        set(value) {
+            field = value
+            notifyChange()
+        }
+
+    /** 最近一次收到广播的 Action */
+    var lastBroadcastAction: String? = null
+        set(value) {
+            field = value
+            notifyChange()
+        }
+
     /** 数据变化回调（主线程调用） */
     var onDataChanged: (() -> Unit)? = null
 

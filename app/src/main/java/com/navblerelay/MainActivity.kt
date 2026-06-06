@@ -29,6 +29,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var statusDot: View
     private lateinit var statusText: TextView
     private lateinit var bleStatus: TextView
+    private lateinit var broadcastStatus: TextView
+    private lateinit var broadcastStatusBar: View
     private lateinit var btnStart: Button
     private lateinit var btnStop: Button
 
@@ -80,6 +82,8 @@ class MainActivity : AppCompatActivity() {
         statusDot = findViewById(R.id.status_dot)
         statusText = findViewById(R.id.status_text)
         bleStatus = findViewById(R.id.ble_status)
+        broadcastStatus = findViewById(R.id.broadcast_status)
+        broadcastStatusBar = findViewById(R.id.broadcast_status_bar)
         btnStart = findViewById(R.id.btn_start)
         btnStop = findViewById(R.id.btn_stop)
 
@@ -159,6 +163,8 @@ class MainActivity : AppCompatActivity() {
             statusText.text = "服务运行中，等待BLE连接..."
             btnStart.isEnabled = false
             btnStop.isEnabled = true
+            broadcastStatusBar.visibility = View.VISIBLE
+            broadcastStatus.text = "广播: 监听中..."
         } else {
             statusDot.setBackgroundResource(R.drawable.status_dot_red)
             statusText.text = "服务未启动"
@@ -166,6 +172,7 @@ class MainActivity : AppCompatActivity() {
             btnStop.isEnabled = false
             bleStatus.text = "BLE: 未连接"
             bleStatus.setTextColor(Color.parseColor("#90A4AE"))
+            broadcastStatusBar.visibility = View.GONE
             resetAllData()
         }
     }
@@ -186,6 +193,18 @@ class MainActivity : AppCompatActivity() {
             statusDot.setBackgroundResource(R.drawable.status_dot_yellow)
             bleStatus.text = "BLE: 等待连接"
             bleStatus.setTextColor(Color.parseColor("#FFC107"))
+        }
+
+        // 广播接收状态
+        val lastBroadcast = NavDataHolder.broadcastReceived
+        if (lastBroadcast > 0) {
+            val secAgo = (System.currentTimeMillis() - lastBroadcast) / 1000
+            val agoStr = if (secAgo < 60) "${secAgo}秒前" else "${secAgo / 60}分钟前"
+            broadcastStatus.text = "广播: 已收到 ($agoStr)"
+            broadcastStatus.setTextColor(Color.parseColor("#4CAF50"))
+        } else if (!btnStart.isEnabled) {
+            broadcastStatus.text = "广播: 等待高德发送..."
+            broadcastStatus.setTextColor(Color.parseColor("#FFC107"))
         }
 
         // 导航状态

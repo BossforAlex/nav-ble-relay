@@ -72,7 +72,7 @@
         android:paddingStart="16dp"
         android:paddingEnd="16dp"
         android:paddingTop="8dp"
-        android:paddingBottom="8dp"
+        android:paddingBottom="4dp"
         android:background="#E3F2FD"
         android:gravity="center_vertical">
 
@@ -99,6 +99,29 @@
             android:text="BLE: 未连接"
             android:textSize="12sp"
             android:textColor="#90A4AE" />
+    </LinearLayout>
+
+    <!-- 广播接收状态 -->
+    <LinearLayout
+        android:id="@+id/broadcast_status_bar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingTop="0dp"
+        android:paddingBottom="8dp"
+        android:background="#E3F2FD"
+        android:gravity="center_vertical"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/broadcast_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="广播: 等待中..."
+            android:textSize="11sp"
+            android:textColor="#78909C" />
     </LinearLayout>
 
     <!-- 滚动内容区 -->
