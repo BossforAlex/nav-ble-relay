@@ -19,6 +19,7 @@ import com.navblerelay.R
 import com.navblerelay.ble.BleGattServer
 import com.navblerelay.protocol.AmapAutoProtocol
 import com.navblerelay.protocol.*
+import com.navblerelay.protocol.NavDataHolder
 import com.navblerelay.receiver.NavBroadcastReceiver
 
 /**
@@ -65,10 +66,14 @@ class NavBleService : Service() {
             bleServer = BleGattServer(this).apply {
                 onDeviceConnected = { device ->
                     Log.i(TAG, "ESP32 connected: ${device.address}")
+                    NavDataHolder.bleConnected = true
+                    NavDataHolder.bleDeviceAddress = device.address
                     updateNotification("已连接: ${device.address}")
                 }
                 onDeviceDisconnected = { device ->
                     Log.i(TAG, "ESP32 disconnected: ${device.address}")
+                    NavDataHolder.bleConnected = false
+                    NavDataHolder.bleDeviceAddress = null
                     updateNotification("等待 ESP32 连接...")
                 }
                 onError = { msg ->
@@ -131,10 +136,13 @@ class NavBleService : Service() {
         val receiver = NavBroadcastReceiver()
 
         receiver.onGuideInfo = { info: GuideInfo ->
+            NavDataHolder.guideInfo = info
             bleServer?.sendGuideInfo(info)
         }
 
         receiver.onMapState = { state, crossMap ->
+            NavDataHolder.mapState = state
+            NavDataHolder.crossMap = crossMap
             bleServer?.sendMapState(state, crossMap)
             when (state) {
                 AmapAutoProtocol.STATE_START_NAV -> updateNotification("导航中...")
@@ -144,14 +152,17 @@ class NavBleService : Service() {
         }
 
         receiver.onDriveWay = { info ->
+            NavDataHolder.driveWayInfo = info
             bleServer?.sendDriveWay(info)
         }
 
         receiver.onTmcSegment = { info ->
+            NavDataHolder.tmcSegmentInfo = info
             bleServer?.sendTmcSegment(info)
         }
 
         receiver.onLocation = { info ->
+            NavDataHolder.locationInfo = info
             bleServer?.sendLocation(info)
         }
 
