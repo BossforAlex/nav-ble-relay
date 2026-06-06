@@ -5,15 +5,14 @@
     android:orientation="vertical"
     android:background="#F5F5F5">
 
-    <!-- 顶部控制栏 -->
+    <!-- 顶部标题栏 -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical"
         android:padding="12dp"
-        android:background="#1976D2"
-        android:elevation="4dp">
+        android:background="#1976D2">
 
         <ImageView
             android:layout_width="36dp"
@@ -32,23 +31,37 @@
             android:textColor="#FFFFFF"
             android:textStyle="bold"
             android:layout_marginStart="12dp" />
+    </LinearLayout>
+
+    <!-- 控制按钮卡片 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="12dp"
+        android:background="#FFFFFF"
+        android:elevation="2dp">
 
         <Button
             android:id="@+id/btn_start"
-            android:layout_width="80dp"
-            android:layout_height="36dp"
-            android:text="启动"
-            android:textSize="13sp"
-            android:minHeight="0dp" />
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:text="启动服务"
+            android:textSize="16sp"
+            android:textColor="#FFFFFF"
+            android:backgroundTint="#1976D2" />
 
         <Button
             android:id="@+id/btn_stop"
-            android:layout_width="80dp"
-            android:layout_height="36dp"
-            android:text="停止"
-            android:textSize="13sp"
-            android:minHeight="0dp"
-            android:layout_marginStart="8dp" />
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:text="停止服务"
+            android:textSize="16sp"
+            android:textColor="#FFFFFF"
+            android:backgroundTint="#F44336"
+            android:layout_marginStart="12dp" />
     </LinearLayout>
 
     <!-- 状态栏 -->
@@ -66,8 +79,8 @@
 
         <View
             android:id="@+id/status_dot"
-            android:layout_width="10dp"
-            android:layout_height="10dp"
+            android:layout_width="12dp"
+            android:layout_height="12dp"
             android:background="@drawable/status_dot_red" />
 
         <TextView
