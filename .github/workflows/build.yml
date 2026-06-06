@@ -7,6 +7,9 @@ on:
     branches: [main, master]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Build APK
@@ -44,7 +47,7 @@ jobs:
         run: ./gradlew assembleRelease --stacktrace
         if: success()
 
-      - name: Upload Debug APK
+      - name: Upload Debug APK (Artifact)
         uses: actions/upload-artifact@v4
         with:
           name: nav-ble-relay-debug
@@ -52,10 +55,20 @@ jobs:
           retention-days: 7
         if: success()
 
-      - name: Upload Release APK
+      - name: Upload Release APK (Artifact)
         uses: actions/upload-artifact@v4
         with:
           name: nav-ble-relay-release
           path: app/build/outputs/apk/release/app-release-unsigned.apk
           retention-days: 7
         if: success()
+
+      - name: Publish APK to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Build ${{ github.run_number }}"
+          tag_name: "build-${{ github.run_number }}"
+          files: app/build/outputs/apk/debug/app-debug.apk
+          prerelease: true
+          fail_on_unmatched_files: true
+        if: success() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
