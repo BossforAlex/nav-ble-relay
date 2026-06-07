@@ -40,10 +40,9 @@
             android:text="未启动"
             android:textSize="11sp"
             android:textColor="#666"
-            android:background="#1A1D23"
+            android:background="@drawable/card_bg_dark"
             android:paddingHorizontal="10dp"
-            android:paddingVertical="4dp"
-            android:background="@drawable/card_bg_dark" />
+            android:paddingVertical="4dp" />
     </LinearLayout>
 
     <!-- 控制卡片 -->
