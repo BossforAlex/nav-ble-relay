@@ -9,25 +9,41 @@ import org.json.JSONObject
 
 /**
  * 监听高德地图车机版发送的导航广播
- * Action: AUTONAVI_STANDARD_BROADCAST_SEND
  *
- * 支持两种使用方式：
+ * 支持两种注册方式：
  * 1. 代码动态注册（通过回调传递给 Service）
  * 2. Manifest 静态注册（直接写入 NavDataHolder 单例）
+ *
+ * 兼容车机版 (AmapAuto) 和手机版 (Amap) 可能的广播 Action。
  */
 class NavBroadcastReceiver : BroadcastReceiver() {
 
     companion object {
-        private const val TAG = "NavBroadcastReceiver"
+        private const val TAG = "NavBR"
 
-        /** 所有已知的高德广播 Action */
+        /** 广播 Action：自检测试用 */
+        const val SELF_TEST_ACTION = "com.navblerelay.SELF_TEST"
+
+        /** 所有已知的高德广播 Action + 自检 Action */
         val ALL_ACTIONS = arrayOf(
+            // ── 车机版标准 Action (AmapAuto) ──
             "AUTONAVI_STANDARD_BROADCAST_SEND",
             "AUTONAVI_STANDARD_BROADCAST_RECV",
+            // ── 包名前缀 Action ──
             "com.autonavi.amapauto.ACTION_STANDARD_BROADCAST_SEND",
             "com.autonavi.amapauto.ACTION_STANDARD_BROADCAST_RECV",
             "com.autonavi.amapauto.action.STANDARD_BROADCAST",
-            "com.autonavi.action.STANDARD_BROADCAST_SEND"
+            "com.autonavi.action.STANDARD_BROADCAST_SEND",
+            // ── 高德地图手机版可能的广播 Action ──
+            "com.autonavi.minimap.ACTION_BROADCAST",
+            "com.autonavi.minimap.action.NAV_INFO",
+            "com.autonavi.action.NAVIGATION_INFO",
+            // ── 通用高德广播 ──
+            "AUTONAVI_NAVI_INFO",
+            "AutonaviNaviInfo",
+            "com.autonavi.autonavi.action.BROADCAST_SEND",
+            // ── 自检 Action（用于验证接收器是否正常工作）──
+            SELF_TEST_ACTION
         )
     }
 
@@ -38,21 +54,30 @@ class NavBroadcastReceiver : BroadcastReceiver() {
     var onLocation: ((LocationInfo) -> Unit)? = null
 
     override fun onReceive(context: Context, intent: Intent) {
-        val keyType = intent.getIntExtra("KEY_TYPE", -1)
         val action = intent.action ?: "null"
-        Log.i(TAG, "收到广播: action=$action, KEY_TYPE=$keyType")
+        val pkg = intent.`package` ?: "-"
+
+        // 兼容多种 KEY_TYPE 大小写
+        var keyType = intent.getIntExtra("KEY_TYPE", -1)
+        if (keyType == -1) keyType = intent.getIntExtra("key_type", -1)
+        if (keyType == -1) keyType = intent.getIntExtra("EXTRA_KEY_TYPE", -1)
+
+        Log.i(TAG, "📡 action=$action pkg=$pkg KEY_TYPE=$keyType")
 
         // 记录接收时间
         NavDataHolder.broadcastReceived = System.currentTimeMillis()
         NavDataHolder.lastBroadcastAction = action
 
         if (keyType == -1) {
-            // 打印所有 extra 用于调试
             val extras = intent.extras
-            if (extras != null) {
+            if (extras != null && !extras.isEmpty) {
+                val sb = StringBuilder("extras: ")
                 for (key in extras.keySet()) {
-                    Log.d(TAG, "  extra: $key = ${extras.get(key)}")
+                    sb.append("$key=${extras.get(key)}, ")
                 }
+                Log.i(TAG, sb.toString().trimEnd(',', ' '))
+            } else {
+                Log.d(TAG, "空广播/无 extras")
             }
             return
         }
@@ -63,7 +88,9 @@ class NavBroadcastReceiver : BroadcastReceiver() {
             AmapAutoProtocol.KEY_DRIVE_WAY -> parseDriveWay(intent)
             AmapAutoProtocol.KEY_TMC_SEGMENT -> parseTmcSegment(intent)
             AmapAutoProtocol.KEY_LOCATION -> parseLocation(intent)
-            else -> Log.d(TAG, "Unhandled KEY_TYPE: $keyType")
+            else -> {
+                Log.i(TAG, "未知 KEY_TYPE=$keyType, extras keys=${intent.extras?.keySet()}")
+            }
         }
     }
 
@@ -71,25 +98,33 @@ class NavBroadcastReceiver : BroadcastReceiver() {
 
     private fun parseGuideInfo(intent: Intent) {
         val info = GuideInfo(
-            type = intent.getIntExtra("TYPE", 0),
-            curRoadName = intent.getStringExtra("CUR_ROAD_NAME") ?: "",
-            nextRoadName = intent.getStringExtra("NEXT_ROAD_NAME") ?: "",
+            type = intent.getIntExtra("TYPE", intent.getIntExtra("type", 0)),
+            curRoadName = intent.getStringExtra("CUR_ROAD_NAME")
+                ?: intent.getStringExtra("curRoadName") ?: "",
+            nextRoadName = intent.getStringExtra("NEXT_ROAD_NAME")
+                ?: intent.getStringExtra("nextRoadName") ?: "",
             nextNextRoadName = intent.getStringExtra("NEXT_NEXT_ROAD_NAME") ?: "",
-            icon = intent.getIntExtra("ICON", -1),
+            icon = intent.getIntExtra("ICON", intent.getIntExtra("icon", -1)),
             nextNextTurnIcon = intent.getIntExtra("NEXT_NEXT_TURN_ICON", -1),
-            routeRemainDis = intent.getIntExtra("ROUTE_REMAIN_DIS", 0),
-            routeRemainTime = intent.getIntExtra("ROUTE_REMAIN_TIME", 0),
+            routeRemainDis = intent.getIntExtra("ROUTE_REMAIN_DIS",
+                intent.getIntExtra("routeRemainDis", 0)),
+            routeRemainTime = intent.getIntExtra("ROUTE_REMAIN_TIME",
+                intent.getIntExtra("routeRemainTime", 0)),
             routeAllDis = intent.getIntExtra("ROUTE_ALL_DIS", 0),
             routeAllTime = intent.getIntExtra("ROUTE_ALL_TIME", 0),
             segRemainDis = intent.getIntExtra("SEG_REMAIN_DIS", 0),
             segRemainTime = intent.getIntExtra("SEG_REMAIN_TIME", 0),
             nextSegRemainDis = intent.getIntExtra("NEXT_SEG_REMAIN_DIS", 0),
-            carLatitude = intent.getDoubleExtra("CAR_LATITUDE", 0.0),
-            carLongitude = intent.getDoubleExtra("CAR_LONGITUDE", 0.0),
-            carDirection = intent.getIntExtra("CAR_DIRECTION", 0),
-            curSpeed = intent.getIntExtra("CUR_SPEED", 0),
-            limitedSpeed = intent.getIntExtra("LIMITED_SPEED", 0),
-            roadType = intent.getIntExtra("ROAD_TYPE", -1),
+            carLatitude = intent.getDoubleExtra("CAR_LATITUDE",
+                intent.getDoubleExtra("carLatitude", 0.0)),
+            carLongitude = intent.getDoubleExtra("CAR_LONGITUDE",
+                intent.getDoubleExtra("carLongitude", 0.0)),
+            carDirection = intent.getIntExtra("CAR_DIRECTION",
+                intent.getIntExtra("carDirection", 0)),
+            curSpeed = intent.getIntExtra("CUR_SPEED", intent.getIntExtra("curSpeed", 0)),
+            limitedSpeed = intent.getIntExtra("LIMITED_SPEED",
+                intent.getIntExtra("limitedSpeed", 0)),
+            roadType = intent.getIntExtra("ROAD_TYPE", intent.getIntExtra("roadType", -1)),
             cameraDist = intent.getIntExtra("CAMERA_DIST", 0),
             cameraType = intent.getIntExtra("CAMERA_TYPE", -1),
             cameraSpeed = intent.getIntExtra("CAMERA_SPEED", 0),
@@ -101,82 +136,63 @@ class NavBroadcastReceiver : BroadcastReceiver() {
             curSegNum = intent.getIntExtra("CUR_SEG_NUM", 0),
             curPointNum = intent.getIntExtra("CUR_POINT_NUM", 0)
         )
-        Log.d(TAG, "GuideInfo parsed: icon=${info.icon}, road=${info.curRoadName}")
-        // 回调优先；若无回调（manifest 注册），则直接写入单例
-        if (onGuideInfo != null) {
-            onGuideInfo?.invoke(info)
-        } else {
-            NavDataHolder.guideInfo = info
-        }
+        Log.i(TAG, "GuideInfo: road=${info.curRoadName} speed=${info.curSpeed} icon=${info.icon}")
+        if (onGuideInfo != null) onGuideInfo?.invoke(info)
+        else NavDataHolder.guideInfo = info
     }
 
     // ── 地图状态 ─────────────────────────────────────────
 
     private fun parseMapState(intent: Intent) {
-        val state = intent.getIntExtra("EXTRA_STATE", -1)
+        val state = intent.getIntExtra("EXTRA_STATE", intent.getIntExtra("extraState", -1))
         val crossMap = if (intent.hasExtra("EXTRA_CROSS_MAP")) {
             intent.getIntExtra("EXTRA_CROSS_MAP", 0).toString()
         } else null
-        Log.d(TAG, "MapState: state=$state")
-        if (onMapState != null) {
-            onMapState?.invoke(state, crossMap)
-        } else {
-            NavDataHolder.mapState = state
-            NavDataHolder.crossMap = crossMap
-        }
+        Log.i(TAG, "MapState: state=$state")
+        if (onMapState != null) onMapState?.invoke(state, crossMap)
+        else { NavDataHolder.mapState = state; NavDataHolder.crossMap = crossMap }
     }
 
-    // ── 车道信息 ─────────────────────────────────────────
+    // ── 车道/路况/定位解析（同之前） ────────────────────
 
     private fun parseDriveWay(intent: Intent) {
         val json = intent.getStringExtra("EXTRA_DRIVE_WAY") ?: return
         try {
             val root = JSONObject(json)
-            val enabled = root.optBoolean("drive_way_enabled", false)
-            val size = root.optInt("drive_way_size", 0)
             val lanes = mutableListOf<LaneInfo>()
-            val infoArr = root.optJSONArray("drive_way_info")
-            if (infoArr != null) {
-                for (i in 0 until infoArr.length()) {
-                    val item = infoArr.getJSONObject(i)
-                    lanes.add(
-                        LaneInfo(
-                            number = item.optString("drive_way_number", "0").toIntOrNull() ?: 0,
-                            backIcon = item.optString("drive_way_lane_Back_icon", "-1").toIntOrNull() ?: -1
-                        )
-                    )
+            root.optJSONArray("drive_way_info")?.let { arr ->
+                for (i in 0 until arr.length()) {
+                    val item = arr.getJSONObject(i)
+                    lanes.add(LaneInfo(
+                        number = item.optString("drive_way_number", "0").toIntOrNull() ?: 0,
+                        backIcon = item.optString("drive_way_lane_Back_icon", "-1").toIntOrNull() ?: -1
+                    ))
                 }
             }
-            val info = DriveWayInfo(enabled, size, lanes)
-            if (onDriveWay != null) {
-                onDriveWay?.invoke(info)
-            } else {
-                NavDataHolder.driveWayInfo = info
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to parse drive way", e)
-        }
+            val info = DriveWayInfo(
+                enabled = root.optBoolean("drive_way_enabled", false),
+                size = root.optInt("drive_way_size", 0),
+                lanes = lanes
+            )
+            if (onDriveWay != null) onDriveWay?.invoke(info)
+            else NavDataHolder.driveWayInfo = info
+        } catch (e: Exception) { Log.e(TAG, "DriveWay parse", e) }
     }
-
-    // ── 路况光柱图 ───────────────────────────────────────
 
     private fun parseTmcSegment(intent: Intent) {
         val json = intent.getStringExtra("EXTRA_TMC_SEGMENT") ?: return
         try {
             val root = JSONObject(json)
             val segments = mutableListOf<TmcSegment>()
-            val infoArr = root.optJSONArray("tmc_info")
-            if (infoArr != null) {
-                for (i in 0 until infoArr.length()) {
-                    val item = infoArr.getJSONObject(i)
-                    segments.add(
-                        TmcSegment(
-                            number = item.optString("tmc_segment_number", "0").toIntOrNull() ?: 0,
-                            status = item.optString("tmc_status", "-1").toIntOrNull() ?: -1,
-                            distance = item.optString("tmc_segment_distance", "0").toIntOrNull() ?: 0,
-                            percent = item.optString("tmc_segment_percent", "0")
-                        )
-                    )
+            root.optJSONArray("tmc_info")?.let { arr ->
+                for (i in 0 until arr.length()) {
+                    val item = arr.getJSONObject(i)
+                    segments.add(TmcSegment(
+                        number = item.optString("tmc_segment_number", "0").toIntOrNull() ?: 0,
+                        status = item.optString("tmc_status", "-1").toIntOrNull() ?: -1,
+                        distance = item.optString("tmc_segment_distance", "0").toIntOrNull() ?: 0,
+                        percent = item.optString("tmc_segment_percent", "0")
+                    ))
                 }
             }
             val info = TmcSegmentInfo(
@@ -187,17 +203,10 @@ class NavBroadcastReceiver : BroadcastReceiver() {
                 finishDistance = root.optInt("finish_distance", 0),
                 segments = segments
             )
-            if (onTmcSegment != null) {
-                onTmcSegment?.invoke(info)
-            } else {
-                NavDataHolder.tmcSegmentInfo = info
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to parse TMC segment", e)
-        }
+            if (onTmcSegment != null) onTmcSegment?.invoke(info)
+            else NavDataHolder.tmcSegmentInfo = info
+        } catch (e: Exception) { Log.e(TAG, "TMC parse", e) }
     }
-
-    // ── 定位信息 ─────────────────────────────────────────
 
     private fun parseLocation(intent: Intent) {
         val json = intent.getStringExtra("EXTRA_LOCATION_INFO") ?: return
@@ -210,13 +219,8 @@ class NavBroadcastReceiver : BroadcastReceiver() {
                 time = root.optLong("time", 0L),
                 provider = root.optString("provider", "")
             )
-            if (onLocation != null) {
-                onLocation?.invoke(info)
-            } else {
-                NavDataHolder.locationInfo = info
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to parse location", e)
-        }
+            if (onLocation != null) onLocation?.invoke(info)
+            else NavDataHolder.locationInfo = info
+        } catch (e: Exception) { Log.e(TAG, "Location parse", e) }
     }
 }

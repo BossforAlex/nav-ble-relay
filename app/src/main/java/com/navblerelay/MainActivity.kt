@@ -1,371 +1,326 @@
 package com.navblerelay
 
 import android.Manifest
+import android.content.*
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.view.Gravity
+import android.util.Log
 import android.view.View
 import android.widget.Button
-import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
-import com.navblerelay.protocol.AmapAutoProtocol
-import com.navblerelay.protocol.DriveWayInfo
-import com.navblerelay.protocol.GuideInfo
-import com.navblerelay.protocol.LocationInfo
 import com.navblerelay.protocol.NavDataHolder
-import com.navblerelay.protocol.TmcSegmentInfo
+import com.navblerelay.receiver.NavBroadcastReceiver
 import com.navblerelay.service.NavBleService
 
 class MainActivity : AppCompatActivity() {
 
+    companion object {
+        private const val TAG = "MainActivity"
+        private val CYAN = Color.parseColor("#00D4FF")
+        private val AMBER = Color.parseColor("#FFB300")
+        private val RED = Color.parseColor("#F44336")
+        private val GREEN = Color.parseColor("#4CAF50")
+        private val GRAY = Color.parseColor("#555555")
+        private val WHITE = Color.parseColor("#EAEAEA")
+    }
+
     private lateinit var statusDot: View
     private lateinit var statusText: TextView
     private lateinit var bleStatus: TextView
+    private lateinit var broadcastStatusRow: View
     private lateinit var broadcastStatus: TextView
-    private lateinit var broadcastStatusBar: View
     private lateinit var btnStart: Button
     private lateinit var btnStop: Button
+    private lateinit var btnTestBroadcast: Button
 
-    private lateinit var tvMapState: TextView
-    private lateinit var tvRoad: TextView
-    private lateinit var tvTurn: TextView
-    private lateinit var tvDistance: TextView
-    private lateinit var tvTime: TextView
-    private lateinit var tvSpeed: TextView
-    private lateinit var tvSpeedLimit: TextView
-    private lateinit var tvRoadType: TextView
-    private lateinit var tvCamera: TextView
-    private lateinit var tvTrafficLight: TextView
-    private lateinit var tvSapa: TextView
-    private lateinit var tvLane: TextView
-    private lateinit var tvTmc: TextView
-    private lateinit var tmcBar: LinearLayout
-    private lateinit var tvBearing: TextView
-    private lateinit var tvAccuracy: TextView
-    private lateinit var tvProvider: TextView
+    private lateinit var mapState: TextView
+    private lateinit var crossMap: TextView
+    private lateinit var curRoad: TextView
+    private lateinit var nextRoad: TextView
+    private lateinit var routeRemain: TextView
+    private lateinit var curSpeed: TextView
+    private lateinit var limitedSpeed: TextView
+    private lateinit var cameraDist: TextView
+    private lateinit var sapaDist: TextView
+    private lateinit var trafficLight: TextView
+    private lateinit var driveWaySize: TextView
+    private lateinit var driveWayDetail: TextView
+    private lateinit var tmcTotal: TextView
+    private lateinit var tmcRemain: TextView
+    private lateinit var tmcSegments: TextView
+    private lateinit var locSpeed: TextView
+    private lateinit var locBearing: TextView
+    private lateinit var locAccuracy: TextView
 
     private val handler = Handler(Looper.getMainLooper())
-    private var needRefresh = false
-
-    private val requiredPermissions = buildList {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            add(Manifest.permission.BLUETOOTH_CONNECT)
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            add(Manifest.permission.POST_NOTIFICATIONS)
-        }
-    }
+    private var checkRefreshRunnable: Runnable? = null
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) { grants ->
-        val allGranted = grants.values.all { it }
-        if (allGranted) {
-            startService()
-        } else {
-            Toast.makeText(this, "需要蓝牙和通知权限才能启动服务", Toast.LENGTH_LONG).show()
-        }
+    ) { results ->
+        val allGranted = results.values.all { it }
+        if (allGranted) Log.i(TAG, "All permissions granted")
+        else Toast.makeText(this, "Some permissions denied", Toast.LENGTH_SHORT).show()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-
-        statusDot = findViewById(R.id.status_dot)
-        statusText = findViewById(R.id.status_text)
-        bleStatus = findViewById(R.id.ble_status)
-        broadcastStatus = findViewById(R.id.broadcast_status)
-        broadcastStatusBar = findViewById(R.id.broadcast_status_bar)
-        btnStart = findViewById(R.id.btn_start)
-        btnStop = findViewById(R.id.btn_stop)
-
-        tvMapState = findViewById(R.id.tv_map_state)
-        tvRoad = findViewById(R.id.tv_road)
-        tvTurn = findViewById(R.id.tv_turn)
-        tvDistance = findViewById(R.id.tv_distance)
-        tvTime = findViewById(R.id.tv_time)
-        tvSpeed = findViewById(R.id.tv_speed)
-        tvSpeedLimit = findViewById(R.id.tv_speed_limit)
-        tvRoadType = findViewById(R.id.tv_road_type)
-        tvCamera = findViewById(R.id.tv_camera)
-        tvTrafficLight = findViewById(R.id.tv_traffic_light)
-        tvSapa = findViewById(R.id.tv_sapa)
-        tvLane = findViewById(R.id.tv_lane)
-        tvTmc = findViewById(R.id.tv_tmc)
-        tmcBar = findViewById(R.id.tmc_bar)
-        tvBearing = findViewById(R.id.tv_bearing)
-        tvAccuracy = findViewById(R.id.tv_accuracy)
-        tvProvider = findViewById(R.id.tv_provider)
-
-        btnStart.setOnClickListener {
-            Toast.makeText(this, "正在启动服务...", Toast.LENGTH_SHORT).show()
-            if (hasAllPermissions()) {
-                startService()
-            } else {
-                permissionLauncher.launch(requiredPermissions.toTypedArray())
-            }
-        }
-
-        btnStop.setOnClickListener {
-            Toast.makeText(this, "正在停止服务...", Toast.LENGTH_SHORT).show()
-            NavBleService.stop(this)
-            setServiceRunning(false)
-        }
+        initViews()
+        setupListeners()
+        setupDataObserver()
+        requestPermissionsIfNeeded()
     }
 
     override fun onResume() {
         super.onResume()
-        NavDataHolder.onDataChanged = {
-            handler.removeCallbacks(checkRefreshRunnable)
-            handler.post(checkRefreshRunnable)
-        }
-        // 进入页面时立即刷新一次
-        handler.post { refreshUI() }
-    }
-
-    override fun onPause() {
-        super.onPause()
-        NavDataHolder.onDataChanged = null
-        handler.removeCallbacks(checkRefreshRunnable)
-    }
-
-    // 防抖刷新：有数据变化时延迟 200ms 后再刷新，避免频繁更新
-    private val checkRefreshRunnable = Runnable {
+        updateServiceState()
         refreshUI()
     }
 
-    private fun hasAllPermissions(): Boolean {
-        return requiredPermissions.all {
+    private fun initViews() {
+        statusDot = findViewById(R.id.status_dot)
+        statusText = findViewById(R.id.status_text)
+        bleStatus = findViewById(R.id.ble_status)
+        broadcastStatusRow = findViewById(R.id.broadcast_status_row)
+        broadcastStatus = findViewById(R.id.broadcast_status)
+        btnStart = findViewById(R.id.btn_start)
+        btnStop = findViewById(R.id.btn_stop)
+        btnTestBroadcast = findViewById(R.id.btn_test_broadcast)
+
+        mapState = findViewById(R.id.map_state)
+        crossMap = findViewById(R.id.cross_map)
+        curRoad = findViewById(R.id.cur_road)
+        nextRoad = findViewById(R.id.next_road)
+        routeRemain = findViewById(R.id.route_remain)
+        curSpeed = findViewById(R.id.cur_speed)
+        limitedSpeed = findViewById(R.id.limited_speed)
+        cameraDist = findViewById(R.id.camera_dist)
+        sapaDist = findViewById(R.id.sapa_dist)
+        trafficLight = findViewById(R.id.traffic_light)
+        driveWaySize = findViewById(R.id.drive_way_size)
+        driveWayDetail = findViewById(R.id.drive_way_detail)
+        tmcTotal = findViewById(R.id.tmc_total)
+        tmcRemain = findViewById(R.id.tmc_remain)
+        tmcSegments = findViewById(R.id.tmc_segments)
+        locSpeed = findViewById(R.id.loc_speed)
+        locBearing = findViewById(R.id.loc_bearing)
+        locAccuracy = findViewById(R.id.loc_accuracy)
+    }
+
+    private fun setupListeners() {
+        btnStart.setOnClickListener {
+            if (!hasRequiredPermissions()) {
+                requestPermissionsIfNeeded()
+                Toast.makeText(this, "Grant permissions first", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            try {
+                NavBleService.start(this)
+                setServiceRunning(true)
+            } catch (e: Exception) {
+                Log.e(TAG, "Start service failed", e)
+                Toast.makeText(this, "Failed: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        btnStop.setOnClickListener {
+            NavBleService.stop(this)
+            setServiceRunning(false)
+        }
+
+        btnTestBroadcast.setOnClickListener {
+            val intent = Intent(NavBroadcastReceiver.SELF_TEST_ACTION)
+            intent.setPackage(packageName)
+            intent.putExtra("KEY_TYPE", 0)
+            sendBroadcast(intent)
+            Log.i(TAG, "Manual test broadcast sent")
+            Toast.makeText(this, "Test broadcast sent. Check logcat: adb logcat -s NavBR:V", Toast.LENGTH_LONG).show()
+
+            handler.postDelayed({
+                if (NavDataHolder.broadcastReceived > 0) {
+                    val ago = (System.currentTimeMillis() - NavDataHolder.broadcastReceived) / 1000
+                    broadcastStatus.text = "RECEIVED (${ago}s ago)"
+                    broadcastStatus.setTextColor(GREEN)
+                    Toast.makeText(this, "Self-test PASSED!", Toast.LENGTH_SHORT).show()
+                } else {
+                    broadcastStatus.text = "NOT RECEIVED"
+                    broadcastStatus.setTextColor(RED)
+                    Toast.makeText(this, "Self-test FAILED. Check logcat.", Toast.LENGTH_LONG).show()
+                }
+            }, 1500)
+        }
+    }
+
+    private fun setupDataObserver() {
+        NavDataHolder.onDataChanged = { scheduleRefresh() }
+    }
+
+    private fun scheduleRefresh() {
+        checkRefreshRunnable?.let { handler.removeCallbacks(it) }
+        checkRefreshRunnable = Runnable { refreshUI() }
+        handler.postDelayed(checkRefreshRunnable!!, 200)
+    }
+
+    // ── 权限 ─────────────────────────────────────────────
+
+    private fun hasRequiredPermissions(): Boolean {
+        val permissions = mutableListOf<String>()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+            permissions.add(Manifest.permission.BLUETOOTH_CONNECT)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
+        return permissions.all {
             ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
         }
     }
 
-    private fun startService() {
-        try {
-            NavBleService.start(this)
-            setServiceRunning(true)
-        } catch (e: Exception) {
-            Toast.makeText(this, "启动失败: ${e.message}", Toast.LENGTH_LONG).show()
-        }
+    private fun requestPermissionsIfNeeded() {
+        val permissions = mutableListOf<String>()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED)
+            permissions.add(Manifest.permission.BLUETOOTH_CONNECT)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
+            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
+        if (permissions.isNotEmpty()) permissionLauncher.launch(permissions.toTypedArray())
+    }
+
+    // ── 服务状态 ─────────────────────────────────────────
+
+    private fun updateServiceState() = setServiceRunning(isServiceRunning())
+
+    private fun isServiceRunning(): Boolean {
+        val manager = getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+        return manager.getRunningServices(Int.MAX_VALUE)
+            .any { NavBleService::class.java.name == it.service.className }
     }
 
     private fun setServiceRunning(running: Boolean) {
         if (running) {
             statusDot.setBackgroundResource(R.drawable.status_dot_yellow)
-            statusText.text = "服务运行中，等待BLE连接..."
+            statusText.text = "RUNNING"
+            statusText.setTextColor(AMBER)
             btnStart.isEnabled = false
             btnStop.isEnabled = true
-            broadcastStatusBar.visibility = View.VISIBLE
-            broadcastStatus.text = "广播: 监听中..."
+            btnTestBroadcast.visibility = View.VISIBLE
+            broadcastStatusRow.visibility = View.VISIBLE
+            broadcastStatus.text = "WAITING..."
+            broadcastStatus.setTextColor(AMBER)
         } else {
             statusDot.setBackgroundResource(R.drawable.status_dot_red)
-            statusText.text = "服务未启动"
+            statusText.text = "STOPPED"
+            statusText.setTextColor(GRAY)
             btnStart.isEnabled = true
             btnStop.isEnabled = false
-            bleStatus.text = "BLE: 未连接"
-            bleStatus.setTextColor(Color.parseColor("#90A4AE"))
-            broadcastStatusBar.visibility = View.GONE
+            btnTestBroadcast.visibility = View.GONE
+            bleStatus.text = "DISCONNECTED"
+            bleStatus.setTextColor(GRAY)
+            broadcastStatusRow.visibility = View.GONE
             resetAllData()
         }
     }
 
+    private fun resetAllData() {
+        arrayOf(mapState, crossMap, curRoad, nextRoad, routeRemain, curSpeed,
+            limitedSpeed, cameraDist, sapaDist, trafficLight, driveWaySize,
+            driveWayDetail, tmcTotal, tmcRemain, tmcSegments,
+            locSpeed, locBearing, locAccuracy).forEach { it.text = "—" }
+    }
+
+    // ── UI 刷新 ──────────────────────────────────────────
+
     private fun refreshUI() {
-        // BLE 连接状态
-        val isConnected = NavDataHolder.bleConnected
-        if (isConnected) {
+        // BLE
+        if (NavDataHolder.bleConnected) {
             statusDot.setBackgroundResource(R.drawable.status_dot_green)
-            bleStatus.text = "BLE: 已连接"
-            bleStatus.setTextColor(Color.parseColor("#4CAF50"))
-        } else if (btnStart.isEnabled) {
-            // 服务未启动
-            bleStatus.text = "BLE: 未连接"
-            bleStatus.setTextColor(Color.parseColor("#90A4AE"))
-        } else {
-            // 服务已启动但未连接
-            statusDot.setBackgroundResource(R.drawable.status_dot_yellow)
-            bleStatus.text = "BLE: 等待连接"
-            bleStatus.setTextColor(Color.parseColor("#FFC107"))
-        }
-
-        // 广播接收状态
-        val lastBroadcast = NavDataHolder.broadcastReceived
-        if (lastBroadcast > 0) {
-            val secAgo = (System.currentTimeMillis() - lastBroadcast) / 1000
-            val agoStr = if (secAgo < 60) "${secAgo}秒前" else "${secAgo / 60}分钟前"
-            broadcastStatus.text = "广播: 已收到 ($agoStr)"
-            broadcastStatus.setTextColor(Color.parseColor("#4CAF50"))
+            statusText.text = "CONNECTED"
+            statusText.setTextColor(GREEN)
+            bleStatus.text = "CONNECTED ${NavDataHolder.bleDeviceAddress ?: ""}"
+            bleStatus.setTextColor(GREEN)
         } else if (!btnStart.isEnabled) {
-            broadcastStatus.text = "广播: 等待高德发送..."
-            broadcastStatus.setTextColor(Color.parseColor("#FFC107"))
+            bleStatus.text = "WAITING"
+            bleStatus.setTextColor(AMBER)
         }
 
-        // 导航状态
+        // Broadcast
+        val last = NavDataHolder.broadcastReceived
+        if (last > 0) {
+            val sec = (System.currentTimeMillis() - last) / 1000
+            val ago = if (sec < 60) "${sec}s ago" else "${sec / 60}min ago"
+            broadcastStatus.text = "RECEIVED ($ago)"
+            broadcastStatus.setTextColor(GREEN)
+        }
+
         refreshMapState()
-
-        // 引导信息
-        NavDataHolder.guideInfo?.let { refreshGuideInfo(it) }
-
-        // 车道信息
-        NavDataHolder.driveWayInfo?.let { refreshDriveWay(it) }
-
-        // 路况光柱
-        NavDataHolder.tmcSegmentInfo?.let { refreshTmc(it) }
-
-        // 定位信息
-        NavDataHolder.locationInfo?.let { refreshLocation(it) }
+        refreshGuideInfo()
+        refreshDriveWay()
+        refreshTmc()
+        refreshLocation()
     }
 
     private fun refreshMapState() {
-        val state = NavDataHolder.mapState
-        tvMapState.text = when (state) {
-            AmapAutoProtocol.STATE_START_NAV -> "🟢 导航中"
-            AmapAutoProtocol.STATE_STOP_NAV -> "🔴 导航已结束"
-            AmapAutoProtocol.STATE_ARRIVE_DEST -> "🏁 已到达目的地"
-            else -> "等待导航数据..."
+        val s = NavDataHolder.mapState
+        mapState.text = when (s) {
+            -1 -> "—"
+            0 -> "IDLE"
+            1 -> "NAVIGATING"
+            2 -> "ARRIVED"
+            3 -> "PAUSED"
+            else -> "STATE:$s"
         }
+        crossMap.text = NavDataHolder.crossMap ?: "—"
     }
 
-    private fun refreshGuideInfo(info: GuideInfo) {
-        // 道路名称
-        val road = if (info.curRoadName.isNotEmpty()) info.curRoadName else "--"
-        val nextRoad = if (info.nextRoadName.isNotEmpty()) " → ${info.nextRoadName}" else ""
-        tvRoad.text = "当前道路: $road$nextRoad"
-
-        // 转向图标
-        val iconName = AmapAutoProtocol.ICON_MAP[info.icon] ?: "--"
-        tvTurn.text = "转向: $iconName"
-
-        // 距离
-        if (info.routeRemainDis > 0) {
-            tvDistance.text = if (info.routeRemainDis >= 1000)
-                "剩余: ${info.routeRemainDis / 1000}.${(info.routeRemainDis % 1000) / 100} km"
-            else
-                "剩余: ${info.routeRemainDis} m"
-        }
-
-        // 时间
-        if (info.routeRemainTime > 0) {
-            val min = info.routeRemainTime / 60
-            tvTime.text = "预计: ${min} 分钟"
-        }
-
-        // 速度
-        if (info.curSpeed > 0) {
-            tvSpeed.text = "车速: ${info.curSpeed} km/h"
-        }
-
-        // 限速
-        if (info.limitedSpeed > 0) {
-            tvSpeedLimit.text = "限速: ${info.limitedSpeed} km/h"
-        }
-
-        // 道路类型
-        if (info.roadType >= 0) {
-            tvRoadType.text = "道路类型: ${AmapAutoProtocol.ROAD_TYPE_MAP[info.roadType] ?: "未知"}"
-        }
-
-        // 电子眼
-        if (info.cameraDist > 0 && info.cameraType >= 0) {
-            val cameraType = AmapAutoProtocol.CAMERA_TYPE_MAP[info.cameraType] ?: "电子眼"
-            val dist = if (info.cameraDist >= 1000)
-                "${info.cameraDist / 1000}.${(info.cameraDist % 1000) / 100} km"
-            else
-                "${info.cameraDist} m"
-            var camText = "$cameraType 前方 $dist"
-            if (info.cameraSpeed > 0) camText += " 限速${info.cameraSpeed}km/h"
-            tvCamera.text = "电子眼: $camText"
-        }
-
-        // 红绿灯
-        if (info.trafficLightNum > 0) {
-            tvTrafficLight.text = "红绿灯: 前方 ${info.trafficLightNum} 个"
-        }
-
-        // 服务区
-        if (info.sapaDist > 0) {
-            val dist = if (info.sapaDist >= 1000)
-                "${info.sapaDist / 1000}.${(info.sapaDist % 1000) / 100} km"
-            else
-                "${info.sapaDist} m"
-            val name = if (info.sapaName.isNotEmpty()) " (${info.sapaName})" else ""
-            tvSapa.text = "服务区: 前方 $dist$name"
-        }
+    private fun refreshGuideInfo() {
+        val i = NavDataHolder.guideInfo ?: return
+        curRoad.text = i.curRoadName.ifEmpty { "—" }
+        nextRoad.text = i.nextRoadName.ifEmpty { "—" }
+        routeRemain.text = if (i.routeRemainDis > 0) {
+            "%.1f km / %d min".format(i.routeRemainDis / 1000f, i.routeRemainTime / 60)
+        } else "—"
+        curSpeed.text = if (i.curSpeed > 0) "${i.curSpeed} km/h" else "—"
+        limitedSpeed.text = if (i.limitedSpeed > 0) "${i.limitedSpeed} km/h" else "—"
+        cameraDist.text = if (i.cameraDist > 0) "${i.cameraDist} m" else "—"
+        sapaDist.text = if (i.sapaDist > 0) "${i.sapaName} ${i.sapaDist}m" else "—"
+        trafficLight.text = if (i.trafficLightNum > 0) "${i.trafficLightNum}" else "—"
     }
 
-    private fun refreshDriveWay(info: DriveWayInfo) {
-        if (!info.enabled || info.lanes.isEmpty()) {
-            tvLane.text = "等待数据..."
-            return
-        }
-        val sb = StringBuilder("车道数: ${info.size}\n")
-        info.lanes.forEach { lane ->
-            val iconName = AmapAutoProtocol.ICON_MAP[lane.backIcon] ?: "?"
-            sb.append("  车道${lane.number}: $iconName\n")
-        }
-        tvLane.text = sb.toString().trimEnd()
+    private fun refreshDriveWay() {
+        val i = NavDataHolder.driveWayInfo ?: return
+        driveWaySize.text = if (i.enabled) "${i.size} lanes" else "—"
+        if (i.enabled && i.lanes.isNotEmpty()) {
+            driveWayDetail.text = i.lanes.joinToString(" ") {
+                when (it.backIcon) {
+                    0 -> "⬆" ; 1 -> "↖" ; 2 -> "↗" ; 3 -> "←"
+                    4 -> "→" ; 5 -> "↙" ; 6 -> "↘" ; 7 -> "↩"
+                    else -> "•"
+                }
+            }
+        } else driveWayDetail.text = "—"
     }
 
-    private fun refreshTmc(info: TmcSegmentInfo) {
-        if (!info.enabled || info.segments.isEmpty()) {
-            tvTmc.text = "等待数据..."
-            tmcBar.removeAllViews()
-            return
-        }
-
-        val total = info.totalDistance
-        val statusNames = mapOf(-1 to "无数据", 0 to "未知", 1 to "畅通", 2 to "缓行", 3 to "拥堵", 4 to "严重拥堵")
-        val statusColors = mapOf(-1 to "#BDBDBD", 0 to "#BDBDBD", 1 to "#4CAF50", 2 to "#FFC107", 3 to "#FF9800", 4 to "#F44336")
-
-        tvTmc.text = "总距离: ${formatDist(total)} | 剩余: ${formatDist(info.residualDistance)}"
-
-        tmcBar.removeAllViews()
-        if (total <= 0) return
-
-        info.segments.forEach { seg ->
-            val pct = seg.percent.toFloatOrNull() ?: 0f
-            val view = View(this)
-            val params = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, pct)
-            view.setBackgroundColor(Color.parseColor(statusColors[seg.status] ?: "#BDBDBD"))
-            view.contentDescription = statusNames[seg.status] ?: "?"
-            tmcBar.addView(view, params)
-        }
+    private fun refreshTmc() {
+        val i = NavDataHolder.tmcSegmentInfo ?: return
+        if (i.enabled) {
+            tmcTotal.text = "%.1f km".format(i.totalDistance / 1000f)
+            tmcRemain.text = "%.1f km".format(i.residualDistance / 1000f)
+            tmcSegments.text = "${i.size}"
+        } else { tmcTotal.text = "—" ; tmcRemain.text = "—" ; tmcSegments.text = "—" }
     }
 
-    private fun refreshLocation(info: LocationInfo) {
-        tvBearing.text = "方位角: ${info.bearing}°"
-        tvAccuracy.text = "精度: ${info.accuracy}m"
-        tvProvider.text = "定位来源: ${info.provider}"
-    }
-
-    private fun resetAllData() {
-        tvMapState.text = "等待导航数据..."
-        tvRoad.text = "当前道路: --"
-        tvTurn.text = "转向: --"
-        tvDistance.text = "剩余: --"
-        tvTime.text = "预计: --"
-        tvSpeed.text = "车速: --"
-        tvSpeedLimit.text = "限速: --"
-        tvRoadType.text = "道路类型: --"
-        tvCamera.text = "电子眼: --"
-        tvTrafficLight.text = "红绿灯: --"
-        tvSapa.text = "服务区: --"
-        tvLane.text = "等待数据..."
-        tvTmc.text = "等待数据..."
-        tmcBar.removeAllViews()
-        tvBearing.text = "方位角: --"
-        tvAccuracy.text = "精度: --"
-        tvProvider.text = "定位来源: --"
-    }
-
-    private fun formatDist(meters: Int): String {
-        return if (meters >= 1000) "${meters / 1000}.${(meters % 1000) / 100} km" else "${meters} m"
+    private fun refreshLocation() {
+        val i = NavDataHolder.locationInfo ?: return
+        locSpeed.text = if (i.speed > 0) "${i.speed} km/h" else "—"
+        locBearing.text = if (i.bearing > 0) "${i.bearing}°" else "—"
+        locAccuracy.text = if (i.accuracy > 0) "${i.accuracy} m" else "—"
     }
 }
