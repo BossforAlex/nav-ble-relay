@@ -20,14 +20,26 @@ class NavBroadcastReceiver : BroadcastReceiver() {
     companion object {
         private const val TAG = "NavBroadcastReceiver"
 
-        /** 所有已知的高德广播 Action */
+        /** 所有已知的高德广播 Action + 自检 Action */
         val ALL_ACTIONS = arrayOf(
+            // ── 车机版标准 Action ──
             "AUTONAVI_STANDARD_BROADCAST_SEND",
             "AUTONAVI_STANDARD_BROADCAST_RECV",
+            // ── 可能存在的包名前缀 Action ──
             "com.autonavi.amapauto.ACTION_STANDARD_BROADCAST_SEND",
             "com.autonavi.amapauto.ACTION_STANDARD_BROADCAST_RECV",
             "com.autonavi.amapauto.action.STANDARD_BROADCAST",
-            "com.autonavi.action.STANDARD_BROADCAST_SEND"
+            "com.autonavi.action.STANDARD_BROADCAST_SEND",
+            // ── 高德地图手机版可能的广播 Action ──
+            "com.autonavi.minimap.ACTION_BROADCAST",
+            "com.autonavi.minimap.action.NAV_INFO",
+            "com.autonavi.action.NAVIGATION_INFO",
+            // ── 通用高德广播 ──
+            "AUTONAVI_NAVI_INFO",
+            "AutonaviNaviInfo",
+            "com.autonavi.autonavi.action.BROADCAST_SEND",
+            // ── 自检 Action ──
+            "com.navblerelay.SELF_TEST"
         )
     }
 

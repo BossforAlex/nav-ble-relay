@@ -173,12 +173,13 @@ class NavBleService : Service() {
         for (action in NavBroadcastReceiver.ALL_ACTIONS) {
             filter.addAction(action)
         }
+        filter.priority = 999
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
         } else {
             registerReceiver(receiver, filter)
         }
-        Log.i(TAG, "BroadcastReceiver registered for ${NavBroadcastReceiver.ALL_ACTIONS.size} actions")
+        Log.i(TAG, "✅ BroadcastReceiver registered for ${NavBroadcastReceiver.ALL_ACTIONS.size} actions (priority=999)")
 
         // 发送自检广播，验证接收器是否正常工作
         sendSelfTestBroadcast()
@@ -192,9 +193,9 @@ class NavBleService : Service() {
         try {
             val intent = Intent("com.navblerelay.SELF_TEST")
             intent.setPackage(packageName)
-            intent.putExtra("KEY_TYPE", 0) // 用 0 作为自检标记，不会触发任何解析
+            intent.putExtra("KEY_TYPE", 0)
             sendBroadcast(intent)
-            Log.i(TAG, "自检广播已发送，检查 logcat 中 NavBroadcastReceiver 是否收到")
+            Log.i(TAG, "🔍 自检广播已发送 (action=com.navblerelay.SELF_TEST, pkg=$packageName)")
         } catch (e: Exception) {
             Log.w(TAG, "自检广播发送失败", e)
         }

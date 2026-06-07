@@ -49,13 +49,22 @@
         <!-- 静态注册广播接收器：Android 14+ 必须通过 manifest 声明才能接收跨应用广播 -->
         <receiver
             android:name=".receiver.NavBroadcastReceiver"
-            android:exported="true">
-            <intent-filter>
+            android:exported="true"
+            android:priority="999">
+            <intent-filter priority="999">
                 <action android:name="AUTONAVI_STANDARD_BROADCAST_SEND" />
                 <action android:name="AUTONAVI_STANDARD_BROADCAST_RECV" />
                 <action android:name="com.autonavi.amapauto.ACTION_STANDARD_BROADCAST_SEND" />
                 <action android:name="com.autonavi.amapauto.ACTION_STANDARD_BROADCAST_RECV" />
                 <action android:name="com.autonavi.amapauto.action.STANDARD_BROADCAST" />
+                <action android:name="com.autonavi.action.STANDARD_BROADCAST_SEND" />
+                <action android:name="com.autonavi.minimap.ACTION_BROADCAST" />
+                <action android:name="com.autonavi.minimap.action.NAV_INFO" />
+                <action android:name="com.autonavi.action.NAVIGATION_INFO" />
+                <action android:name="AUTONAVI_NAVI_INFO" />
+                <action android:name="AutonaviNaviInfo" />
+                <action android:name="com.autonavi.autonavi.action.BROADCAST_SEND" />
+                <action android:name="com.navblerelay.SELF_TEST" />
             </intent-filter>
         </receiver>
 
