@@ -10,8 +10,6 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.View
-import android.view.WindowInsets
-import android.view.WindowInsetsController
 import android.widget.Button
 import android.widget.TextView
 import android.widget.Toast
@@ -77,7 +75,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
         setContentView(R.layout.activity_main)
         initViews()
         setupListeners()
@@ -92,30 +89,25 @@ class MainActivity : AppCompatActivity() {
         refreshUI()
     }
 
-    private fun enableEdgeToEdge() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            window.setDecorFitsSystemWindows(false)
-            val controller = window.insetsController
-            if (controller != null) {
-                controller.systemBarsBehavior =
-                    WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-                controller.hide(WindowInsets.Type.systemBars())
-            }
-        }
-    }
-
+    /**
+     * Android 15+ 强制边缘到边缘显示，Android 16 移除了 opt-out 能力。
+     * 使用 WindowInsetsCompat 安全处理系统栏内边距，不再调用 hide() 等已废弃 API。
+     */
     private fun applyEdgeToEdgeInsets() {
         val rootView = findViewById<View>(android.R.id.content)
         ViewCompat.setOnApplyWindowInsetsListener(rootView) { view, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            val displayCutout = insets.getInsets(WindowInsetsCompat.Type.displayCutout())
             view.setPadding(
-                systemBars.left,
-                systemBars.top,
-                systemBars.right,
-                systemBars.bottom
+                maxOf(systemBars.left, displayCutout.left),
+                maxOf(systemBars.top, displayCutout.top),
+                maxOf(systemBars.right, displayCutout.right),
+                maxOf(systemBars.bottom, displayCutout.bottom)
             )
             WindowInsetsCompat.CONSUMED
         }
+        // 请求第一帧 insets
+        ViewCompat.requestApplyInsets(rootView)
     }
 
     private fun initViews() {

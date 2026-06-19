@@ -13,6 +13,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
+import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.navblerelay.MainActivity
 import com.navblerelay.R
@@ -21,14 +22,6 @@ import com.navblerelay.protocol.AmapAutoProtocol
 import com.navblerelay.protocol.NavDataHolder
 import com.navblerelay.receiver.NavBroadcastReceiver
 
-/**
- * 前台 Service：持续监听高德导航广播并通过 BLE 转发
- *
- * - Service 启动后注册广播接收器 NavBroadcastReceiver（动态注册）
- * - 启动 BLE GattServer，等待 ESP32 连接
- * - 前台服务保证应用在后台时依然活跃
- * - 支持 ACTION_STOP 主动停止
- */
 class NavBleService : Service() {
 
     companion object {
@@ -53,12 +46,6 @@ class NavBleService : Service() {
             context.startService(intent)
         }
 
-        /**
-         * 判断服务是否正在运行。
-         *
-         * 不使用已废弃的 ActivityManager.getRunningServices（Android 8+ 对第三方应用不可靠）。
-         * 改用静态字段的方式记录服务状态，保证跨组件可见且稳定。
-         */
         @Volatile
         private var running: Boolean = false
 
@@ -188,14 +175,12 @@ class NavBleService : Service() {
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            // Android 13+ 需要 RECEIVER_EXPORTED / RECEIVER_NOT_EXPORTED
             registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
         } else {
             registerReceiver(receiver, filter)
         }
         Log.i(TAG, "✅ 广播接收器已注册（${NavBroadcastReceiver.ALL_ACTIONS.size} 个 Action）")
 
-        // 发送自检广播 —— 验证接收器工作正常
         sendSelfTestBroadcast()
     }
 
@@ -234,31 +219,24 @@ class NavBleService : Service() {
             Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        val stopIntent = PendingIntent.getService(
-            this, 0,
-            Intent(this, NavBleService::class.java).apply { action = ACTION_STOP },
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+        val stopAction = NotificationCompat.Action.Builder(
+            android.R.drawable.ic_media_pause,
+            "停止",
+            PendingIntent.getService(
+                this, 0,
+                Intent(this, NavBleService::class.java).apply { action = ACTION_STOP },
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+        ).build()
 
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            Notification.Builder(this, CHANNEL_ID)
-                .setContentTitle("导航 BLE 转发")
-                .setContentText(text)
-                .setSmallIcon(R.drawable.ic_navigation)
-                .setContentIntent(contentIntent)
-                .addAction(android.R.drawable.ic_media_pause, "停止", stopIntent)
-                .setOngoing(true)
-                .build()
-        } else {
-            @Suppress("DEPRECATION")
-            Notification.Builder(this)
-                .setContentTitle("导航 BLE 转发")
-                .setContentText(text)
-                .setSmallIcon(R.drawable.ic_navigation)
-                .setContentIntent(contentIntent)
-                .setOngoing(true)
-                .build()
-        }
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("导航 BLE 转发")
+            .setContentText(text)
+            .setSmallIcon(R.drawable.ic_navigation)
+            .setContentIntent(contentIntent)
+            .addAction(stopAction)
+            .setOngoing(true)
+            .build()
     }
 
     private fun updateNotification(text: String) {
