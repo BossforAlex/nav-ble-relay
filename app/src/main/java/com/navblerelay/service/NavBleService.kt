@@ -18,18 +18,21 @@ import com.navblerelay.MainActivity
 import com.navblerelay.R
 import com.navblerelay.ble.BleGattServer
 import com.navblerelay.protocol.AmapAutoProtocol
-import com.navblerelay.protocol.*
 import com.navblerelay.protocol.NavDataHolder
 import com.navblerelay.receiver.NavBroadcastReceiver
 
 /**
  * 前台 Service：持续监听高德导航广播并通过 BLE 转发
- * 参考文档 §3.1-3.5 AmapAuto 标准广播协议
+ *
+ * - Service 启动后注册广播接收器 NavBroadcastReceiver（动态注册）
+ * - 启动 BLE GattServer，等待 ESP32 连接
+ * - 前台服务保证应用在后台时依然活跃
+ * - 支持 ACTION_STOP 主动停止
  */
 class NavBleService : Service() {
 
     companion object {
-        private const val TAG = "NavBleService"
+        private const val TAG = "NavBleSvc"
         private const val CHANNEL_ID = "nav_ble_channel"
         private const val NOTIFICATION_ID = 1001
         const val ACTION_STOP = "com.navblerelay.action.STOP_SERVICE"
@@ -49,6 +52,17 @@ class NavBleService : Service() {
             }
             context.startService(intent)
         }
+
+        /**
+         * 判断服务是否正在运行。
+         *
+         * 不使用已废弃的 ActivityManager.getRunningServices（Android 8+ 对第三方应用不可靠）。
+         * 改用静态字段的方式记录服务状态，保证跨组件可见且稳定。
+         */
+        @Volatile
+        private var running: Boolean = false
+
+        fun isRunning(): Boolean = running
     }
 
     private var broadcastReceiver: NavBroadcastReceiver? = null
@@ -56,48 +70,48 @@ class NavBleService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        running = true
         Log.i(TAG, "Service onCreate")
 
         try {
             createNotificationChannel()
-            startForeground(NOTIFICATION_ID, createNotification())
-            Log.i(TAG, "Foreground notification started")
+            startForeground(NOTIFICATION_ID, createNotification("等待 ESP32 连接..."))
+            Log.i(TAG, "✅ 前台服务已启动，通知 ID=$NOTIFICATION_ID")
 
             bleServer = BleGattServer(this).apply {
                 onDeviceConnected = { device ->
-                    Log.i(TAG, "ESP32 connected: ${device.address}")
+                    Log.i(TAG, "🟢 ESP32 连接：${device.address}")
                     NavDataHolder.bleConnected = true
                     NavDataHolder.bleDeviceAddress = device.address
-                    updateNotification("已连接: ${device.address}")
+                    updateNotification("ESP32 已连接：${device.address}")
                 }
                 onDeviceDisconnected = { device ->
-                    Log.i(TAG, "ESP32 disconnected: ${device.address}")
+                    Log.i(TAG, "🔴 ESP32 断开：${device.address}")
                     NavDataHolder.bleConnected = false
                     NavDataHolder.bleDeviceAddress = null
                     updateNotification("等待 ESP32 连接...")
                 }
                 onError = { msg ->
-                    Log.e(TAG, "BLE error: $msg")
+                    Log.e(TAG, "BLE 错误：$msg")
                 }
             }
 
-            // 检查蓝牙权限后再启动 BLE
             if (hasBluetoothPermission()) {
                 bleServer?.start()
             } else {
-                Log.w(TAG, "缺少 BLUETOOTH_CONNECT 权限，跳过 BLE 启动")
+                Log.w(TAG, "缺少 BLUETOOTH_CONNECT/BLUETOOTH_ADVERTISE 权限，暂不启动 BLE")
             }
 
             registerBroadcastReceiver()
-        } catch (e: Exception) {
-            Log.e(TAG, "Service onCreate failed", e)
+        } catch (t: Throwable) {
+            Log.e(TAG, "Service onCreate 异常", t)
             stopSelf()
         }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
-            Log.i(TAG, "Received stop action")
+            Log.i(TAG, "收到停止命令")
             stopSelf()
             return START_NOT_STICKY
         }
@@ -107,118 +121,115 @@ class NavBleService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
+        running = false
         Log.i(TAG, "Service onDestroy")
         try {
             broadcastReceiver?.let { unregisterReceiver(it) }
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to unregister receiver", e)
+            broadcastReceiver = null
+        } catch (t: Throwable) {
+            Log.w(TAG, "注销广播接收器失败", t)
         }
-        try {
-            bleServer?.stop()
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to stop BLE server", e)
+        try { bleServer?.stop() } catch (t: Throwable) {
+            Log.w(TAG, "停止 BLE Server 失败", t)
         }
+        bleServer = null
         super.onDestroy()
     }
+
+    // ── 权限检查 ────────────────────────────────────────
 
     private fun hasBluetoothPermission(): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) ==
+                    PackageManager.PERMISSION_GRANTED &&
+                    ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_ADVERTISE) ==
                     PackageManager.PERMISSION_GRANTED
         } else {
             true
         }
     }
 
-    // ── 广播注册 ─────────────────────────────────────────
+    // ── 广播注册 ────────────────────────────────────────
 
     private fun registerBroadcastReceiver() {
-        val receiver = NavBroadcastReceiver()
-
-        receiver.onGuideInfo = { info: GuideInfo ->
-            NavDataHolder.guideInfo = info
-            bleServer?.sendGuideInfo(info)
-        }
-
-        receiver.onMapState = { state, crossMap ->
-            NavDataHolder.mapState = state
-            NavDataHolder.crossMap = crossMap
-            bleServer?.sendMapState(state, crossMap)
-            when (state) {
-                AmapAutoProtocol.STATE_START_NAV -> updateNotification("导航中...")
-                AmapAutoProtocol.STATE_STOP_NAV -> updateNotification("导航已结束")
-                AmapAutoProtocol.STATE_ARRIVE_DEST -> updateNotification("已到达目的地")
+        val receiver = NavBroadcastReceiver().apply {
+            onGuideInfo = { info ->
+                NavDataHolder.guideInfo = info
+                bleServer?.sendGuideInfo(info)
+            }
+            onMapState = { state, crossMap ->
+                NavDataHolder.mapState = state
+                NavDataHolder.crossMap = crossMap
+                bleServer?.sendMapState(state, crossMap)
+                when (state) {
+                    AmapAutoProtocol.STATE_START_NAV -> updateNotification("导航进行中")
+                    AmapAutoProtocol.STATE_STOP_NAV -> updateNotification("导航已结束")
+                    AmapAutoProtocol.STATE_ARRIVE_DEST -> updateNotification("已到达目的地")
+                }
+            }
+            onDriveWay = { info ->
+                NavDataHolder.driveWayInfo = info
+                bleServer?.sendDriveWay(info)
+            }
+            onTmcSegment = { info ->
+                NavDataHolder.tmcSegmentInfo = info
+                bleServer?.sendTmcSegment(info)
+            }
+            onLocation = { info ->
+                NavDataHolder.locationInfo = info
+                bleServer?.sendLocation(info)
             }
         }
-
-        receiver.onDriveWay = { info ->
-            NavDataHolder.driveWayInfo = info
-            bleServer?.sendDriveWay(info)
-        }
-
-        receiver.onTmcSegment = { info ->
-            NavDataHolder.tmcSegmentInfo = info
-            bleServer?.sendTmcSegment(info)
-        }
-
-        receiver.onLocation = { info ->
-            NavDataHolder.locationInfo = info
-            bleServer?.sendLocation(info)
-        }
-
         broadcastReceiver = receiver
 
-        // 注册所有已知的高德广播 Action + 自检 Action
         val filter = IntentFilter()
         for (action in NavBroadcastReceiver.ALL_ACTIONS) {
             filter.addAction(action)
         }
-        filter.priority = 999
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            // Android 13+ 需要 RECEIVER_EXPORTED / RECEIVER_NOT_EXPORTED
             registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
         } else {
             registerReceiver(receiver, filter)
         }
-        Log.i(TAG, "✅ BroadcastReceiver registered (${NavBroadcastReceiver.ALL_ACTIONS.size} actions, priority=999)")
+        Log.i(TAG, "✅ 广播接收器已注册（${NavBroadcastReceiver.ALL_ACTIONS.size} 个 Action）")
 
-        // 发送自检广播，验证接收器是否正常工作
+        // 发送自检广播 —— 验证接收器工作正常
         sendSelfTestBroadcast()
     }
 
-    /**
-     * 发送一条自检广播，验证 NavBroadcastReceiver 是否已正确注册。
-     * 如果 logcat 中出现 "收到广播: action=com.navblerelay.SELF_TEST" 则说明接收器正常。
-     */
     private fun sendSelfTestBroadcast() {
         try {
             val intent = Intent(NavBroadcastReceiver.SELF_TEST_ACTION)
             intent.setPackage(packageName)
             intent.putExtra("KEY_TYPE", 0)
             sendBroadcast(intent)
-            Log.i(TAG, "🔍 自检广播已发送 (action=${NavBroadcastReceiver.SELF_TEST_ACTION})")
-        } catch (e: Exception) {
-            Log.w(TAG, "自检广播发送失败", e)
+            Log.i(TAG, "🔍 自检广播已发送")
+        } catch (t: Throwable) {
+            Log.w(TAG, "自检广播发送失败", t)
         }
     }
 
-    // ── 通知栏 ──────────────────────────────────────────
+    // ── 通知 / 前台服务 ───────────────────────────────
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "导航BLE转发",
+                "导航 BLE 转发",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
                 description = "蓝牙导航广播转发服务运行中"
+                setShowBadge(false)
             }
             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             manager.createNotificationChannel(channel)
         }
     }
 
-    private fun createNotification(): Notification {
-        val pendingIntent = PendingIntent.getActivity(
+    private fun createNotification(text: String): Notification {
+        val contentIntent = PendingIntent.getActivity(
             this, 0,
             Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
@@ -231,20 +242,20 @@ class NavBleService : Service() {
 
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Notification.Builder(this, CHANNEL_ID)
-                .setContentTitle("导航BLE转发")
-                .setContentText("等待 ESP32 连接...")
+                .setContentTitle("导航 BLE 转发")
+                .setContentText(text)
                 .setSmallIcon(R.drawable.ic_navigation)
-                .setContentIntent(pendingIntent)
+                .setContentIntent(contentIntent)
                 .addAction(android.R.drawable.ic_media_pause, "停止", stopIntent)
                 .setOngoing(true)
                 .build()
         } else {
             @Suppress("DEPRECATION")
             Notification.Builder(this)
-                .setContentTitle("导航BLE转发")
-                .setContentText("等待 ESP32 连接...")
+                .setContentTitle("导航 BLE 转发")
+                .setContentText(text)
                 .setSmallIcon(R.drawable.ic_navigation)
-                .setContentIntent(pendingIntent)
+                .setContentIntent(contentIntent)
                 .setOngoing(true)
                 .build()
         }
@@ -253,40 +264,9 @@ class NavBleService : Service() {
     private fun updateNotification(text: String) {
         try {
             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            val pendingIntent = PendingIntent.getActivity(
-                this, 0,
-                Intent(this, MainActivity::class.java),
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-
-            val stopIntent = PendingIntent.getService(
-                this, 0,
-                Intent(this, NavBleService::class.java).apply { action = ACTION_STOP },
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-
-            val notification = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                Notification.Builder(this, CHANNEL_ID)
-                    .setContentTitle("导航BLE转发")
-                    .setContentText(text)
-                    .setSmallIcon(R.drawable.ic_navigation)
-                    .setContentIntent(pendingIntent)
-                    .addAction(android.R.drawable.ic_media_pause, "停止", stopIntent)
-                    .setOngoing(true)
-                    .build()
-            } else {
-                @Suppress("DEPRECATION")
-                Notification.Builder(this)
-                    .setContentTitle("导航BLE转发")
-                    .setContentText(text)
-                    .setSmallIcon(R.drawable.ic_navigation)
-                    .setContentIntent(pendingIntent)
-                    .setOngoing(true)
-                    .build()
-            }
-            manager.notify(NOTIFICATION_ID, notification)
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to update notification", e)
+            manager.notify(NOTIFICATION_ID, createNotification(text))
+        } catch (t: Throwable) {
+            Log.w(TAG, "更新通知失败", t)
         }
     }
 }

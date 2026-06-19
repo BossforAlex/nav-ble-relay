@@ -4,45 +4,55 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
-import com.navblerelay.protocol.*
+import com.navblerelay.protocol.AmapAutoProtocol
+import com.navblerelay.protocol.AmapAutoProtocol.iconLabel
+import com.navblerelay.protocol.AmapAutoProtocol.roadLabel
+import com.navblerelay.protocol.AmapAutoProtocol.cameraLabel
+import com.navblerelay.protocol.AmapAutoProtocol.tmcLabel
+import com.navblerelay.protocol.DriveWayInfo
+import com.navblerelay.protocol.GuideInfo
+import com.navblerelay.protocol.LaneInfo
+import com.navblerelay.protocol.LocationInfo
+import com.navblerelay.protocol.NavDataHolder
+import com.navblerelay.protocol.TmcSegment
+import com.navblerelay.protocol.TmcSegmentInfo
 import org.json.JSONObject
 
 /**
  * 监听高德地图车机版发送的导航广播
  *
- * 支持两种注册方式：
- * 1. 代码动态注册（通过回调传递给 Service）
- * 2. Manifest 静态注册（直接写入 NavDataHolder 单例）
- *
- * 兼容车机版 (AmapAuto) 和手机版 (Amap) 可能的广播 Action。
+ * 设计要点：
+ *   1. 同时支持 ACTION_SEND 和 ACTION_RECV，兼容车机版公版 APP 以及手机版
+ *   2. 以中文 log 输出关键字段（转向、道路类型、电子眼、路况等），便于调试
+ *   3. 解析完成后通过回调把对象传递给 NavBleService，由其负责 BLE 转发
+ *   4. 提供 SELF_TEST 自检测试广播，方便在无导航场景下验证链路正常
  */
 class NavBroadcastReceiver : BroadcastReceiver() {
 
     companion object {
         private const val TAG = "NavBR"
 
-        /** 广播 Action：自检测试用 */
+        /** 自检测试 Action —— 用于验证接收器是否正常工作 */
         const val SELF_TEST_ACTION = "com.navblerelay.SELF_TEST"
 
-        /** 所有已知的高德广播 Action + 自检 Action */
+        /** 所有监听的高德广播 Action（在 Manifest 与运行时同时注册） */
         val ALL_ACTIONS = arrayOf(
-            // ── 车机版标准 Action (AmapAuto) ──
+            // 车机版标准 Action
             "AUTONAVI_STANDARD_BROADCAST_SEND",
             "AUTONAVI_STANDARD_BROADCAST_RECV",
-            // ── 包名前缀 Action ──
+            // 可能的带包名前缀 Action
             "com.autonavi.amapauto.ACTION_STANDARD_BROADCAST_SEND",
             "com.autonavi.amapauto.ACTION_STANDARD_BROADCAST_RECV",
             "com.autonavi.amapauto.action.STANDARD_BROADCAST",
             "com.autonavi.action.STANDARD_BROADCAST_SEND",
-            // ── 高德地图手机版可能的广播 Action ──
+            // 高德地图手机版（非车机版）可能的广播
             "com.autonavi.minimap.ACTION_BROADCAST",
             "com.autonavi.minimap.action.NAV_INFO",
             "com.autonavi.action.NAVIGATION_INFO",
-            // ── 通用高德广播 ──
             "AUTONAVI_NAVI_INFO",
             "AutonaviNaviInfo",
             "com.autonavi.autonavi.action.BROADCAST_SEND",
-            // ── 自检 Action（用于验证接收器是否正常工作）──
+            // 自检
             SELF_TEST_ACTION
         )
     }
@@ -62,22 +72,21 @@ class NavBroadcastReceiver : BroadcastReceiver() {
         if (keyType == -1) keyType = intent.getIntExtra("key_type", -1)
         if (keyType == -1) keyType = intent.getIntExtra("EXTRA_KEY_TYPE", -1)
 
-        Log.i(TAG, "📡 action=$action pkg=$pkg KEY_TYPE=$keyType")
-
-        // 记录接收时间
         NavDataHolder.broadcastReceived = System.currentTimeMillis()
         NavDataHolder.lastBroadcastAction = action
 
         if (keyType == -1) {
-            val extras = intent.extras
-            if (extras != null && !extras.isEmpty) {
-                val sb = StringBuilder("extras: ")
-                for (key in extras.keySet()) {
-                    sb.append("$key=${extras.get(key)}, ")
-                }
-                Log.i(TAG, sb.toString().trimEnd(',', ' '))
+            if (action == SELF_TEST_ACTION) {
+                Log.i(TAG, "✅ 收到自检广播（action=$action）")
             } else {
-                Log.d(TAG, "空广播/无 extras")
+                val extras = intent.extras
+                if (extras != null && !extras.isEmpty) {
+                    val sb = StringBuilder("非导航广播 action=$action pkg=$pkg; extras: ")
+                    for (key in extras.keySet()) {
+                        sb.append("$key=${extras.get(key)}, ")
+                    }
+                    Log.d(TAG, sb.toString().trimEnd(',', ' '))
+                }
             }
             return
         }
@@ -88,14 +97,11 @@ class NavBroadcastReceiver : BroadcastReceiver() {
             AmapAutoProtocol.KEY_DRIVE_WAY -> parseDriveWay(intent)
             AmapAutoProtocol.KEY_TMC_SEGMENT -> parseTmcSegment(intent)
             AmapAutoProtocol.KEY_LOCATION -> parseLocation(intent)
-            else -> {
-                Log.i(TAG, "未知 KEY_TYPE=$keyType, extras keys=${intent.extras?.keySet()}")
-            }
+            else -> Log.i(TAG, "忽略的 KEY_TYPE=$keyType（不支持的协议字段）")
         }
     }
 
-    // ── 引导信息解析 ─────────────────────────────────────
-
+    // ── 引导信息（最核心的广播，每秒更新一次）──────────
     private fun parseGuideInfo(intent: Intent) {
         val info = GuideInfo(
             type = intent.getIntExtra("TYPE", intent.getIntExtra("type", 0)),
@@ -136,25 +142,51 @@ class NavBroadcastReceiver : BroadcastReceiver() {
             curSegNum = intent.getIntExtra("CUR_SEG_NUM", 0),
             curPointNum = intent.getIntExtra("CUR_POINT_NUM", 0)
         )
-        Log.i(TAG, "GuideInfo: road=${info.curRoadName} speed=${info.curSpeed} icon=${info.icon}")
-        if (onGuideInfo != null) onGuideInfo?.invoke(info)
-        else NavDataHolder.guideInfo = info
+
+        Log.i(TAG, buildString {
+            append("[导航] 当前道路=\"${info.curRoadName}\" ")
+            append("转向=${iconLabel(info.icon)}(${info.icon}) ")
+            append("下一道路=\"${info.nextRoadName}\" ")
+            append("剩余距离=${info.routeRemainDis}m ")
+            append("剩余时间=${info.routeRemainTime}s ")
+            append("当前车速=${info.curSpeed}km/h ")
+            append("限速=${info.limitedSpeed}km/h ")
+            append("道路类型=${roadLabel(info.roadType)} ")
+            if (info.cameraDist > 0)
+                append("前方${info.cameraDist}m=${cameraLabel(info.cameraType)}(${info.cameraSpeed}km/h) ")
+            if (info.sapaDist > 0)
+                append("前方${info.sapaDist}m=服务区\"${info.sapaName}\" ")
+            if (info.trafficLightNum > 0) append("红绿灯=${info.trafficLightNum}个 ")
+            append("车头方向=${info.carDirection}°")
+        })
+
+        onGuideInfo?.invoke(info) ?: run { NavDataHolder.guideInfo = info }
     }
 
-    // ── 地图状态 ─────────────────────────────────────────
-
+    // ── 导航状态（开始 / 结束 / 到达） ──────────────────
     private fun parseMapState(intent: Intent) {
-        val state = intent.getIntExtra("EXTRA_STATE", intent.getIntExtra("extraState", -1))
+        val state = intent.getIntExtra("EXTRA_STATE",
+            intent.getIntExtra("extraState", -1))
         val crossMap = if (intent.hasExtra("EXTRA_CROSS_MAP")) {
             intent.getIntExtra("EXTRA_CROSS_MAP", 0).toString()
         } else null
-        Log.i(TAG, "MapState: state=$state")
-        if (onMapState != null) onMapState?.invoke(state, crossMap)
-        else { NavDataHolder.mapState = state; NavDataHolder.crossMap = crossMap }
+
+        val stateLabel = when (state) {
+            AmapAutoProtocol.STATE_START_NAV -> "导航开始"
+            AmapAutoProtocol.STATE_STOP_NAV -> "导航结束"
+            AmapAutoProtocol.STATE_ARRIVE_DEST -> "到达目的地"
+            -1 -> "空状态"
+            else -> "状态($state)"
+        }
+        Log.i(TAG, "[状态] $stateLabel（路口放大图=$crossMap）")
+
+        onMapState?.invoke(state, crossMap) ?: run {
+            NavDataHolder.mapState = state
+            NavDataHolder.crossMap = crossMap
+        }
     }
 
-    // ── 车道/路况/定位解析（同之前） ────────────────────
-
+    // ── 车道信息（临近路口时触发） ───────────────────────
     private fun parseDriveWay(intent: Intent) {
         val json = intent.getStringExtra("EXTRA_DRIVE_WAY") ?: return
         try {
@@ -174,11 +206,15 @@ class NavBroadcastReceiver : BroadcastReceiver() {
                 size = root.optInt("drive_way_size", 0),
                 lanes = lanes
             )
-            if (onDriveWay != null) onDriveWay?.invoke(info)
-            else NavDataHolder.driveWayInfo = info
-        } catch (e: Exception) { Log.e(TAG, "DriveWay parse", e) }
+            Log.i(TAG, "[车道] enabled=${info.enabled} size=${info.size} " +
+                    "车道图标=${lanes.joinToString(",") { iconLabel(it.backIcon) }}")
+            onDriveWay?.invoke(info) ?: run { NavDataHolder.driveWayInfo = info }
+        } catch (e: Exception) {
+            Log.e(TAG, "车道信息解析失败", e)
+        }
     }
 
+    // ── 路况光柱图 ──────────────────────────────────────
     private fun parseTmcSegment(intent: Intent) {
         val json = intent.getStringExtra("EXTRA_TMC_SEGMENT") ?: return
         try {
@@ -203,11 +239,16 @@ class NavBroadcastReceiver : BroadcastReceiver() {
                 finishDistance = root.optInt("finish_distance", 0),
                 segments = segments
             )
-            if (onTmcSegment != null) onTmcSegment?.invoke(info)
-            else NavDataHolder.tmcSegmentInfo = info
-        } catch (e: Exception) { Log.e(TAG, "TMC parse", e) }
+            Log.i(TAG, "[路况] 总距离=${info.totalDistance}m " +
+                    "剩余=${info.residualDistance}m " +
+                    "分段状态=${segments.joinToString(",") { tmcLabel(it.status) }}")
+            onTmcSegment?.invoke(info) ?: run { NavDataHolder.tmcSegmentInfo = info }
+        } catch (e: Exception) {
+            Log.e(TAG, "路况解析失败", e)
+        }
     }
 
+    // ── 定位信息 ────────────────────────────────────────
     private fun parseLocation(intent: Intent) {
         val json = intent.getStringExtra("EXTRA_LOCATION_INFO") ?: return
         try {
@@ -219,8 +260,11 @@ class NavBroadcastReceiver : BroadcastReceiver() {
                 time = root.optLong("time", 0L),
                 provider = root.optString("provider", "")
             )
-            if (onLocation != null) onLocation?.invoke(info)
-            else NavDataHolder.locationInfo = info
-        } catch (e: Exception) { Log.e(TAG, "Location parse", e) }
+            Log.i(TAG, "[定位] 方向=${info.bearing}° 精度=${info.accuracy}m " +
+                    "速度=${info.speed}km/h provider=${info.provider}")
+            onLocation?.invoke(info) ?: run { NavDataHolder.locationInfo = info }
+        } catch (e: Exception) {
+            Log.e(TAG, "定位信息解析失败", e)
+        }
     }
 }

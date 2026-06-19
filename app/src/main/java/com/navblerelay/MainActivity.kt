@@ -196,13 +196,7 @@ class MainActivity : AppCompatActivity() {
 
     // ── 服务状态 ─────────────────────────────────────────
 
-    private fun updateServiceState() = setServiceRunning(isServiceRunning())
-
-    private fun isServiceRunning(): Boolean {
-        val manager = getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
-        return manager.getRunningServices(Int.MAX_VALUE)
-            .any { NavBleService::class.java.name == it.service.className }
-    }
+    private fun updateServiceState() = setServiceRunning(NavBleService.isRunning())
 
     private fun setServiceRunning(running: Boolean) {
         if (running) {
