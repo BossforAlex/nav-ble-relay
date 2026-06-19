@@ -10,12 +10,16 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.View
+import android.view.WindowInsets
+import android.view.WindowInsetsController
 import android.widget.Button
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import com.navblerelay.protocol.NavDataHolder
 import com.navblerelay.receiver.NavBroadcastReceiver
 import com.navblerelay.service.NavBleService
@@ -73,10 +77,12 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
         setContentView(R.layout.activity_main)
         initViews()
         setupListeners()
         setupDataObserver()
+        applyEdgeToEdgeInsets()
         requestPermissionsIfNeeded()
     }
 
@@ -84,6 +90,32 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         updateServiceState()
         refreshUI()
+    }
+
+    private fun enableEdgeToEdge() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            window.setDecorFitsSystemWindows(false)
+            val controller = window.insetsController
+            if (controller != null) {
+                controller.systemBarsBehavior =
+                    WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                controller.hide(WindowInsets.Type.systemBars())
+            }
+        }
+    }
+
+    private fun applyEdgeToEdgeInsets() {
+        val rootView = findViewById<View>(android.R.id.content)
+        ViewCompat.setOnApplyWindowInsetsListener(rootView) { view, insets ->
+            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            view.setPadding(
+                systemBars.left,
+                systemBars.top,
+                systemBars.right,
+                systemBars.bottom
+            )
+            WindowInsetsCompat.CONSUMED
+        }
     }
 
     private fun initViews() {
@@ -233,7 +265,6 @@ class MainActivity : AppCompatActivity() {
     // ── UI 刷新 ──────────────────────────────────────────
 
     private fun refreshUI() {
-        // BLE
         if (NavDataHolder.bleConnected) {
             statusDot.setBackgroundResource(R.drawable.status_dot_green)
             statusText.text = "CONNECTED"
@@ -245,7 +276,6 @@ class MainActivity : AppCompatActivity() {
             bleStatus.setTextColor(AMBER)
         }
 
-        // Broadcast
         val last = NavDataHolder.broadcastReceived
         if (last > 0) {
             val sec = (System.currentTimeMillis() - last) / 1000
@@ -294,7 +324,7 @@ class MainActivity : AppCompatActivity() {
         if (i.enabled && i.lanes.isNotEmpty()) {
             driveWayDetail.text = i.lanes.joinToString(" ") {
                 when (it.backIcon) {
-                    0 -> "⬆" ; 1 -> "↖" ; 2 -> "↗" ; 3 -> "←"
+                    0 -> "↑" ; 1 -> "↖" ; 2 -> "↗" ; 3 -> "←"
                     4 -> "→" ; 5 -> "↙" ; 6 -> "↘" ; 7 -> "↩"
                     else -> "•"
                 }

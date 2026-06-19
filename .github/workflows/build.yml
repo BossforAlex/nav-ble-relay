@@ -3,8 +3,6 @@ name: Android CI Build
 on:
   push:
     branches: [main, master]
-  pull_request:
-    branches: [main, master]
   workflow_dispatch:
 
 permissions:
@@ -36,30 +34,15 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: wrapper
-          cache-read-only: ${{ github.event_name == 'pull_request' }}
 
       - name: Build Debug APK
         run: ./gradlew assembleDebug --stacktrace
 
-      - name: Build Release APK
-        run: ./gradlew assembleRelease --stacktrace
-        if: success()
-
-      - name: Upload Debug APK (Artifact)
+      - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
           name: nav-ble-relay-debug
           path: app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 7
-        if: success()
-
-      - name: Upload Release APK (Artifact)
-        uses: actions/upload-artifact@v4
-        with:
-          name: nav-ble-relay-release
-          path: app/build/outputs/apk/release/app-release-unsigned.apk
           retention-days: 7
         if: success()
 
@@ -71,4 +54,4 @@ jobs:
           files: app/build/outputs/apk/debug/app-debug.apk
           prerelease: true
           fail_on_unmatched_files: true
-        if: success() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        if: success()
