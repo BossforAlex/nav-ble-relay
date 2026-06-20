@@ -3,16 +3,15 @@ package com.navblerelay
 import android.Manifest
 import android.content.*
 import android.content.pm.PackageManager
-import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.view.View
-import android.view.WindowInsets
-import android.view.WindowInsetsController
 import android.widget.Button
+import android.widget.ImageButton
+import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -28,41 +27,18 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "MainActivity"
-        private val CYAN = Color.parseColor("#00D4FF")
-        private val AMBER = Color.parseColor("#FFB300")
-        private val RED = Color.parseColor("#F44336")
-        private val GREEN = Color.parseColor("#4CAF50")
-        private val GRAY = Color.parseColor("#555555")
-        private val WHITE = Color.parseColor("#EAEAEA")
     }
 
     private lateinit var statusDot: View
     private lateinit var statusText: TextView
     private lateinit var bleStatus: TextView
-    private lateinit var broadcastStatusRow: View
+    private lateinit var broadcastStatusRow: LinearLayout
     private lateinit var broadcastStatus: TextView
     private lateinit var btnStart: Button
     private lateinit var btnStop: Button
     private lateinit var btnTestBroadcast: Button
 
-    private lateinit var mapState: TextView
-    private lateinit var crossMap: TextView
-    private lateinit var curRoad: TextView
-    private lateinit var nextRoad: TextView
-    private lateinit var routeRemain: TextView
-    private lateinit var curSpeed: TextView
-    private lateinit var limitedSpeed: TextView
-    private lateinit var cameraDist: TextView
-    private lateinit var sapaDist: TextView
-    private lateinit var trafficLight: TextView
-    private lateinit var driveWaySize: TextView
-    private lateinit var driveWayDetail: TextView
-    private lateinit var tmcTotal: TextView
-    private lateinit var tmcRemain: TextView
-    private lateinit var tmcSegments: TextView
-    private lateinit var locSpeed: TextView
-    private lateinit var locBearing: TextView
-    private lateinit var locAccuracy: TextView
+    private val rows = mutableMapOf<String, Pair<TextView, TextView>>()
 
     private val handler = Handler(Looper.getMainLooper())
     private var checkRefreshRunnable: Runnable? = null
@@ -70,14 +46,12 @@ class MainActivity : AppCompatActivity() {
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { results ->
-        val allGranted = results.values.all { it }
-        if (allGranted) Log.i(TAG, "All permissions granted")
-        else Toast.makeText(this, "Some permissions denied", Toast.LENGTH_SHORT).show()
+        if (results.values.all { it }) Log.i(TAG, "All permissions granted")
+        else Toast.makeText(this, "部分权限被拒绝", Toast.LENGTH_SHORT).show()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
         setContentView(R.layout.activity_main)
         initViews()
         setupListeners()
@@ -88,34 +62,32 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        if (SettingsActivity.isKeepScreenOn(this)) {
+            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
         updateServiceState()
         refreshUI()
     }
 
-    private fun enableEdgeToEdge() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            window.setDecorFitsSystemWindows(false)
-            val controller = window.insetsController
-            if (controller != null) {
-                controller.systemBarsBehavior =
-                    WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-                controller.hide(WindowInsets.Type.systemBars())
-            }
-        }
-    }
-
+    /**
+     * Android 15+ 强制边缘到边缘显示，使用 WindowInsetsCompat 安全处理系统栏内边距。
+     */
     private fun applyEdgeToEdgeInsets() {
         val rootView = findViewById<View>(android.R.id.content)
         ViewCompat.setOnApplyWindowInsetsListener(rootView) { view, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            val displayCutout = insets.getInsets(WindowInsetsCompat.Type.displayCutout())
             view.setPadding(
-                systemBars.left,
-                systemBars.top,
-                systemBars.right,
-                systemBars.bottom
+                maxOf(systemBars.left, displayCutout.left),
+                maxOf(systemBars.top, displayCutout.top),
+                maxOf(systemBars.right, displayCutout.right),
+                maxOf(systemBars.bottom, displayCutout.bottom)
             )
             WindowInsetsCompat.CONSUMED
         }
+        ViewCompat.requestApplyInsets(rootView)
     }
 
     private fun initViews() {
@@ -128,31 +100,46 @@ class MainActivity : AppCompatActivity() {
         btnStop = findViewById(R.id.btn_stop)
         btnTestBroadcast = findViewById(R.id.btn_test_broadcast)
 
-        mapState = findViewById(R.id.map_state)
-        crossMap = findViewById(R.id.cross_map)
-        curRoad = findViewById(R.id.cur_road)
-        nextRoad = findViewById(R.id.next_road)
-        routeRemain = findViewById(R.id.route_remain)
-        curSpeed = findViewById(R.id.cur_speed)
-        limitedSpeed = findViewById(R.id.limited_speed)
-        cameraDist = findViewById(R.id.camera_dist)
-        sapaDist = findViewById(R.id.sapa_dist)
-        trafficLight = findViewById(R.id.traffic_light)
-        driveWaySize = findViewById(R.id.drive_way_size)
-        driveWayDetail = findViewById(R.id.drive_way_detail)
-        tmcTotal = findViewById(R.id.tmc_total)
-        tmcRemain = findViewById(R.id.tmc_remain)
-        tmcSegments = findViewById(R.id.tmc_segments)
-        locSpeed = findViewById(R.id.loc_speed)
-        locBearing = findViewById(R.id.loc_bearing)
-        locAccuracy = findViewById(R.id.loc_accuracy)
+        rows["map_state"] = bindRow(R.id.row_map_state, R.string.state)
+        rows["cross_map"] = bindRow(R.id.row_cross_map, R.string.cross)
+        rows["cur_road"] = bindRow(R.id.row_cur_road, R.string.current_road)
+        rows["next_road"] = bindRow(R.id.row_next_road, R.string.next_road)
+        rows["route_remain"] = bindRow(R.id.row_route_remain, R.string.route_remain)
+        rows["cur_speed"] = bindRow(R.id.row_cur_speed, R.string.current_speed)
+        rows["limited_speed"] = bindRow(R.id.row_limited_speed, R.string.speed_limit)
+        rows["camera_dist"] = bindRow(R.id.row_camera_dist, R.string.camera)
+        rows["sapa_dist"] = bindRow(R.id.row_sapa_dist, R.string.sapa)
+        rows["traffic_light"] = bindRow(R.id.row_traffic_light, R.string.traffic_light)
+        rows["drive_way_size"] = bindRow(R.id.row_drive_way_size, R.string.lane_count)
+        rows["drive_way_detail"] = bindRow(R.id.row_drive_way_detail, R.string.lane_detail)
+        rows["tmc_total"] = bindRow(R.id.row_tmc_total, R.string.total)
+        rows["tmc_remain"] = bindRow(R.id.row_tmc_remain, R.string.remain)
+        rows["tmc_segments"] = bindRow(R.id.row_tmc_segments, R.string.segments)
+        rows["loc_speed"] = bindRow(R.id.row_loc_speed, R.string.current_speed)
+        rows["loc_bearing"] = bindRow(R.id.row_loc_bearing, R.string.bearing)
+        rows["loc_accuracy"] = bindRow(R.id.row_loc_accuracy, R.string.accuracy)
+    }
+
+    private fun bindRow(rowId: Int, labelRes: Int): Pair<TextView, TextView> {
+        val row = findViewById<LinearLayout>(rowId)
+        val label = row.findViewById<TextView>(R.id.item_label)
+        val value = row.findViewById<TextView>(R.id.item_value)
+        label.setText(labelRes)
+        return label to value
     }
 
     private fun setupListeners() {
+        findViewById<ImageButton>(R.id.btn_settings).setOnClickListener {
+            SettingsActivity.start(this)
+        }
+        findViewById<ImageButton>(R.id.btn_about).setOnClickListener {
+            AboutActivity.start(this)
+        }
+
         btnStart.setOnClickListener {
             if (!hasRequiredPermissions()) {
                 requestPermissionsIfNeeded()
-                Toast.makeText(this, "Grant permissions first", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "请先授予权限", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
             try {
@@ -160,7 +147,7 @@ class MainActivity : AppCompatActivity() {
                 setServiceRunning(true)
             } catch (e: Exception) {
                 Log.e(TAG, "Start service failed", e)
-                Toast.makeText(this, "Failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "启动失败：${e.message}", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -175,18 +162,18 @@ class MainActivity : AppCompatActivity() {
             intent.putExtra("KEY_TYPE", 0)
             sendBroadcast(intent)
             Log.i(TAG, "Manual test broadcast sent")
-            Toast.makeText(this, "Test broadcast sent. Check logcat: adb logcat -s NavBR:V", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "已发送测试广播，查看 logcat: adb logcat -s NavBR:V", Toast.LENGTH_LONG).show()
 
             handler.postDelayed({
                 if (NavDataHolder.broadcastReceived > 0) {
                     val ago = (System.currentTimeMillis() - NavDataHolder.broadcastReceived) / 1000
-                    broadcastStatus.text = "RECEIVED (${ago}s ago)"
-                    broadcastStatus.setTextColor(GREEN)
-                    Toast.makeText(this, "Self-test PASSED!", Toast.LENGTH_SHORT).show()
+                    broadcastStatus.text = "已接收 (${ago}秒前)"
+                    broadcastStatus.setTextColor(getColor(R.color.md_success))
+                    Toast.makeText(this, "自检通过", Toast.LENGTH_SHORT).show()
                 } else {
-                    broadcastStatus.text = "NOT RECEIVED"
-                    broadcastStatus.setTextColor(RED)
-                    Toast.makeText(this, "Self-test FAILED. Check logcat.", Toast.LENGTH_LONG).show()
+                    broadcastStatus.text = "未接收"
+                    broadcastStatus.setTextColor(getColor(R.color.md_error))
+                    Toast.makeText(this, "自检失败，请检查 logcat", Toast.LENGTH_LONG).show()
                 }
             }, 1500)
         }
@@ -233,33 +220,30 @@ class MainActivity : AppCompatActivity() {
     private fun setServiceRunning(running: Boolean) {
         if (running) {
             statusDot.setBackgroundResource(R.drawable.status_dot_yellow)
-            statusText.text = "RUNNING"
-            statusText.setTextColor(AMBER)
+            statusText.text = getString(R.string.status_running)
+            statusText.setTextColor(getColor(R.color.md_status_running))
             btnStart.isEnabled = false
             btnStop.isEnabled = true
             btnTestBroadcast.visibility = View.VISIBLE
             broadcastStatusRow.visibility = View.VISIBLE
-            broadcastStatus.text = "WAITING..."
-            broadcastStatus.setTextColor(AMBER)
+            broadcastStatus.text = getString(R.string.status_waiting)
+            broadcastStatus.setTextColor(getColor(R.color.md_warning))
         } else {
             statusDot.setBackgroundResource(R.drawable.status_dot_red)
-            statusText.text = "STOPPED"
-            statusText.setTextColor(GRAY)
+            statusText.text = getString(R.string.status_stopped)
+            statusText.setTextColor(getColor(R.color.md_on_surface_variant))
             btnStart.isEnabled = true
             btnStop.isEnabled = false
             btnTestBroadcast.visibility = View.GONE
-            bleStatus.text = "DISCONNECTED"
-            bleStatus.setTextColor(GRAY)
+            bleStatus.text = getString(R.string.status_disconnected)
+            bleStatus.setTextColor(getColor(R.color.md_status_disconnected))
             broadcastStatusRow.visibility = View.GONE
             resetAllData()
         }
     }
 
     private fun resetAllData() {
-        arrayOf(mapState, crossMap, curRoad, nextRoad, routeRemain, curSpeed,
-            limitedSpeed, cameraDist, sapaDist, trafficLight, driveWaySize,
-            driveWayDetail, tmcTotal, tmcRemain, tmcSegments,
-            locSpeed, locBearing, locAccuracy).forEach { it.text = "—" }
+        rows.values.forEach { it.second.text = getString(R.string.not_available) }
     }
 
     // ── UI 刷新 ──────────────────────────────────────────
@@ -267,21 +251,21 @@ class MainActivity : AppCompatActivity() {
     private fun refreshUI() {
         if (NavDataHolder.bleConnected) {
             statusDot.setBackgroundResource(R.drawable.status_dot_green)
-            statusText.text = "CONNECTED"
-            statusText.setTextColor(GREEN)
-            bleStatus.text = "CONNECTED ${NavDataHolder.bleDeviceAddress ?: ""}"
-            bleStatus.setTextColor(GREEN)
+            statusText.text = getString(R.string.status_connected)
+            statusText.setTextColor(getColor(R.color.md_status_connected))
+            bleStatus.text = "已连接 ${NavDataHolder.bleDeviceAddress ?: ""}"
+            bleStatus.setTextColor(getColor(R.color.md_status_connected))
         } else if (!btnStart.isEnabled) {
-            bleStatus.text = "WAITING"
-            bleStatus.setTextColor(AMBER)
+            bleStatus.text = getString(R.string.status_waiting)
+            bleStatus.setTextColor(getColor(R.color.md_warning))
         }
 
         val last = NavDataHolder.broadcastReceived
         if (last > 0) {
             val sec = (System.currentTimeMillis() - last) / 1000
-            val ago = if (sec < 60) "${sec}s ago" else "${sec / 60}min ago"
-            broadcastStatus.text = "RECEIVED ($ago)"
-            broadcastStatus.setTextColor(GREEN)
+            val ago = if (sec < 60) "${sec}秒前" else "${sec / 60}分钟前"
+            broadcastStatus.text = "已接收 ($ago)"
+            broadcastStatus.setTextColor(getColor(R.color.md_success))
         }
 
         refreshMapState()
@@ -293,58 +277,62 @@ class MainActivity : AppCompatActivity() {
 
     private fun refreshMapState() {
         val s = NavDataHolder.mapState
-        mapState.text = when (s) {
-            -1 -> "—"
-            0 -> "IDLE"
-            1 -> "NAVIGATING"
-            2 -> "ARRIVED"
-            3 -> "PAUSED"
-            else -> "STATE:$s"
+        rows["map_state"]?.second?.text = when (s) {
+            -1 -> getString(R.string.not_available)
+            0 -> "空闲 / IDLE"
+            1 -> "导航中 / NAVIGATING"
+            2 -> "已到达 / ARRIVED"
+            3 -> "已暂停 / PAUSED"
+            else -> "状态: $s"
         }
-        crossMap.text = NavDataHolder.crossMap ?: "—"
+        rows["cross_map"]?.second?.text = NavDataHolder.crossMap ?: getString(R.string.not_available)
     }
 
     private fun refreshGuideInfo() {
         val i = NavDataHolder.guideInfo ?: return
-        curRoad.text = i.curRoadName.ifEmpty { "—" }
-        nextRoad.text = i.nextRoadName.ifEmpty { "—" }
-        routeRemain.text = if (i.routeRemainDis > 0) {
-            "%.1f km / %d min".format(i.routeRemainDis / 1000f, i.routeRemainTime / 60)
-        } else "—"
-        curSpeed.text = if (i.curSpeed > 0) "${i.curSpeed} km/h" else "—"
-        limitedSpeed.text = if (i.limitedSpeed > 0) "${i.limitedSpeed} km/h" else "—"
-        cameraDist.text = if (i.cameraDist > 0) "${i.cameraDist} m" else "—"
-        sapaDist.text = if (i.sapaDist > 0) "${i.sapaName} ${i.sapaDist}m" else "—"
-        trafficLight.text = if (i.trafficLightNum > 0) "${i.trafficLightNum}" else "—"
+        rows["cur_road"]?.second?.text = i.curRoadName.ifEmpty { getString(R.string.not_available) }
+        rows["next_road"]?.second?.text = i.nextRoadName.ifEmpty { getString(R.string.not_available) }
+        rows["route_remain"]?.second?.text = if (i.routeRemainDis > 0) {
+            "%.1f 公里 / %d 分钟".format(i.routeRemainDis / 1000f, i.routeRemainTime / 60)
+        } else getString(R.string.not_available)
+        rows["cur_speed"]?.second?.text = if (i.curSpeed > 0) "${i.curSpeed} km/h" else getString(R.string.not_available)
+        rows["limited_speed"]?.second?.text = if (i.limitedSpeed > 0) "${i.limitedSpeed} km/h" else getString(R.string.not_available)
+        rows["camera_dist"]?.second?.text = if (i.cameraDist > 0) "${i.cameraDist} m" else getString(R.string.not_available)
+        rows["sapa_dist"]?.second?.text = if (i.sapaDist > 0) "${i.sapaName} ${i.sapaDist}m" else getString(R.string.not_available)
+        rows["traffic_light"]?.second?.text = if (i.trafficLightNum > 0) "${i.trafficLightNum}" else getString(R.string.not_available)
     }
 
     private fun refreshDriveWay() {
         val i = NavDataHolder.driveWayInfo ?: return
-        driveWaySize.text = if (i.enabled) "${i.size} lanes" else "—"
+        rows["drive_way_size"]?.second?.text = if (i.enabled) "${i.size} 车道" else getString(R.string.not_available)
         if (i.enabled && i.lanes.isNotEmpty()) {
-            driveWayDetail.text = i.lanes.joinToString(" ") {
+            rows["drive_way_detail"]?.second?.text = i.lanes.joinToString(" ") {
                 when (it.backIcon) {
                     0 -> "↑" ; 1 -> "↖" ; 2 -> "↗" ; 3 -> "←"
                     4 -> "→" ; 5 -> "↙" ; 6 -> "↘" ; 7 -> "↩"
                     else -> "•"
                 }
             }
-        } else driveWayDetail.text = "—"
+        } else rows["drive_way_detail"]?.second?.text = getString(R.string.not_available)
     }
 
     private fun refreshTmc() {
         val i = NavDataHolder.tmcSegmentInfo ?: return
         if (i.enabled) {
-            tmcTotal.text = "%.1f km".format(i.totalDistance / 1000f)
-            tmcRemain.text = "%.1f km".format(i.residualDistance / 1000f)
-            tmcSegments.text = "${i.size}"
-        } else { tmcTotal.text = "—" ; tmcRemain.text = "—" ; tmcSegments.text = "—" }
+            rows["tmc_total"]?.second?.text = "%.1f 公里".format(i.totalDistance / 1000f)
+            rows["tmc_remain"]?.second?.text = "%.1f 公里".format(i.residualDistance / 1000f)
+            rows["tmc_segments"]?.second?.text = "${i.size}"
+        } else {
+            rows["tmc_total"]?.second?.text = getString(R.string.not_available)
+            rows["tmc_remain"]?.second?.text = getString(R.string.not_available)
+            rows["tmc_segments"]?.second?.text = getString(R.string.not_available)
+        }
     }
 
     private fun refreshLocation() {
         val i = NavDataHolder.locationInfo ?: return
-        locSpeed.text = if (i.speed > 0) "${i.speed} km/h" else "—"
-        locBearing.text = if (i.bearing > 0) "${i.bearing}°" else "—"
-        locAccuracy.text = if (i.accuracy > 0) "${i.accuracy} m" else "—"
+        rows["loc_speed"]?.second?.text = if (i.speed > 0) "${i.speed} km/h" else getString(R.string.not_available)
+        rows["loc_bearing"]?.second?.text = if (i.bearing > 0) "${i.bearing}°" else getString(R.string.not_available)
+        rows["loc_accuracy"]?.second?.text = if (i.accuracy > 0) "${i.accuracy} m" else getString(R.string.not_available)
     }
 }

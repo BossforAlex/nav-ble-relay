@@ -4,139 +4,181 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="#0D1117"
-    android:padding="12dp"
-    android:focusableInTouchMode="true">
+    android:background="?android:colorBackground"
+    android:padding="16dp">
 
-    <!-- 标题栏 -->
+    <!-- 顶部标题栏 -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:paddingBottom="10dp">
+        android:paddingBottom="16dp">
 
-        <View
-            android:id="@+id/status_dot"
-            android:layout_width="10dp"
-            android:layout_height="10dp"
-            android:background="@drawable/status_dot_red"
-            android:layout_marginEnd="8dp" />
+        <ImageView
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:src="@drawable/ic_navigation"
+            android:layout_marginEnd="10dp"
+            app:tint="@color/md_primary" />
 
         <TextView
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="NavBleRelay"
-            android:textSize="18sp"
-            android:textColor="#EAEAEA"
+            android:text="@string/title_app"
+            android:textSize="20sp"
+            android:textColor="?attr/colorOnSurface"
             android:textStyle="bold"
-            android:letterSpacing="0.05" />
+            android:letterSpacing="0.02" />
 
-        <TextView
-            android:id="@+id/status_text"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="未启动"
-            android:textSize="11sp"
-            android:textColor="#666"
-            android:background="@drawable/card_bg_dark"
-            android:paddingHorizontal="10dp"
-            android:paddingVertical="4dp" />
+        <ImageButton
+            android:id="@+id/btn_settings"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:src="@drawable/ic_settings"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/menu_settings"
+            app:tint="@color/md_on_surface_variant" />
+
+        <ImageButton
+            android:id="@+id/btn_about"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:src="@drawable/ic_about"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/menu_about"
+            app:tint="@color/md_on_surface_variant" />
     </LinearLayout>
 
-    <!-- 控制卡片 -->
+    <!-- 服务控制卡片 -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:background="@drawable/card_bg_dark"
-        android:elevation="6dp"
-        android:padding="14dp"
-        android:layout_marginBottom="10dp">
+        android:padding="16dp"
+        android:layout_marginBottom="12dp">
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="SERVICE CONTROL"
-            android:textSize="10sp"
-            android:textColor="#555"
-            android:letterSpacing="0.15"
-            android:layout_marginBottom="10dp" />
+            android:text="@string/service_control"
+            android:textSize="11sp"
+            android:textColor="@color/md_on_surface_variant"
+            android:letterSpacing="0.08"
+            android:layout_marginBottom="12dp" />
 
         <Button
             android:id="@+id/btn_start"
             android:layout_width="match_parent"
-            android:layout_height="50dp"
-            android:text="START SERVICE"
+            android:layout_height="54dp"
+            android:text="@string/start_service"
             android:textSize="15sp"
-            android:textColor="#0D1117"
+            android:textColor="@color/md_on_primary"
             android:textStyle="bold"
-            android:letterSpacing="0.08"
+            android:letterSpacing="0.04"
             android:background="@drawable/btn_start_bg"
             android:insetTop="0dp"
             android:insetBottom="0dp"
-            android:layout_marginBottom="8dp" />
+            android:layout_marginBottom="10dp" />
 
         <Button
             android:id="@+id/btn_stop"
             android:layout_width="match_parent"
-            android:layout_height="50dp"
-            android:text="STOP SERVICE"
+            android:layout_height="54dp"
+            android:text="@string/stop_service"
             android:textSize="15sp"
-            android:textColor="#F44336"
+            android:textColor="@color/md_error"
             android:textStyle="bold"
-            android:letterSpacing="0.08"
+            android:letterSpacing="0.04"
             android:background="@drawable/btn_stop_bg"
             android:insetTop="0dp"
             android:insetBottom="0dp"
             android:enabled="false"
-            android:layout_marginBottom="8dp" />
+            android:layout_marginBottom="10dp" />
 
         <Button
             android:id="@+id/btn_test_broadcast"
             android:layout_width="match_parent"
-            android:layout_height="42dp"
-            android:text="TEST BROADCAST"
+            android:layout_height="46dp"
+            android:text="@string/test_broadcast"
             android:textSize="13sp"
-            android:textColor="#FFB300"
+            android:textColor="@color/md_warning"
             android:textStyle="bold"
-            android:letterSpacing="0.06"
+            android:letterSpacing="0.04"
             android:background="@drawable/btn_test_bg"
             android:insetTop="0dp"
             android:insetBottom="0dp"
             android:visibility="gone" />
     </LinearLayout>
 
-    <!-- 状态卡片 -->
+    <!-- 状态概览卡片 -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:background="@drawable/card_bg_dark"
-        android:elevation="4dp"
-        android:padding="14dp"
-        android:layout_marginBottom="10dp">
+        android:padding="16dp"
+        android:layout_marginBottom="12dp">
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="STATUS"
-            android:textSize="10sp"
-            android:textColor="#555"
-            android:letterSpacing="0.15"
-            android:layout_marginBottom="8dp" />
+            android:text="@string/status"
+            android:textSize="11sp"
+            android:textColor="@color/md_on_surface_variant"
+            android:letterSpacing="0.08"
+            android:layout_marginBottom="10dp" />
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal">
-            <TextView android:layout_width="70dp" android:layout_height="wrap_content"
-                android:text="BLE" android:textSize="12sp" android:textColor="#666" android:letterSpacing="0.05" />
-            <TextView android:id="@+id/ble_status" android:layout_width="0dp"
-                android:layout_height="wrap_content" android:layout_weight="1"
-                android:text="DISCONNECTED" android:textSize="12sp" android:textColor="#555"
-                android:letterSpacing="0.05" />
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+            <TextView
+                android:layout_width="80dp"
+                android:layout_height="wrap_content"
+                android:text="@string/ble"
+                android:textSize="13sp"
+                android:textColor="@color/md_on_surface_variant" />
+            <View
+                android:id="@+id/status_dot"
+                android:layout_width="8dp"
+                android:layout_height="8dp"
+                android:background="@drawable/status_dot_red"
+                android:layout_marginEnd="8dp" />
+            <TextView
+                android:id="@+id/status_text"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/status_stopped"
+                android:textSize="13sp"
+                android:textColor="@color/md_on_surface"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="8dp"
+            android:gravity="center_vertical">
+            <TextView
+                android:layout_width="80dp"
+                android:layout_height="wrap_content"
+                android:text="@string/status"
+                android:textSize="13sp"
+                android:textColor="@color/md_on_surface_variant" />
+            <TextView
+                android:id="@+id/ble_status"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/status_disconnected"
+                android:textSize="13sp"
+                android:textColor="@color/md_status_disconnected" />
         </LinearLayout>
 
         <LinearLayout
@@ -144,14 +186,22 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginTop="6dp"
+            android:layout_marginTop="8dp"
             android:visibility="gone">
-            <TextView android:layout_width="70dp" android:layout_height="wrap_content"
-                android:text="BRD" android:textSize="12sp" android:textColor="#666" android:letterSpacing="0.05" />
-            <TextView android:id="@+id/broadcast_status" android:layout_width="0dp"
-                android:layout_height="wrap_content" android:layout_weight="1"
-                android:text="WAITING" android:textSize="12sp" android:textColor="#FFB300"
-                android:letterSpacing="0.05" />
+            <TextView
+                android:layout_width="80dp"
+                android:layout_height="wrap_content"
+                android:text="@string/broadcast"
+                android:textSize="13sp"
+                android:textColor="@color/md_on_surface_variant" />
+            <TextView
+                android:id="@+id/broadcast_status"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/status_waiting"
+                android:textSize="13sp"
+                android:textColor="@color/md_warning" />
         </LinearLayout>
     </LinearLayout>
 
@@ -168,159 +218,120 @@
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
-            <!-- 卡片: 导航状态 -->
+            <!-- 导航状态 -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:background="@drawable/card_bg_dark"
-                android:elevation="3dp"
-                android:padding="14dp"
-                android:layout_marginBottom="8dp">
-
-                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:text="NAVIGATION" android:textSize="10sp" android:textColor="#00D4FF"
-                    android:letterSpacing="0.15" android:layout_marginBottom="8dp" />
-
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-                    <TextView android:layout_width="60dp" android:layout_height="wrap_content" android:text="State" android:textSize="12sp" android:textColor="#666" android:letterSpacing="0.05" />
-                    <TextView android:id="@+id/map_state" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="—" android:textSize="12sp" android:textColor="#EAEAEA" android:letterSpacing="0.05" />
-                </LinearLayout>
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="4dp">
-                    <TextView android:layout_width="60dp" android:layout_height="wrap_content" android:text="Cross" android:textSize="12sp" android:textColor="#666" android:letterSpacing="0.05" />
-                    <TextView android:id="@+id/cross_map" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="—" android:textSize="12sp" android:textColor="#EAEAEA" android:letterSpacing="0.05" />
-                </LinearLayout>
+                android:padding="16dp"
+                android:layout_marginBottom="10dp">
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/navigation"
+                    android:textSize="11sp"
+                    android:textColor="@color/md_primary"
+                    android:textStyle="bold"
+                    android:letterSpacing="0.08"
+                    android:layout_marginBottom="10dp" />
+                <include layout="@layout/item_kv" android:id="@+id/row_map_state" />
+                <include layout="@layout/item_kv" android:id="@+id/row_cross_map" />
             </LinearLayout>
 
-            <!-- 卡片: 引导信息 -->
+            <!-- 引导信息 -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:background="@drawable/card_bg_dark"
-                android:elevation="3dp"
-                android:padding="14dp"
-                android:layout_marginBottom="8dp">
-
-                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:text="GUIDANCE" android:textSize="10sp" android:textColor="#00D4FF"
-                    android:letterSpacing="0.15" android:layout_marginBottom="8dp" />
-
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-                    <TextView android:layout_width="60dp" android:layout_height="wrap_content" android:text="Road" android:textSize="12sp" android:textColor="#666" android:letterSpacing="0.05" />
-                    <TextView android:id="@+id/cur_road" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="—" android:textSize="12sp" android:textColor="#EAEAEA" android:letterSpacing="0.05" />
-                </LinearLayout>
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="4dp">
-                    <TextView android:layout_width="60dp" android:layout_height="wrap_content" android:text="Next" android:textSize="12sp" android:textColor="#666" android:letterSpacing="0.05" />
-                    <TextView android:id="@+id/next_road" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="—" android:textSize="12sp" android:textColor="#EAEAEA" android:letterSpacing="0.05" />
-                </LinearLayout>
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="4dp">
-                    <TextView android:layout_width="60dp" android:layout_height="wrap_content" android:text="Remain" android:textSize="12sp" android:textColor="#666" android:letterSpacing="0.05" />
-                    <TextView android:id="@+id/route_remain" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="—" android:textSize="12sp" android:textColor="#00D4FF" android:letterSpacing="0.05" />
-                </LinearLayout>
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="4dp">
-                    <TextView android:layout_width="60dp" android:layout_height="wrap_content" android:text="Speed" android:textSize="12sp" android:textColor="#666" android:letterSpacing="0.05" />
-                    <TextView android:id="@+id/cur_speed" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="—" android:textSize="12sp" android:textColor="#EAEAEA" android:letterSpacing="0.05" />
-                </LinearLayout>
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="4dp">
-                    <TextView android:layout_width="60dp" android:layout_height="wrap_content" android:text="Limit" android:textSize="12sp" android:textColor="#666" android:letterSpacing="0.05" />
-                    <TextView android:id="@+id/limited_speed" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="—" android:textSize="12sp" android:textColor="#FFB300" android:letterSpacing="0.05" />
-                </LinearLayout>
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="4dp">
-                    <TextView android:layout_width="60dp" android:layout_height="wrap_content" android:text="Camera" android:textSize="12sp" android:textColor="#666" android:letterSpacing="0.05" />
-                    <TextView android:id="@+id/camera_dist" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="—" android:textSize="12sp" android:textColor="#EAEAEA" android:letterSpacing="0.05" />
-                </LinearLayout>
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="4dp">
-                    <TextView android:layout_width="60dp" android:layout_height="wrap_content" android:text="SAPA" android:textSize="12sp" android:textColor="#666" android:letterSpacing="0.05" />
-                    <TextView android:id="@+id/sapa_dist" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="—" android:textSize="12sp" android:textColor="#EAEAEA" android:letterSpacing="0.05" />
-                </LinearLayout>
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="4dp">
-                    <TextView android:layout_width="60dp" android:layout_height="wrap_content" android:text="Light" android:textSize="12sp" android:textColor="#666" android:letterSpacing="0.05" />
-                    <TextView android:id="@+id/traffic_light" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="—" android:textSize="12sp" android:textColor="#EAEAEA" android:letterSpacing="0.05" />
-                </LinearLayout>
+                android:padding="16dp"
+                android:layout_marginBottom="10dp">
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/guidance"
+                    android:textSize="11sp"
+                    android:textColor="@color/md_primary"
+                    android:textStyle="bold"
+                    android:letterSpacing="0.08"
+                    android:layout_marginBottom="10dp" />
+                <include layout="@layout/item_kv" android:id="@+id/row_cur_road" />
+                <include layout="@layout/item_kv" android:id="@+id/row_next_road" />
+                <include layout="@layout/item_kv" android:id="@+id/row_route_remain" />
+                <include layout="@layout/item_kv" android:id="@+id/row_cur_speed" />
+                <include layout="@layout/item_kv" android:id="@+id/row_limited_speed" />
+                <include layout="@layout/item_kv" android:id="@+id/row_camera_dist" />
+                <include layout="@layout/item_kv" android:id="@+id/row_sapa_dist" />
+                <include layout="@layout/item_kv" android:id="@+id/row_traffic_light" />
             </LinearLayout>
 
-            <!-- 卡片: 车道指引 -->
+            <!-- 车道指引 -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:background="@drawable/card_bg_dark"
-                android:elevation="3dp"
-                android:padding="14dp"
-                android:layout_marginBottom="8dp">
-
-                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:text="DRIVE WAY" android:textSize="10sp" android:textColor="#00D4FF"
-                    android:letterSpacing="0.15" android:layout_marginBottom="8dp" />
-
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-                    <TextView android:layout_width="60dp" android:layout_height="wrap_content" android:text="Count" android:textSize="12sp" android:textColor="#666" android:letterSpacing="0.05" />
-                    <TextView android:id="@+id/drive_way_size" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="—" android:textSize="12sp" android:textColor="#EAEAEA" android:letterSpacing="0.05" />
-                </LinearLayout>
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="4dp">
-                    <TextView android:layout_width="60dp" android:layout_height="wrap_content" android:text="Detail" android:textSize="12sp" android:textColor="#666" android:letterSpacing="0.05" />
-                    <TextView android:id="@+id/drive_way_detail" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="—" android:textSize="16sp" android:textColor="#00D4FF" android:letterSpacing="0.08" />
-                </LinearLayout>
+                android:padding="16dp"
+                android:layout_marginBottom="10dp">
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/drive_way"
+                    android:textSize="11sp"
+                    android:textColor="@color/md_primary"
+                    android:textStyle="bold"
+                    android:letterSpacing="0.08"
+                    android:layout_marginBottom="10dp" />
+                <include layout="@layout/item_kv" android:id="@+id/row_drive_way_size" />
+                <include layout="@layout/item_kv" android:id="@+id/row_drive_way_detail" />
             </LinearLayout>
 
-            <!-- 卡片: 路况光柱 -->
+            <!-- 路况光柱 -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:background="@drawable/card_bg_dark"
-                android:elevation="3dp"
-                android:padding="14dp"
-                android:layout_marginBottom="8dp">
-
-                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:text="TRAFFIC BAR" android:textSize="10sp" android:textColor="#00D4FF"
-                    android:letterSpacing="0.15" android:layout_marginBottom="8dp" />
-
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-                    <TextView android:layout_width="60dp" android:layout_height="wrap_content" android:text="Total" android:textSize="12sp" android:textColor="#666" android:letterSpacing="0.05" />
-                    <TextView android:id="@+id/tmc_total" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="—" android:textSize="12sp" android:textColor="#EAEAEA" android:letterSpacing="0.05" />
-                </LinearLayout>
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="4dp">
-                    <TextView android:layout_width="60dp" android:layout_height="wrap_content" android:text="Remain" android:textSize="12sp" android:textColor="#666" android:letterSpacing="0.05" />
-                    <TextView android:id="@+id/tmc_remain" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="—" android:textSize="12sp" android:textColor="#EAEAEA" android:letterSpacing="0.05" />
-                </LinearLayout>
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="4dp">
-                    <TextView android:layout_width="60dp" android:layout_height="wrap_content" android:text="Segs" android:textSize="12sp" android:textColor="#666" android:letterSpacing="0.05" />
-                    <TextView android:id="@+id/tmc_segments" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="—" android:textSize="12sp" android:textColor="#EAEAEA" android:letterSpacing="0.05" />
-                </LinearLayout>
+                android:padding="16dp"
+                android:layout_marginBottom="10dp">
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/traffic_bar"
+                    android:textSize="11sp"
+                    android:textColor="@color/md_primary"
+                    android:textStyle="bold"
+                    android:letterSpacing="0.08"
+                    android:layout_marginBottom="10dp" />
+                <include layout="@layout/item_kv" android:id="@+id/row_tmc_total" />
+                <include layout="@layout/item_kv" android:id="@+id/row_tmc_remain" />
+                <include layout="@layout/item_kv" android:id="@+id/row_tmc_segments" />
             </LinearLayout>
 
-            <!-- 卡片: 定位信息 -->
+            <!-- 定位信息 -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:background="@drawable/card_bg_dark"
-                android:elevation="3dp"
-                android:padding="14dp"
-                android:layout_marginBottom="8dp">
-
-                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:text="LOCATION" android:textSize="10sp" android:textColor="#00D4FF"
-                    android:letterSpacing="0.15" android:layout_marginBottom="8dp" />
-
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-                    <TextView android:layout_width="60dp" android:layout_height="wrap_content" android:text="Speed" android:textSize="12sp" android:textColor="#666" android:letterSpacing="0.05" />
-                    <TextView android:id="@+id/loc_speed" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="—" android:textSize="12sp" android:textColor="#EAEAEA" android:letterSpacing="0.05" />
-                </LinearLayout>
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="4dp">
-                    <TextView android:layout_width="60dp" android:layout_height="wrap_content" android:text="Bearing" android:textSize="12sp" android:textColor="#666" android:letterSpacing="0.05" />
-                    <TextView android:id="@+id/loc_bearing" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="—" android:textSize="12sp" android:textColor="#EAEAEA" android:letterSpacing="0.05" />
-                </LinearLayout>
-                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="4dp">
-                    <TextView android:layout_width="60dp" android:layout_height="wrap_content" android:text="Acc" android:textSize="12sp" android:textColor="#666" android:letterSpacing="0.05" />
-                    <TextView android:id="@+id/loc_accuracy" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="—" android:textSize="12sp" android:textColor="#EAEAEA" android:letterSpacing="0.05" />
-                </LinearLayout>
+                android:padding="16dp"
+                android:layout_marginBottom="10dp">
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/location"
+                    android:textSize="11sp"
+                    android:textColor="@color/md_primary"
+                    android:textStyle="bold"
+                    android:letterSpacing="0.08"
+                    android:layout_marginBottom="10dp" />
+                <include layout="@layout/item_kv" android:id="@+id/row_loc_speed" />
+                <include layout="@layout/item_kv" android:id="@+id/row_loc_bearing" />
+                <include layout="@layout/item_kv" android:id="@+id/row_loc_accuracy" />
             </LinearLayout>
 
-            <View android:layout_width="match_parent" android:layout_height="20dp" />
+            <View android:layout_width="match_parent" android:layout_height="24dp" />
 
         </LinearLayout>
     </ScrollView>

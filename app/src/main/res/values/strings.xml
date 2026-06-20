@@ -1,3 +1,85 @@
 <resources>
     <string name="app_name">导航BLE转发</string>
+
+    <!-- Main screen -->
+    <string name="title_app">导航BLE转发</string>
+    <string name="status_stopped">已停止</string>
+    <string name="status_running">运行中</string>
+    <string name="status_connected">已连接</string>
+    <string name="status_disconnected">未连接</string>
+    <string name="status_waiting">等待中</string>
+
+    <string name="service_control">服务控制 / Service Control</string>
+    <string name="start_service">启动服务 / START</string>
+    <string name="stop_service">停止服务 / STOP</string>
+    <string name="test_broadcast">测试广播 / TEST BROADCAST</string>
+
+    <string name="status">状态 / Status</string>
+    <string name="ble">蓝牙 / BLE</string>
+    <string name="broadcast">广播 / BRD</string>
+
+    <!-- Data cards -->
+    <string name="navigation">导航状态 / Navigation</string>
+    <string name="state">状态 / State</string>
+    <string name="cross">路口图 / Cross</string>
+
+    <string name="guidance">引导信息 / Guidance</string>
+    <string name="current_road">当前道路 / Road</string>
+    <string name="next_road">下条道路 / Next</string>
+    <string name="route_remain">剩余路程 / Remain</string>
+    <string name="current_speed">当前车速 / Speed</string>
+    <string name="speed_limit">限速 / Limit</string>
+    <string name="camera">摄像头 / Camera</string>
+    <string name="sapa">服务区 / SAPA</string>
+    <string name="traffic_light">红绿灯 / Light</string>
+
+    <string name="drive_way">车道指引 / Drive Way</string>
+    <string name="lane_count">车道数 / Count</string>
+    <string name="lane_detail">详情 / Detail</string>
+
+    <string name="traffic_bar">路况光柱 / Traffic Bar</string>
+    <string name="total">总长 / Total</string>
+    <string name="remain">剩余 / Remain</string>
+    <string name="segments">段数 / Segs</string>
+
+    <string name="location">定位信息 / Location</string>
+    <string name="bearing">方向 / Bearing</string>
+    <string name="accuracy">精度 / Acc</string>
+
+    <!-- Settings -->
+    <string name="settings">设置 / Settings</string>
+    <string name="settings_title">设置 Settings</string>
+    <string name="ble_service">蓝牙服务</string>
+    <string name="service_uuid">服务 UUID</string>
+    <string name="notify_characteristic">通知特征值</string>
+    <string name="log_detail">详细日志</string>
+    <string name="log_detail_summary">输出更多调试信息到 logcat</string>
+    <string name="keep_screen_on">保持屏幕常亮</string>
+    <string name="keep_screen_on_summary">主界面保持屏幕不熄灭</string>
+    <string name="auto_start">开机自启</string>
+    <string name="auto_start_summary">系统启动后自动开始转发</string>
+    <string name="reset_prefs">恢复默认设置</string>
+    <string name="reset_prefs_summary">清除所有设置项</string>
+    <string name="privacy">隐私政策</string>
+
+    <!-- About -->
+    <string name="about">关于 / About</string>
+    <string name="about_title">关于 About</string>
+    <string name="about_desc">本软件通过读取高德地图车机版的公开广播协议，解析导航信息，并通过低功耗蓝牙（BLE）转发给 ESP32 等设备。无需集成高德 SDK，纯本地读取广播数据。</string>
+    <string name="version">版本</string>
+    <string name="author">作者</string>
+    <string name="author_value">BossforAlex</string>
+    <string name="license">开源协议</string>
+    <string name="license_value">MIT License</string>
+    <string name="github_repo">GitHub 仓库</string>
+    <string name="protocol_version">协议版本</string>
+    <string name="protocol_value">AmapAuto标准广播协议 20180813</string>
+
+    <!-- Misc -->
+    <string name="menu_settings">设置</string>
+    <string name="menu_about">关于</string>
+    <string name="back">返回</string>
+    <string name="save">保存</string>
+    <string name="unknown">未知</string>
+    <string name="not_available">—</string>
 </resources>
