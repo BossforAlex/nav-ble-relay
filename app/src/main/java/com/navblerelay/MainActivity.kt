@@ -72,7 +72,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Android 15+ 强制边缘到边缘显示，使用 WindowInsetsCompat 安全处理系统栏内边距。
+     * Android 15+ 强制边缘到边缘显示，Android 16 移除了 opt-out 能力。
+     * 使用 WindowInsetsCompat 安全处理系统栏内边距，不再调用 hide() 等已废弃 API。
      */
     private fun applyEdgeToEdgeInsets() {
         val rootView = findViewById<View>(android.R.id.content)
@@ -87,6 +88,7 @@ class MainActivity : AppCompatActivity() {
             )
             WindowInsetsCompat.CONSUMED
         }
+        // 请求第一帧 insets
         ViewCompat.requestApplyInsets(rootView)
     }
 

@@ -258,7 +258,7 @@ class BleGattServer(private val context: Context) {
             BluetoothGattDescriptor.PERMISSION_READ
                     or BluetoothGattDescriptor.PERMISSION_WRITE
         )
-        cccd.value = BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE
+        cccd.setValue(BluetoothGattDescriptor.DISABLE_NOTIFICATION_VALUE)
         ch.addDescriptor(cccd)
         return ch
     }
@@ -359,7 +359,7 @@ class BleGattServer(private val context: Context) {
             try {
                 if (hasBluetoothPermission()) {
                     gattServer?.sendResponse(
-                        device, requestId, BluetoothGatt.GATT_SUCCESS, offset, characteristic.value
+                        device, requestId, BluetoothGatt.GATT_SUCCESS, offset, characteristic.getValue()
                     )
                 }
             } catch (t: Throwable) {
@@ -382,7 +382,7 @@ class BleGattServer(private val context: Context) {
             Log.w(TAG, "特征值 ${ch.uuid} 数据较大(${bytes.size}B)，请确保 ESP32 已协商足够 MTU")
         }
 
-        ch.value = bytes
+        ch.setValue(bytes)
         try {
             if (!hasBluetoothPermission()) {
                 Log.w(TAG, "缺少 BLUETOOTH_CONNECT 权限，跳过 notifyCharacteristicChanged")
