@@ -46,7 +46,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="通用"
+                android:text="@string/settings_general"
                 android:textSize="12sp"
                 android:textColor="@color/md_primary"
                 android:textStyle="bold"
@@ -231,7 +231,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="其他"
+                android:text="@string/settings_other"
                 android:textSize="12sp"
                 android:textColor="@color/md_primary"
                 android:textStyle="bold"

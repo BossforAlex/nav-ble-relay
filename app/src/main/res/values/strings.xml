@@ -61,6 +61,8 @@
     <string name="reset_prefs">恢复默认设置</string>
     <string name="reset_prefs_summary">清除所有设置项</string>
     <string name="privacy">隐私政策</string>
+    <string name="settings_general">通用</string>
+    <string name="settings_other">其他</string>
 
     <!-- About -->
     <string name="about">关于 / About</string>
@@ -74,6 +76,7 @@
     <string name="github_repo">GitHub 仓库</string>
     <string name="protocol_version">协议版本</string>
     <string name="protocol_value">AmapAuto标准广播协议 20180813</string>
+    <string name="about_footer">Made with ❤ for car navigation</string>
 
     <!-- Misc -->
     <string name="menu_settings">设置</string>
