@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Thanox Material 3 Expressive dark palette -->
+    <color name="md_primary">#AAC7FF</color>
+    <color name="md_on_primary">#0A305F</color>
+    <color name="md_primary_container">#284777</color>
+    <color name="md_on_primary_container">#D6E3FF</color>
+
+    <color name="md_secondary">#BEC6DC</color>
+    <color name="md_on_secondary">#283141</color>
+    <color name="md_secondary_container">#3E4759</color>
+    <color name="md_on_secondary_container">#DAE2F9</color>
+
+    <color name="md_tertiary">#DDBCE0</color>
+    <color name="md_on_tertiary">#3F2844</color>
+    <color name="md_tertiary_container">#573E5C</color>
+    <color name="md_on_tertiary_container">#FAD8FD</color>
+
+    <!-- Surfaces -->
+    <color name="md_surface">#111318</color>
+    <color name="md_on_surface">#E2E2E9</color>
+    <color name="md_surface_variant">#44474E</color>
+    <color name="md_on_surface_variant">#C4C6D0</color>
+    <color name="md_surface_dim">#111318</color>
+    <color name="md_surface_bright">#37393E</color>
+    <color name="md_background">#111318</color>
+
+    <color name="md_outline">#8E9099</color>
+    <color name="md_outline_variant">#44474E</color>
+
+    <!-- Functional colors -->
+    <color name="md_error">#FFB4AB</color>
+    <color name="md_on_error">#690005</color>
+    <color name="md_error_container">#93000A</color>
+    <color name="md_on_error_container">#FFDAD6</color>
+
+    <color name="md_success">#53BCAC</color>
+    <color name="md_warning">#FFB74D</color>
+    <color name="md_info">#AAC7FF</color>
+
+    <color name="md_card_bg">#1E2024</color>
+    <color name="md_card_stroke">#44474E</color>
+    <color name="md_status_running">#FFB74D</color>
+    <color name="md_status_connected">#53BCAC</color>
+    <color name="md_status_disconnected">#FFB4AB</color>
+</resources>

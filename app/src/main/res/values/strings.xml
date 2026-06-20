@@ -24,6 +24,8 @@
     <string name="cross">路口图 / Cross</string>
 
     <string name="guidance">引导信息 / Guidance</string>
+    <string name="guidance_preview">导航引导 / Turn Preview</string>
+    <string name="next_turn">下一转向 / Next Turn</string>
     <string name="current_road">当前道路 / Road</string>
     <string name="next_road">下条道路 / Next</string>
     <string name="route_remain">剩余路程 / Remain</string>

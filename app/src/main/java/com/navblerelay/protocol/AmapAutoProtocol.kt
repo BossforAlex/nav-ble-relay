@@ -92,8 +92,60 @@ object AmapAutoProtocol {
         4 to "严重拥堵"
     )
 
+    /** 转向图标 → 箭头旋转角度（0 表示直行向上） */
+    val ICON_ROTATION = mapOf(
+        0 to 0,
+        1 to 0,
+        2 to -90,
+        3 to 90,
+        4 to -45,
+        5 to 45,
+        6 to -135,
+        7 to 135,
+        8 to 180,
+        9 to 0,
+        10 to 0,
+        11 to 0,
+        12 to 0,
+        13 to 0,
+        14 to 0,
+        15 to 0,
+        16 to 0,
+        17 to 0,
+        18 to 0,
+        19 to -180,
+        20 to 0
+    )
+
+    /** 转向图标 → 简短方向标签（用于小屏显示） */
+    val ICON_SHORT = mapOf(
+        0 to "直行",
+        1 to "直行",
+        2 to "左转",
+        3 to "右转",
+        4 to "左前方",
+        5 to "右前方",
+        6 to "左后方",
+        7 to "右后方",
+        8 to "掉头",
+        9 to "直行",
+        10 to "途经点",
+        11 to "环岛",
+        12 to "出环岛",
+        13 to "服务区",
+        14 to "收费站",
+        15 to "到达",
+        16 to "隧道",
+        17 to "环岛",
+        18 to "出环岛",
+        19 to "右转掉头",
+        20 to "顺行"
+    )
+
     /** 便捷方法：获取中文描述，不存在时返回 "未知(值)" */
     fun iconLabel(id: Int): String = ICON_MAP[id] ?: "未知($id)"
+    fun iconShort(id: Int): String = ICON_SHORT[id] ?: "未知($id)"
+    fun iconRotation(id: Int): Int = ICON_ROTATION[id] ?: 0
     fun roadLabel(id: Int): String = ROAD_TYPE_MAP[id] ?: "未知($id)"
     fun cameraLabel(id: Int): String = CAMERA_TYPE_MAP[id] ?: "未知($id)"
     fun tmcLabel(id: Int): String = TMC_STATUS_MAP[id] ?: "未知($id)"
