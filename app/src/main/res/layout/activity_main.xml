@@ -238,11 +238,11 @@
                     android:letterSpacing="0.08"
                     android:layout_marginBottom="16dp" />
 
-                <ImageView
+                <com.navblerelay.ui.NavArrowView
                     android:id="@+id/nav_arrow"
                     android:layout_width="120dp"
                     android:layout_height="120dp"
-                    android:src="@drawable/ic_nav_arrow"
+                    android:padding="12dp"
                     android:contentDescription="@string/next_turn" />
 
                 <TextView

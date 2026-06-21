@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp"
+    android:height="96dp"
+    android:viewportWidth="96"
+    android:viewportHeight="96">
+    <!-- 环岛：空心圆环 -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M72,54 A18,18 0 1,0 36,54 A18,18 0 1,0 72,54"
+        android:strokeColor="@color/md_on_surface"
+        android:strokeWidth="12"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <!-- 向上进入箭头 -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M54,36 L54,18"
+        android:strokeColor="@color/md_on_surface"
+        android:strokeWidth="14"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:fillColor="@color/md_on_surface"
+        android:pathData="M54,10 L40,28 L68,28 Z" />
+</vector>

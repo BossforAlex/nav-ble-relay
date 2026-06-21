@@ -11,10 +11,10 @@ import android.util.Log
 import android.view.View
 import android.widget.Button
 import android.widget.ImageButton
-import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import com.navblerelay.ui.NavArrowView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -40,7 +40,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnStop: Button
     private lateinit var btnTestBroadcast: Button
 
-    private lateinit var navArrow: ImageView
+    private lateinit var navArrow: NavArrowView
     private lateinit var navDistance: TextView
     private lateinit var navNextRoad: TextView
     private lateinit var navIconLabel: TextView
@@ -256,7 +256,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun resetAllData() {
         rows.values.forEach { it.second.text = getString(R.string.not_available) }
-        navArrow.rotation = 0f
+        navArrow.setIconType(0)
         navDistance.text = getString(R.string.not_available)
         navNextRoad.text = getString(R.string.not_available)
         navIconLabel.text = getString(R.string.not_available)
@@ -317,7 +317,7 @@ class MainActivity : AppCompatActivity() {
         rows["sapa_dist"]?.second?.text = if (i.sapaDist > 0) "${i.sapaName} ${i.sapaDist}m" else getString(R.string.not_available)
         rows["traffic_light"]?.second?.text = if (i.trafficLightNum > 0) "${i.trafficLightNum}" else getString(R.string.not_available)
 
-        navArrow.rotation = AmapAutoProtocol.iconRotation(i.icon).toFloat()
+        navArrow.setIconType(i.icon)
         navDistance.text = if (i.segRemainDis > 0) {
             if (i.segRemainDis >= 1000) "%.1f km".format(i.segRemainDis / 1000f)
             else "${i.segRemainDis} m"
