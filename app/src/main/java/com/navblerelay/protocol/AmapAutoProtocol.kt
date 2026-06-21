@@ -1,5 +1,7 @@
 package com.navblerelay.protocol
 
+import com.navblerelay.R
+
 /**
  * AmapAuto 标准广播协议定义
  *
