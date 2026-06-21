@@ -15,11 +15,12 @@ import kotlin.math.hypot
  * - 路线转向箭头支持 setArrowColor / setArrowWidth / setTurnArrowIs3D 等接口自定义；
  * - 车道线信息通过 AMapLaneInfo 回调获取，官方提供 CreateLaneInfoImage 能力。
  *
- * 本项目通过 AmapAuto 公版广播协议接收导航数据，没有直接接入高德导航 SDK，
- * 因此采用自定义 Canvas 绘制方案，对齐官方视觉风格：
- * - 使用粗线描边（约 20% 宽度）+ 圆角线端/连接，保证箭头不会断裂；
+ * 本项目通过 AmapAuto 公版广播协议接收导航数据，没有直接接入高德导航 SDK。
+ * 路口转向大图标已改用统一的 ic_nav_*.xml 矢量资源；ArrowPainter 仅用于车道指引
+ * 小图标绘制，对齐官方视觉风格：
+ * - 使用粗线描边（约 24% 宽度）+ 圆角线端/连接，保证箭头不会断裂；
  * - 箭头头部使用实心三角形，方向与最后一段路径一致；
- * - 单一颜色，便于在不同背景（车道蓝色 / 页面背景）上保持可读性。
+ * - 单一颜色，便于在车道蓝色背景上保持可读性。
  *
  * 相关文档：
  * - 导航实时数据获取：https://lbs.amap.com/api/android-navi-sdk/guide/navigation-map/navi-info
@@ -39,9 +40,10 @@ object ArrowPainter {
     const val ICON_ROUNDABOUT_EXIT = 9
     const val ICON_ARRIVE = 10
 
-    private const val STROKE_RATIO = 0.20f
-    private const val HEAD_HALF_WIDTH_RATIO = 0.26f
-    private const val HEAD_LENGTH_RATIO = 0.22f
+    // 车道指引图标使用更粗的描边与更大的箭头头部，提升小尺寸下的可读性
+    private const val STROKE_RATIO = 0.24f
+    private const val HEAD_HALF_WIDTH_RATIO = 0.30f
+    private const val HEAD_LENGTH_RATIO = 0.26f
 
     fun draw(canvas: Canvas, icon: Int, rect: RectF, color: Int) {
         if (rect.width() <= 0 || rect.height() <= 0) return

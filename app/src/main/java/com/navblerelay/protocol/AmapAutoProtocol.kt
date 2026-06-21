@@ -34,8 +34,8 @@ object AmapAutoProtocol {
     const val STATE_ARRIVE_DEST = 39
 
     // ── 转向图标含义（§3.1.3 guide_info 中的 ICON 字段）───
-    // 注：图标渲染已统一迁移至 com.navblerelay.ui.ArrowPainter，
-    //     使用 Canvas 动态绘制，避免静态矢量图缩放断裂/显示不全的问题。
+    // 注：路口转向大图标使用统一的 ic_nav_*.xml 矢量资源（NavArrowView）；
+    //     车道指引小图标使用 ArrowPainter Canvas 动态绘制。
     val ICON_MAP = mapOf(
         0 to "未定义",
         1 to "直行",
