@@ -84,4 +84,10 @@
     <string name="save">保存</string>
     <string name="unknown">未知</string>
     <string name="not_available">—</string>
+
+    <!-- ESP BLE Debug -->
+    <string name="esp_title">ESP 蓝牙调试 / ESP BLE</string>
+    <string name="esp_status">ESP 状态 / Status</string>
+    <string name="esp_logs">交互日志 / Logs</string>
+    <string name="esp_clear_logs">清空</string>
 </resources>
