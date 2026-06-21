@@ -80,15 +80,23 @@ class NavBleService : Service() {
 
             bleServer = BleGattServer(this).apply {
                 onDeviceConnected = { device ->
-                    Log.i(TAG, "🟢 ESP32 连接：${device.address}")
+                    val name = device.name ?: "Unknown"
+                    val isEsp = name.contains("ESP", ignoreCase = true)
+                    Log.i(TAG, "🟢 BLE 连接：$name (${device.address})，ESP32=$isEsp")
                     NavDataHolder.bleConnected = true
+                    NavDataHolder.bleDeviceName = name
                     NavDataHolder.bleDeviceAddress = device.address
-                    updateNotification("ESP32 已连接：${device.address}")
+                    NavDataHolder.isEsp32 = isEsp
+                    NavDataHolder.bleConnectedTime = System.currentTimeMillis()
+                    updateNotification("已连接：$name")
                 }
                 onDeviceDisconnected = { device ->
-                    Log.i(TAG, "🔴 ESP32 断开：${device.address}")
+                    Log.i(TAG, "🔴 BLE 断开：${device.address}")
                     NavDataHolder.bleConnected = false
+                    NavDataHolder.bleDeviceName = null
                     NavDataHolder.bleDeviceAddress = null
+                    NavDataHolder.isEsp32 = false
+                    NavDataHolder.bleConnectedTime = 0L
                     updateNotification("等待 ESP32 连接...")
                 }
                 onError = { msg ->

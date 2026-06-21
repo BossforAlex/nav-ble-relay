@@ -55,8 +55,29 @@ object NavDataHolder {
             notifyChange()
         }
 
+    /** BLE 设备名称 */
+    var bleDeviceName: String? = null
+        set(value) {
+            field = value
+            notifyChange()
+        }
+
     /** BLE 设备地址 */
     var bleDeviceAddress: String? = null
+        set(value) {
+            field = value
+            notifyChange()
+        }
+
+    /** 是否识别为 ESP32 */
+    var isEsp32: Boolean = false
+        set(value) {
+            field = value
+            notifyChange()
+        }
+
+    /** 连接开始时间戳 */
+    var bleConnectedTime: Long = 0L
         set(value) {
             field = value
             notifyChange()

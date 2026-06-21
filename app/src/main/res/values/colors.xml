@@ -43,4 +43,16 @@
     <color name="md_status_running">#E07B39</color>
     <color name="md_status_connected">#008375</color>
     <color name="md_status_disconnected">#BA1A1A</color>
+
+    <!-- Lane guide -->
+    <color name="lane_bg">#3A6FC7</color>
+    <color name="lane_divider">#80FFFFFF</color>
+    <color name="lane_arrow">#FFFFFF</color>
+
+    <!-- TMC traffic bar -->
+    <color name="tmc_smooth">#008375</color>
+    <color name="tmc_slow">#E07B39</color>
+    <color name="tmc_congested">#BA1A1A</color>
+    <color name="tmc_severe">#5D1049</color>
+    <color name="tmc_unknown">#74777F</color>
 </resources>

@@ -90,4 +90,10 @@
     <string name="esp_status">ESP 状态 / Status</string>
     <string name="esp_logs">交互日志 / Logs</string>
     <string name="esp_clear_logs">清空</string>
+    <string name="esp_connected">已连接</string>
+    <string name="esp_disconnected">未连接</string>
+    <string name="esp_device_name">设备名称</string>
+    <string name="esp_device_address">设备地址</string>
+    <string name="esp_recognized">ESP32 识别</string>
+    <string name="esp_uptime">连接时长</string>
 </resources>
