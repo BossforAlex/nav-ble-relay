@@ -86,6 +86,17 @@
     <string name="menu_theme">切换主题</string>
     <string name="theme_changed">已切换至 %s</string>
     <string name="back">返回</string>
+    <string name="esp_title">ESP 蓝牙调试</string>
+    <string name="esp_status">ESP 状态 / ESP Status</string>
+    <string name="esp_logs">交互日志 / Logs</string>
+    <string name="esp_connected">已连接</string>
+    <string name="esp_disconnected">未连接</string>
+    <string name="esp_device_name">设备名称</string>
+    <string name="esp_device_address">设备地址</string>
+    <string name="esp_recognized">识别为 ESP32</string>
+    <string name="esp_uptime">连接时长</string>
+    <string name="esp_clear_logs">清空日志</string>
+    <string name="esp_enter_debug">ESP 调试</string>
     <string name="save">保存</string>
     <string name="unknown">未知</string>
     <string name="not_available">—</string>

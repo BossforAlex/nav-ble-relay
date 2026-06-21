@@ -43,6 +43,7 @@
     <color name="md_status_running">#E07B39</color>
     <color name="md_status_connected">#008375</color>
     <color name="md_status_disconnected">#BA1A1A</color>
+    <color name="md_warning">#F9AB00</color>
 
     <!-- Lane guidance -->
     <color name="lane_bg">#4285F4</color>

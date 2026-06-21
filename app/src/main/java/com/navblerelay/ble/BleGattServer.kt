@@ -20,10 +20,12 @@ import android.os.Build
 import android.os.ParcelUuid
 import android.util.Log
 import androidx.core.content.ContextCompat
+import com.navblerelay.ble.BleLog
 import com.navblerelay.protocol.AmapAutoProtocol
 import com.navblerelay.protocol.DriveWayInfo
 import com.navblerelay.protocol.GuideInfo
 import com.navblerelay.protocol.LocationInfo
+import com.navblerelay.protocol.NavDataHolder
 import com.navblerelay.protocol.TmcSegmentInfo
 import org.json.JSONObject
 import java.util.UUID
@@ -88,19 +90,24 @@ class BleGattServer(private val context: Context) {
             gattServer = bluetoothManager.openGattServer(context, gattServerCallback)
             if (gattServer == null) {
                 isRunning.set(false)
+                BleLog.e(TAG, "无法打开 GATT Server")
                 onError?.invoke("无法打开 GATT Server")
                 return
             }
             setupService()
             startAdvertising()
-            Log.i(TAG, "✅ BLE GATT Server 已启动，服务 UUID=$SERVICE_UUID")
+            val msg = "BLE GATT Server 已启动，服务 UUID=$SERVICE_UUID"
+            Log.i(TAG, "✅ $msg")
+            BleLog.i(TAG, msg)
         } catch (se: SecurityException) {
             isRunning.set(false)
             Log.e(TAG, "启动 BLE 时缺少权限", se)
+            BleLog.e(TAG, "启动 BLE 时缺少权限: ${se.message}")
             onError?.invoke("启动 BLE 时缺少权限")
         } catch (t: Throwable) {
             isRunning.set(false)
             Log.e(TAG, "启动 BLE 失败", t)
+            BleLog.e(TAG, "启动 BLE 失败: ${t.message}")
             onError?.invoke("启动 BLE 失败：${t.message}")
         }
     }
@@ -117,13 +124,27 @@ class BleGattServer(private val context: Context) {
         advertiser = null
         connectedDevice = null
         Log.i(TAG, "BLE GATT Server 已停止")
+        BleLog.i(TAG, "BLE GATT Server 已停止")
     }
 
     val isConnected: Boolean get() = connectedDevice != null
 
+    private fun readDeviceName(device: BluetoothDevice): String? {
+        return try {
+            if (hasBluetoothPermission()) device.name else null
+        } catch (t: Throwable) {
+            null
+        }
+    }
+
+    private fun isEsp32Device(name: String?): Boolean {
+        return !name.isNullOrBlank() && name.contains("ESP", ignoreCase = true)
+    }
+
     // ── 数据发送方法 ────────────────────────────────────────
 
     fun sendGuideInfo(info: GuideInfo) {
+        BleLog.i(TAG, "准备发送 GuideInfo: icon=${info.icon}, remain=${info.segRemainDis}m")
         val json = JSONObject().apply {
             put("type", AmapAutoProtocol.KEY_GUIDE_INFO)
             put("ts", System.currentTimeMillis())
@@ -145,6 +166,7 @@ class BleGattServer(private val context: Context) {
     }
 
     fun sendDriveWay(info: DriveWayInfo) {
+        BleLog.i(TAG, "准备发送 DriveWayInfo: enabled=${info.enabled}, lanes=${info.size}")
         val json = JSONObject().apply {
             put("type", AmapAutoProtocol.KEY_DRIVE_WAY)
             put("ts", System.currentTimeMillis())
@@ -165,6 +187,7 @@ class BleGattServer(private val context: Context) {
     }
 
     fun sendTmcSegment(info: TmcSegmentInfo) {
+        BleLog.i(TAG, "准备发送 TmcSegmentInfo: total=${info.totalDistance}, segments=${info.size}")
         val json = JSONObject().apply {
             put("type", AmapAutoProtocol.KEY_TMC_SEGMENT)
             put("ts", System.currentTimeMillis())
@@ -186,6 +209,7 @@ class BleGattServer(private val context: Context) {
     }
 
     fun sendMapState(state: Int, crossMap: String?) {
+        BleLog.i(TAG, "准备发送 MapState: state=$state")
         val json = JSONObject().apply {
             put("type", AmapAutoProtocol.KEY_MAP_STATE)
             put("ts", System.currentTimeMillis())
@@ -198,6 +222,7 @@ class BleGattServer(private val context: Context) {
     }
 
     fun sendLocation(info: LocationInfo) {
+        BleLog.i(TAG, "准备发送 LocationInfo: speed=${info.speed}, bearing=${info.bearing}")
         val json = JSONObject().apply {
             put("type", AmapAutoProtocol.KEY_LOCATION)
             put("ts", System.currentTimeMillis())
@@ -313,21 +338,35 @@ class BleGattServer(private val context: Context) {
         override fun onConnectionStateChange(device: BluetoothDevice, status: Int, newState: Int) {
             if (newState == BluetoothGatt.STATE_CONNECTED) {
                 connectedDevice = device
-                Log.i(TAG, "🟢 ESP32 已连接：${device.address}")
+                val name = readDeviceName(device)
+                val recognized = isEsp32Device(name)
+                NavDataHolder.bleDeviceName = name
+                NavDataHolder.bleDeviceAddress = device.address
+                NavDataHolder.isEsp32 = recognized
+                NavDataHolder.bleConnected = true
+                NavDataHolder.bleConnectedTime = System.currentTimeMillis()
+                val msg = "设备已连接: ${device.address} 名称=${name ?: "未知"} ESP32=${recognized}"
+                Log.i(TAG, "🟢 $msg")
+                BleLog.i(TAG, msg)
                 onDeviceConnected?.invoke(device)
             } else if (newState == BluetoothGatt.STATE_DISCONNECTED) {
-                Log.i(TAG, "🔴 ESP32 已断开：${device.address}")
-                if (device.address == connectedDevice?.address) {
+                val wasConnected = device.address == connectedDevice?.address
+                if (wasConnected) {
                     connectedDevice = null
+                    NavDataHolder.bleConnected = false
+                    NavDataHolder.bleConnectedTime = 0L
                 }
+                val msg = "设备已断开: ${device.address}"
+                Log.i(TAG, "🔴 $msg")
+                BleLog.i(TAG, msg)
                 onDeviceDisconnected?.invoke(device)
             }
         }
 
         override fun onServiceAdded(status: Int, service: BluetoothGattService?) {
-            if (status == BluetoothGatt.GATT_SUCCESS) {
-                Log.i(TAG, "服务已添加：${service?.uuid}")
-            }
+            val msg = "服务已添加: ${service?.uuid} status=${status}"
+            Log.i(TAG, msg)
+            BleLog.i(TAG, msg)
         }
 
         override fun onDescriptorWriteRequest(
@@ -344,9 +383,12 @@ class BleGattServer(private val context: Context) {
                     gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, value)
                 }
                 val hex = value?.joinToString("") { "%02X".format(it) } ?: "null"
-                Log.i(TAG, "CCCD 写入请求：characteristic=${descriptor.characteristic.uuid} value=$hex")
+                val msg = "CCCD 写入请求: characteristic=${descriptor.characteristic.uuid} value=$hex"
+                Log.i(TAG, msg)
+                BleLog.i(TAG, msg)
             } catch (t: Throwable) {
                 Log.e(TAG, "处理 CCCD 写入失败", t)
+                BleLog.e(TAG, "处理 CCCD 写入失败: ${t.message}")
             }
         }
 
@@ -362,13 +404,19 @@ class BleGattServer(private val context: Context) {
                         device, requestId, BluetoothGatt.GATT_SUCCESS, offset, characteristic.value
                     )
                 }
+                val msg = "读取请求: characteristic=${characteristic.uuid} offset=$offset"
+                Log.i(TAG, msg)
+                BleLog.i(TAG, msg)
             } catch (t: Throwable) {
                 Log.e(TAG, "读取特征值请求失败", t)
+                BleLog.e(TAG, "读取特征值请求失败: ${t.message}")
             }
         }
 
         override fun onMtuChanged(device: BluetoothDevice?, mtu: Int) {
-            Log.i(TAG, "MTU 协商完成：$mtu 字节")
+            val msg = "MTU 协商完成: $mtu 字节"
+            Log.i(TAG, msg)
+            BleLog.i(TAG, msg)
         }
     }
 
@@ -389,15 +437,20 @@ class BleGattServer(private val context: Context) {
                 return
             }
             val success = server.notifyCharacteristicChanged(device, ch, false)
+            val shortUuid = ch.uuid.toString().takeLast(4).uppercase()
             if (!success) {
                 Log.w(TAG, "notifyCharacteristicChanged 返回 false：${ch.uuid}")
+                BleLog.w(TAG, "notify 失败: uuid=$shortUuid")
             } else {
                 Log.d(TAG, "📡 BLE 发送 ${ch.uuid}: ${bytes.size}B")
+                BleLog.i(TAG, "notify 成功: uuid=$shortUuid size=${bytes.size}B")
             }
         } catch (se: SecurityException) {
             Log.e(TAG, "缺少蓝牙权限，无法发送通知", se)
+            BleLog.e(TAG, "缺少蓝牙权限，无法发送通知: ${se.message}")
         } catch (t: Throwable) {
             Log.e(TAG, "发送通知异常", t)
+            BleLog.e(TAG, "发送通知异常: ${t.message}")
         }
     }
 }

@@ -74,7 +74,8 @@
             android:layout_height="wrap_content"
             android:text="@string/service_control"
             android:textSize="11sp"
-            android:textColor="@color/md_on_surface_variant"
+            android:textColor="@color/md_primary"
+            android:textStyle="bold"
             android:letterSpacing="0.08"
             android:layout_marginBottom="12dp" />
 
@@ -136,7 +137,8 @@
             android:layout_height="wrap_content"
             android:text="@string/status"
             android:textSize="11sp"
-            android:textColor="@color/md_on_surface_variant"
+            android:textColor="@color/md_primary"
+            android:textStyle="bold"
             android:letterSpacing="0.08"
             android:layout_marginBottom="10dp" />
 
@@ -188,6 +190,33 @@
                 android:text="@string/status_disconnected"
                 android:textSize="13sp"
                 android:textColor="@color/md_status_disconnected" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/btn_esp_debug"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="12dp"
+            android:padding="12dp"
+            android:background="@drawable/ic_item_bg"
+            android:gravity="center_vertical"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground">
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/esp_enter_debug"
+                android:textSize="14sp"
+                android:textColor="@color/md_on_surface" />
+            <ImageView
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:src="@drawable/ic_chevron_right"
+                android:contentDescription="@string/esp_enter_debug"
+                app:tint="@color/md_on_surface_variant" />
         </LinearLayout>
 
         <LinearLayout
@@ -251,7 +280,11 @@
                     android:id="@+id/nav_arrow"
                     android:layout_width="120dp"
                     android:layout_height="120dp"
+                    android:padding="12dp"
+                    android:scaleType="fitCenter"
+                    android:adjustViewBounds="true"
                     android:src="@drawable/ic_nav_straight"
+                    app:srcCompat="@drawable/ic_nav_straight"
                     android:contentDescription="@string/next_turn" />
 
                 <TextView

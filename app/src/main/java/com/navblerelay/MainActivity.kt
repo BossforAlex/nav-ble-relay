@@ -41,6 +41,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnStart: Button
     private lateinit var btnStop: Button
     private lateinit var btnTestBroadcast: Button
+    private lateinit var btnEspDebug: LinearLayout
 
     private lateinit var navArrow: ImageView
     private lateinit var navDistance: TextView
@@ -112,6 +113,7 @@ class MainActivity : AppCompatActivity() {
         btnStart = findViewById(R.id.btn_start)
         btnStop = findViewById(R.id.btn_stop)
         btnTestBroadcast = findViewById(R.id.btn_test_broadcast)
+        btnEspDebug = findViewById(R.id.btn_esp_debug)
 
         navArrow = findViewById(R.id.nav_arrow)
         navDistance = findViewById(R.id.nav_distance)
@@ -158,6 +160,7 @@ class MainActivity : AppCompatActivity() {
         findViewById<ImageButton>(R.id.btn_about).setOnClickListener {
             AboutActivity.start(this)
         }
+        btnEspDebug.setOnClickListener { EspBleActivity.start(this) }
 
         btnStart.setOnClickListener {
             if (!hasRequiredPermissions()) {
@@ -283,7 +286,9 @@ class MainActivity : AppCompatActivity() {
             statusDot.setBackgroundResource(R.drawable.status_dot_green)
             statusText.text = getString(R.string.status_connected)
             statusText.setTextColor(getColor(R.color.md_status_connected))
-            bleStatus.text = "已连接 ${NavDataHolder.bleDeviceAddress ?: ""}"
+            val device = NavDataHolder.bleDeviceName ?: NavDataHolder.bleDeviceAddress ?: ""
+            val espTag = if (NavDataHolder.isEsp32) " [ESP32]" else ""
+            bleStatus.text = "已连接 $device$espTag"
             bleStatus.setTextColor(getColor(R.color.md_status_connected))
         } else if (!btnStart.isEnabled) {
             bleStatus.text = getString(R.string.status_waiting)
