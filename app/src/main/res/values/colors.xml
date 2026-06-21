@@ -1,46 +1,46 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Material 3 primary palette -->
-    <color name="md_primary">#D0BCFF</color>
-    <color name="md_on_primary">#381E72</color>
-    <color name="md_primary_container">#4F378B</color>
-    <color name="md_on_primary_container">#EADDFF</color>
+    <!-- Thanox Material 3 Expressive light palette -->
+    <color name="md_primary">#415F91</color>
+    <color name="md_on_primary">#FFFFFF</color>
+    <color name="md_primary_container">#D6E3FF</color>
+    <color name="md_on_primary_container">#284777</color>
 
-    <color name="md_secondary">#CCC2DC</color>
-    <color name="md_on_secondary">#332D41</color>
-    <color name="md_secondary_container">#4A4458</color>
-    <color name="md_on_secondary_container">#E8DEF8</color>
+    <color name="md_secondary">#565E71</color>
+    <color name="md_on_secondary">#FFFFFF</color>
+    <color name="md_secondary_container">#DAE2F9</color>
+    <color name="md_on_secondary_container">#3E4759</color>
 
-    <color name="md_tertiary">#EFB8C8</color>
-    <color name="md_on_tertiary">#492532</color>
-    <color name="md_tertiary_container">#633B48</color>
-    <color name="md_on_tertiary_container">#FFD8E4</color>
+    <color name="md_tertiary">#705575</color>
+    <color name="md_on_tertiary">#FFFFFF</color>
+    <color name="md_tertiary_container">#FAD8FD</color>
+    <color name="md_on_tertiary_container">#573E5C</color>
 
     <!-- Surfaces -->
-    <color name="md_surface">#1C1B1F</color>
-    <color name="md_on_surface">#E6E1E5</color>
-    <color name="md_surface_variant">#49454F</color>
-    <color name="md_on_surface_variant">#CAC4D0</color>
-    <color name="md_surface_dim">#141218</color>
-    <color name="md_surface_bright">#3B383E</color>
-    <color name="md_background">#0F0F12</color>
+    <color name="md_surface">#F9F9FF</color>
+    <color name="md_on_surface">#191C20</color>
+    <color name="md_surface_variant">#E0E2EC</color>
+    <color name="md_on_surface_variant">#44474E</color>
+    <color name="md_surface_dim">#D9D9E0</color>
+    <color name="md_surface_bright">#F9F9FF</color>
+    <color name="md_background">#F9F9FF</color>
 
-    <color name="md_outline">#938F99</color>
-    <color name="md_outline_variant">#49454F</color>
+    <color name="md_outline">#74777F</color>
+    <color name="md_outline_variant">#C4C6D0</color>
 
     <!-- Functional colors -->
-    <color name="md_error">#F2B8B5</color>
-    <color name="md_on_error">#601410</color>
-    <color name="md_error_container">#8C1D18</color>
-    <color name="md_on_error_container">#F9DEDC</color>
+    <color name="md_error">#BA1A1A</color>
+    <color name="md_on_error">#FFFFFF</color>
+    <color name="md_error_container">#FFDAD6</color>
+    <color name="md_on_error_container">#93000A</color>
 
-    <color name="md_success">#4DB6AC</color>
-    <color name="md_warning">#FFB74D</color>
-    <color name="md_info">#82B1FF</color>
+    <color name="md_success">#008375</color>
+    <color name="md_warning">#E07B39</color>
+    <color name="md_info">#415F91</color>
 
-    <color name="md_card_bg">#1C1B1F</color>
-    <color name="md_card_stroke">#2A2830</color>
-    <color name="md_status_running">#FFB74D</color>
-    <color name="md_status_connected">#4DB6AC</color>
-    <color name="md_status_disconnected">#F2B8B5</color>
+    <color name="md_card_bg">#EDEDF4</color>
+    <color name="md_card_stroke">#C4C6D0</color>
+    <color name="md_status_running">#E07B39</color>
+    <color name="md_status_connected">#008375</color>
+    <color name="md_status_disconnected">#BA1A1A</color>
 </resources>

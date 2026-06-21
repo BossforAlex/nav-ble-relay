@@ -24,6 +24,8 @@
     <string name="cross">路口图 / Cross</string>
 
     <string name="guidance">引导信息 / Guidance</string>
+    <string name="guidance_preview">导航引导 / Turn Preview</string>
+    <string name="next_turn">下一转向 / Next Turn</string>
     <string name="current_road">当前道路 / Road</string>
     <string name="next_road">下条道路 / Next</string>
     <string name="route_remain">剩余路程 / Remain</string>
@@ -61,8 +63,6 @@
     <string name="reset_prefs">恢复默认设置</string>
     <string name="reset_prefs_summary">清除所有设置项</string>
     <string name="privacy">隐私政策</string>
-    <string name="settings_general">通用</string>
-    <string name="settings_other">其他</string>
 
     <!-- About -->
     <string name="about">关于 / About</string>
@@ -76,7 +76,6 @@
     <string name="github_repo">GitHub 仓库</string>
     <string name="protocol_version">协议版本</string>
     <string name="protocol_value">AmapAuto标准广播协议 20180813</string>
-    <string name="about_footer">Made with ❤ for car navigation</string>
 
     <!-- Misc -->
     <string name="menu_settings">设置</string>

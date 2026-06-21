@@ -1,1 +1,1 @@
-// Root build script - plugins are managed in settings.gradle.kts
+// Root build script

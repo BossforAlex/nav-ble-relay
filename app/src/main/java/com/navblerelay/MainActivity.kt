@@ -11,6 +11,7 @@ import android.util.Log
 import android.view.View
 import android.widget.Button
 import android.widget.ImageButton
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
@@ -19,6 +20,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import com.navblerelay.protocol.AmapAutoProtocol
 import com.navblerelay.protocol.NavDataHolder
 import com.navblerelay.receiver.NavBroadcastReceiver
 import com.navblerelay.service.NavBleService
@@ -37,6 +39,11 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnStart: Button
     private lateinit var btnStop: Button
     private lateinit var btnTestBroadcast: Button
+
+    private lateinit var navArrow: ImageView
+    private lateinit var navDistance: TextView
+    private lateinit var navNextRoad: TextView
+    private lateinit var navIconLabel: TextView
 
     private val rows = mutableMapOf<String, Pair<TextView, TextView>>()
 
@@ -72,8 +79,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Android 15+ 强制边缘到边缘显示，Android 16 移除了 opt-out 能力。
-     * 使用 WindowInsetsCompat 安全处理系统栏内边距，不再调用 hide() 等已废弃 API。
+     * Android 15+ 强制边缘到边缘显示，使用 WindowInsetsCompat 安全处理系统栏内边距。
      */
     private fun applyEdgeToEdgeInsets() {
         val rootView = findViewById<View>(android.R.id.content)
@@ -88,7 +94,6 @@ class MainActivity : AppCompatActivity() {
             )
             WindowInsetsCompat.CONSUMED
         }
-        // 请求第一帧 insets
         ViewCompat.requestApplyInsets(rootView)
     }
 
@@ -101,6 +106,11 @@ class MainActivity : AppCompatActivity() {
         btnStart = findViewById(R.id.btn_start)
         btnStop = findViewById(R.id.btn_stop)
         btnTestBroadcast = findViewById(R.id.btn_test_broadcast)
+
+        navArrow = findViewById(R.id.nav_arrow)
+        navDistance = findViewById(R.id.nav_distance)
+        navNextRoad = findViewById(R.id.nav_next_road)
+        navIconLabel = findViewById(R.id.nav_icon_label)
 
         rows["map_state"] = bindRow(R.id.row_map_state, R.string.state)
         rows["cross_map"] = bindRow(R.id.row_cross_map, R.string.cross)
@@ -246,6 +256,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun resetAllData() {
         rows.values.forEach { it.second.text = getString(R.string.not_available) }
+        navArrow.rotation = 0f
+        navDistance.text = getString(R.string.not_available)
+        navNextRoad.text = getString(R.string.not_available)
+        navIconLabel.text = getString(R.string.not_available)
     }
 
     // ── UI 刷新 ──────────────────────────────────────────
@@ -302,6 +316,14 @@ class MainActivity : AppCompatActivity() {
         rows["camera_dist"]?.second?.text = if (i.cameraDist > 0) "${i.cameraDist} m" else getString(R.string.not_available)
         rows["sapa_dist"]?.second?.text = if (i.sapaDist > 0) "${i.sapaName} ${i.sapaDist}m" else getString(R.string.not_available)
         rows["traffic_light"]?.second?.text = if (i.trafficLightNum > 0) "${i.trafficLightNum}" else getString(R.string.not_available)
+
+        navArrow.rotation = AmapAutoProtocol.iconRotation(i.icon).toFloat()
+        navDistance.text = if (i.segRemainDis > 0) {
+            if (i.segRemainDis >= 1000) "%.1f km".format(i.segRemainDis / 1000f)
+            else "${i.segRemainDis} m"
+        } else getString(R.string.not_available)
+        navNextRoad.text = i.nextRoadName.ifEmpty { getString(R.string.not_available) }
+        navIconLabel.text = AmapAutoProtocol.iconShort(i.icon)
     }
 
     private fun refreshDriveWay() {
