@@ -1,7 +1,5 @@
 package com.navblerelay.protocol
 
-import com.navblerelay.R
-
 /**
  * AmapAuto 标准广播协议定义
  *
@@ -36,6 +34,8 @@ object AmapAutoProtocol {
     const val STATE_ARRIVE_DEST = 39
 
     // ── 转向图标含义（§3.1.3 guide_info 中的 ICON 字段）───
+    // 注：图标渲染已统一迁移至 com.navblerelay.ui.ArrowPainter，
+    //     使用 Canvas 动态绘制，避免静态矢量图缩放断裂/显示不全的问题。
     val ICON_MAP = mapOf(
         0 to "未定义",
         1 to "直行",
@@ -144,36 +144,10 @@ object AmapAutoProtocol {
         20 to "顺行"
     )
 
-    /** 转向图标 → 高德风格矢量图标资源（-1 表示无专用图标） */
-    val ICON_DRAWABLE = mapOf(
-        0 to R.drawable.ic_nav_straight,
-        1 to R.drawable.ic_nav_straight,
-        2 to R.drawable.ic_nav_left,
-        3 to R.drawable.ic_nav_right,
-        4 to R.drawable.ic_nav_left_front,
-        5 to R.drawable.ic_nav_right_front,
-        6 to R.drawable.ic_nav_left_back,
-        7 to R.drawable.ic_nav_right_back,
-        8 to R.drawable.ic_nav_uturn,
-        9 to R.drawable.ic_nav_straight,
-        10 to R.drawable.ic_nav_arrive,
-        11 to R.drawable.ic_nav_roundabout_enter,
-        12 to R.drawable.ic_nav_roundabout_exit,
-        13 to R.drawable.ic_nav_arrive,
-        14 to R.drawable.ic_nav_arrive,
-        15 to R.drawable.ic_nav_arrive,
-        16 to R.drawable.ic_nav_straight,
-        17 to R.drawable.ic_nav_roundabout_enter,
-        18 to R.drawable.ic_nav_roundabout_exit,
-        19 to R.drawable.ic_nav_uturn,
-        20 to R.drawable.ic_nav_straight
-    )
-
     /** 便捷方法：获取中文描述，不存在时返回 "未知(值)" */
     fun iconLabel(id: Int): String = ICON_MAP[id] ?: "未知($id)"
     fun iconShort(id: Int): String = ICON_SHORT[id] ?: "未知($id)"
     fun iconRotation(id: Int): Int = ICON_ROTATION[id] ?: 0
-    fun iconDrawableRes(id: Int): Int = ICON_DRAWABLE[id] ?: R.drawable.ic_nav_straight
     fun roadLabel(id: Int): String = ROAD_TYPE_MAP[id] ?: "未知($id)"
     fun cameraLabel(id: Int): String = CAMERA_TYPE_MAP[id] ?: "未知($id)"
     fun tmcLabel(id: Int): String = TMC_STATUS_MAP[id] ?: "未知($id)"

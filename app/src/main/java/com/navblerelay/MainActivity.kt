@@ -11,8 +11,8 @@ import android.util.Log
 import android.view.View
 import android.widget.Button
 import android.widget.ImageButton
-import android.widget.ImageView
 import android.widget.LinearLayout
+import com.navblerelay.ui.NavArrowView
 import android.widget.TextView
 import android.widget.Toast
 import com.navblerelay.ui.LaneGuideView
@@ -43,7 +43,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnTestBroadcast: Button
     private lateinit var btnEspDebug: LinearLayout
 
-    private lateinit var navArrow: ImageView
+    private lateinit var navArrow: NavArrowView
     private lateinit var navDistance: TextView
     private lateinit var navNextRoad: TextView
     private lateinit var navIconLabel: TextView
@@ -270,7 +270,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun resetAllData() {
         rows.values.forEach { it.second.text = getString(R.string.not_available) }
-        navArrow.setImageResource(R.drawable.ic_nav_straight)
+        navArrow.setIconType(0)
         navArrow.rotation = 0f
         navDistance.text = getString(R.string.not_available)
         navNextRoad.text = getString(R.string.not_available)
@@ -336,7 +336,7 @@ class MainActivity : AppCompatActivity() {
         rows["sapa_dist"]?.second?.text = if (i.sapaDist > 0) "${i.sapaName} ${i.sapaDist}m" else getString(R.string.not_available)
         rows["traffic_light"]?.second?.text = if (i.trafficLightNum > 0) "${i.trafficLightNum}" else getString(R.string.not_available)
 
-        navArrow.setImageResource(AmapAutoProtocol.iconDrawableRes(i.icon))
+        navArrow.setIconType(i.icon)
         navArrow.rotation = 0f
         navDistance.text = if (i.segRemainDis > 0) {
             if (i.segRemainDis >= 1000) "%.1f km".format(i.segRemainDis / 1000f)
