@@ -11,7 +11,7 @@
 - **实时导航数据转发**：引导信息、车道信息、路况光柱图、地图状态、定位信息
 - **BLE 外设模式**：Android 设备作为 GATT Server，ESP32 作为 Central 连接并订阅通知
 - **Beline Moto 风格导航引导**：主界面提供大箭头转向预览 + 剩余距离 + 下条道路，适配后续 ESP32 小屏显示
-- **Google 蓝 Material 3 主题**：采用 Google 蓝（Google Blue）Material 3 配色风格，支持浅色 / 深色模式，可在主界面顶栏一键切换
+- **Thanox 同款 Material 3 主题**：基于 [Thanox](https://github.com/Tornaco/Thanox) 的 Material 3 Expressive 配色，支持浅色 / 深色模式
 - **前台服务保活**：服务在通知栏运行，支持启动 / 停止 / 自启动
 - **GitHub Actions 自动构建**：每次推送到 `main` 自动编译 Debug APK 并发布到 Release
 
@@ -104,7 +104,7 @@ Android 端作为 GATT Server，提供以下服务与特征值：
 
 ## 主题
 
-本应用采用 **Google 蓝（Google Blue）Material 3** 配色风格，完整适配浅色与深色模式。用户可在主界面顶栏一键在“跟随系统 / 浅色 / 深色”之间切换，或跟随系统自动切换。
+本应用采用与开源项目 [Thanox](https://github.com/Tornaco/Thanox) 相同的 Material 3 Expressive 配色风格，并完整适配了浅色与深色模式。
 
 ---
 

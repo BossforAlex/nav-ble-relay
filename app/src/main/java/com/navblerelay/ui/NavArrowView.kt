@@ -9,9 +9,10 @@ import com.navblerelay.R
  * 路口转向大图标
  *
  * 使用统一的矢量图标资源（ic_nav_*.xml）替代易断裂/可读性差的旧图标：
- * - 8dp 粗描边 + 圆角线端/连接，保证箭头整体连贯；
+ * - 16dp 粗描边 + 圆角线端/连接，呈现圆润、饱满的实心箭头效果；
  * - 实心三角箭头头部，方向清晰；
  * - 使用 @color/md_on_surface，自动适配 day/night；
+ * - 矢量资源在任意 dpi 下都不会被压缩模糊；
  * - 如需替换为 iconfont.cn 下载的图标，只需覆盖对应的 ic_nav_*.xml 文件并保持命名即可。
  */
 class NavArrowView @JvmOverloads constructor(
@@ -21,8 +22,8 @@ class NavArrowView @JvmOverloads constructor(
 ) : AppCompatImageView(context, attrs, defStyleAttr) {
 
     init {
-        setIconType(0)
         scaleType = ScaleType.FIT_CENTER
+        setIconType(0)
     }
 
     fun setIconType(amapIconType: Int) {

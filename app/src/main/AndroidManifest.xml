@@ -44,11 +44,6 @@
             android:exported="false"
             android:parentActivityName=".MainActivity" />
 
-        <activity
-            android:name=".EspBleActivity"
-            android:exported="false"
-            android:parentActivityName=".MainActivity" />
-
         <service
             android:name=".service.NavBleService"
             android:exported="false"

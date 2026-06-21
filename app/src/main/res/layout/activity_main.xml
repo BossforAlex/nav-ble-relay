@@ -42,15 +42,6 @@
             app:tint="@color/md_on_surface_variant" />
 
         <ImageButton
-            android:id="@+id/btn_theme"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:src="@drawable/ic_theme_system"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="@string/menu_theme"
-            app:tint="@color/md_on_surface_variant" />
-
-        <ImageButton
             android:id="@+id/btn_about"
             android:layout_width="40dp"
             android:layout_height="40dp"
@@ -74,8 +65,7 @@
             android:layout_height="wrap_content"
             android:text="@string/service_control"
             android:textSize="11sp"
-            android:textColor="@color/md_primary"
-            android:textStyle="bold"
+            android:textColor="@color/md_on_surface_variant"
             android:letterSpacing="0.08"
             android:layout_marginBottom="12dp" />
 
@@ -137,8 +127,7 @@
             android:layout_height="wrap_content"
             android:text="@string/status"
             android:textSize="11sp"
-            android:textColor="@color/md_primary"
-            android:textStyle="bold"
+            android:textColor="@color/md_on_surface_variant"
             android:letterSpacing="0.08"
             android:layout_marginBottom="10dp" />
 
@@ -190,33 +179,6 @@
                 android:text="@string/status_disconnected"
                 android:textSize="13sp"
                 android:textColor="@color/md_status_disconnected" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/btn_esp_debug"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:layout_marginTop="12dp"
-            android:padding="12dp"
-            android:background="@drawable/ic_item_bg"
-            android:gravity="center_vertical"
-            android:clickable="true"
-            android:focusable="true"
-            android:foreground="?attr/selectableItemBackground">
-            <TextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="@string/esp_enter_debug"
-                android:textSize="14sp"
-                android:textColor="@color/md_on_surface" />
-            <ImageView
-                android:layout_width="20dp"
-                android:layout_height="20dp"
-                android:src="@drawable/ic_chevron_right"
-                android:contentDescription="@string/esp_enter_debug"
-                app:tint="@color/md_on_surface_variant" />
         </LinearLayout>
 
         <LinearLayout
@@ -313,13 +275,6 @@
                     android:textSize="13sp"
                     android:textColor="@color/md_on_surface_variant" />
 
-                <com.navblerelay.ui.LaneGuideView
-                    android:id="@+id/lane_guide_view"
-                    android:layout_width="match_parent"
-                    android:layout_height="56dp"
-                    android:layout_marginTop="16dp"
-                    android:visibility="gone" />
-
             </LinearLayout>
 
             <!-- 导航状态 -->
@@ -408,13 +363,6 @@
                     android:textStyle="bold"
                     android:letterSpacing="0.08"
                     android:layout_marginBottom="10dp" />
-                <com.navblerelay.ui.TrafficBarView
-                    android:id="@+id/traffic_bar_view"
-                    android:layout_width="match_parent"
-                    android:layout_height="12dp"
-                    android:layout_marginBottom="12dp"
-                    android:visibility="gone" />
-
                 <include layout="@layout/item_kv" android:id="@+id/row_tmc_total" />
                 <include layout="@layout/item_kv" android:id="@+id/row_tmc_remain" />
                 <include layout="@layout/item_kv" android:id="@+id/row_tmc_segments" />

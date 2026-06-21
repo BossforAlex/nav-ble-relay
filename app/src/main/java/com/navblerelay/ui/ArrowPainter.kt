@@ -4,10 +4,9 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
-import kotlin.math.hypot
 
 /**
- * 统一的导航箭头绘制器
+ * 统一的导航箭头绘制器（主要用于车道指引小图标）
  *
  * 参考高德地图官方导航 SDK 文档对转向图标/车道线的规范建议：
  * - 高德建议优先使用 NaviInfo.getIconBitmap()（含路网信息，更直观），
@@ -21,10 +20,6 @@ import kotlin.math.hypot
  * - 使用粗线描边（约 24% 宽度）+ 圆角线端/连接，保证箭头不会断裂；
  * - 箭头头部使用实心三角形，方向与最后一段路径一致；
  * - 单一颜色，便于在车道蓝色背景上保持可读性。
- *
- * 相关文档：
- * - 导航实时数据获取：https://lbs.amap.com/api/android-navi-sdk/guide/navigation-map/navi-info
- * - 自定义其他图面元素：https://lbs.amap.com/api/android-navi-sdk/guide/custom-ui/custom-other-overlay
  */
 object ArrowPainter {
 
@@ -81,145 +76,200 @@ object ArrowPainter {
         }
     }
 
-    private fun drawStraight(canvas: Canvas, cx: Float, cy: Float, w: Float, h: Float, stroke: Paint, fill: Paint) {
-        val baseX = cx
-        val baseY = cy + h * 0.30f
-        val tipX = cx
-        val tipY = cy - h * 0.40f
-        canvas.drawLine(baseX, baseY, tipX, tipY, stroke)
-        canvas.drawPath(triangleHead(tipX, tipY, baseX, baseY, w * HEAD_HALF_WIDTH_RATIO), fill)
+    private fun drawStraight(
+        canvas: Canvas, cx: Float, cy: Float, w: Float, h: Float,
+        strokePaint: Paint, fillPaint: Paint
+    ) {
+        val halfW = w * HEAD_HALF_WIDTH_RATIO
+        val headLen = h * HEAD_LENGTH_RATIO
+        val bodyTop = cy - h * 0.12f
+        val bodyBottom = cy + h * 0.42f
+
+        canvas.drawLine(cx, bodyBottom, cx, bodyTop + headLen, strokePaint)
+        canvas.drawPath(triangle(cx, bodyTop, halfW, headLen), fillPaint)
     }
 
-    private fun drawLeft(canvas: Canvas, cx: Float, cy: Float, w: Float, h: Float, stroke: Paint, fill: Paint) {
-        val p = Path().apply {
-            moveTo(cx, cy + h * 0.30f)
-            lineTo(cx, cy - h * 0.10f)
-            lineTo(cx - w * 0.35f, cy - h * 0.10f)
+    private fun drawLeft(
+        canvas: Canvas, cx: Float, cy: Float, w: Float, h: Float,
+        strokePaint: Paint, fillPaint: Paint
+    ) {
+        val halfW = w * HEAD_HALF_WIDTH_RATIO
+        val headLen = h * HEAD_LENGTH_RATIO
+        val path = Path().apply {
+            moveTo(cx, cy + h * 0.40f)
+            lineTo(cx, cy)
+            lineTo(cx - w * 0.22f, cy)
         }
-        canvas.drawPath(p, stroke)
-        val baseX = cx
-        val baseY = cy - h * 0.10f
-        val tipX = cx - w * 0.55f
-        val tipY = cy - h * 0.10f
-        canvas.drawPath(triangleHead(tipX, tipY, baseX, baseY, h * HEAD_HALF_WIDTH_RATIO), fill)
+        canvas.drawPath(path, strokePaint)
+        canvas.drawPath(triangle(cx - w * 0.22f - headLen, cy, halfW, headLen, Point.LEFT), fillPaint)
     }
 
-    private fun drawRight(canvas: Canvas, cx: Float, cy: Float, w: Float, h: Float, stroke: Paint, fill: Paint) {
-        val p = Path().apply {
-            moveTo(cx, cy + h * 0.30f)
-            lineTo(cx, cy - h * 0.10f)
-            lineTo(cx + w * 0.35f, cy - h * 0.10f)
+    private fun drawRight(
+        canvas: Canvas, cx: Float, cy: Float, w: Float, h: Float,
+        strokePaint: Paint, fillPaint: Paint
+    ) {
+        val halfW = w * HEAD_HALF_WIDTH_RATIO
+        val headLen = h * HEAD_LENGTH_RATIO
+        val path = Path().apply {
+            moveTo(cx, cy + h * 0.40f)
+            lineTo(cx, cy)
+            lineTo(cx + w * 0.22f, cy)
         }
-        canvas.drawPath(p, stroke)
-        val baseX = cx
-        val baseY = cy - h * 0.10f
-        val tipX = cx + w * 0.55f
-        val tipY = cy - h * 0.10f
-        canvas.drawPath(triangleHead(tipX, tipY, baseX, baseY, h * HEAD_HALF_WIDTH_RATIO), fill)
+        canvas.drawPath(path, strokePaint)
+        canvas.drawPath(triangle(cx + w * 0.22f + headLen, cy, halfW, headLen, Point.RIGHT), fillPaint)
     }
 
-    private fun drawLeftFront(canvas: Canvas, cx: Float, cy: Float, w: Float, h: Float, stroke: Paint, fill: Paint) {
-        val baseX = cx + w * 0.05f
-        val baseY = cy + h * 0.32f
-        val tipX = cx - w * 0.32f
-        val tipY = cy - h * 0.32f
-        canvas.drawLine(baseX, baseY, tipX, tipY, stroke)
-        canvas.drawPath(triangleHead(tipX, tipY, baseX, baseY, w * HEAD_HALF_WIDTH_RATIO), fill)
+    private fun drawLeftFront(
+        canvas: Canvas, cx: Float, cy: Float, w: Float, h: Float,
+        strokePaint: Paint, fillPaint: Paint
+    ) {
+        val halfW = w * HEAD_HALF_WIDTH_RATIO
+        val headLen = h * HEAD_LENGTH_RATIO
+        val endX = cx - w * 0.22f
+        val endY = cy - h * 0.22f
+        canvas.drawLine(cx + w * 0.18f, cy + h * 0.38f, endX + headLen * 0.6f, endY + headLen * 0.6f, strokePaint)
+        canvas.drawPath(triangle(endX, endY, halfW, headLen, Point.LEFT_TOP), fillPaint)
     }
 
-    private fun drawRightFront(canvas: Canvas, cx: Float, cy: Float, w: Float, h: Float, stroke: Paint, fill: Paint) {
-        val baseX = cx - w * 0.05f
-        val baseY = cy + h * 0.32f
-        val tipX = cx + w * 0.32f
-        val tipY = cy - h * 0.32f
-        canvas.drawLine(baseX, baseY, tipX, tipY, stroke)
-        canvas.drawPath(triangleHead(tipX, tipY, baseX, baseY, w * HEAD_HALF_WIDTH_RATIO), fill)
+    private fun drawRightFront(
+        canvas: Canvas, cx: Float, cy: Float, w: Float, h: Float,
+        strokePaint: Paint, fillPaint: Paint
+    ) {
+        val halfW = w * HEAD_HALF_WIDTH_RATIO
+        val headLen = h * HEAD_LENGTH_RATIO
+        val endX = cx + w * 0.22f
+        val endY = cy - h * 0.22f
+        canvas.drawLine(cx - w * 0.18f, cy + h * 0.38f, endX - headLen * 0.6f, endY + headLen * 0.6f, strokePaint)
+        canvas.drawPath(triangle(endX, endY, halfW, headLen, Point.RIGHT_TOP), fillPaint)
     }
 
-    private fun drawLeftBack(canvas: Canvas, cx: Float, cy: Float, w: Float, h: Float, stroke: Paint, fill: Paint) {
-        val baseX = cx + w * 0.05f
-        val baseY = cy - h * 0.32f
-        val tipX = cx - w * 0.32f
-        val tipY = cy + h * 0.32f
-        canvas.drawLine(baseX, baseY, tipX, tipY, stroke)
-        canvas.drawPath(triangleHead(tipX, tipY, baseX, baseY, w * HEAD_HALF_WIDTH_RATIO), fill)
+    private fun drawLeftBack(
+        canvas: Canvas, cx: Float, cy: Float, w: Float, h: Float,
+        strokePaint: Paint, fillPaint: Paint
+    ) {
+        val halfW = w * HEAD_HALF_WIDTH_RATIO
+        val headLen = h * HEAD_LENGTH_RATIO
+        val endX = cx - w * 0.22f
+        val endY = cy + h * 0.22f
+        canvas.drawLine(cx + w * 0.18f, cy - h * 0.38f, endX + headLen * 0.6f, endY - headLen * 0.6f, strokePaint)
+        canvas.drawPath(triangle(endX, endY, halfW, headLen, Point.LEFT_BOTTOM), fillPaint)
     }
 
-    private fun drawRightBack(canvas: Canvas, cx: Float, cy: Float, w: Float, h: Float, stroke: Paint, fill: Paint) {
-        val baseX = cx - w * 0.05f
-        val baseY = cy - h * 0.32f
-        val tipX = cx + w * 0.32f
-        val tipY = cy + h * 0.32f
-        canvas.drawLine(baseX, baseY, tipX, tipY, stroke)
-        canvas.drawPath(triangleHead(tipX, tipY, baseX, baseY, w * HEAD_HALF_WIDTH_RATIO), fill)
+    private fun drawRightBack(
+        canvas: Canvas, cx: Float, cy: Float, w: Float, h: Float,
+        strokePaint: Paint, fillPaint: Paint
+    ) {
+        val halfW = w * HEAD_HALF_WIDTH_RATIO
+        val headLen = h * HEAD_LENGTH_RATIO
+        val endX = cx + w * 0.22f
+        val endY = cy + h * 0.22f
+        canvas.drawLine(cx - w * 0.18f, cy - h * 0.38f, endX - headLen * 0.6f, endY - headLen * 0.6f, strokePaint)
+        canvas.drawPath(triangle(endX, endY, halfW, headLen, Point.RIGHT_BOTTOM), fillPaint)
     }
 
-    private fun drawUturn(canvas: Canvas, cx: Float, cy: Float, w: Float, h: Float, stroke: Paint, fill: Paint) {
-        val r = w * 0.22f
-        val topY = cy - h * 0.15f
-        val leftX = cx - r
-        val rightX = cx + r
-        val p = Path().apply {
-            moveTo(cx, cy + h * 0.35f)
-            lineTo(cx, topY + r)
-            arcTo(leftX, topY - r, rightX, topY + r, 90f, 180f, false)
+    private fun drawUturn(
+        canvas: Canvas, cx: Float, cy: Float, w: Float, h: Float,
+        strokePaint: Paint, fillPaint: Paint
+    ) {
+        val halfW = w * HEAD_HALF_WIDTH_RATIO
+        val headLen = h * HEAD_LENGTH_RATIO
+        val rect = RectF(cx - w * 0.22f, cy - h * 0.10f, cx + w * 0.22f, cy + h * 0.34f)
+        val path = Path().apply {
+            moveTo(cx, cy + h * 0.34f)
+            lineTo(cx, cy + h * 0.10f)
+            arcTo(rect, 90f, 180f)
+            lineTo(cx - w * 0.22f - headLen, cy - h * 0.10f)
         }
-        canvas.drawPath(p, stroke)
-        val tipX = cx - r
-        val tipY = topY
-        val baseX = cx - r
-        val baseY = topY + r * 0.9f
-        canvas.drawPath(triangleHead(tipX, tipY, baseX, baseY, h * HEAD_HALF_WIDTH_RATIO), fill)
+        canvas.drawPath(path, strokePaint)
+        canvas.drawPath(triangle(cx - w * 0.22f - headLen, cy - h * 0.10f, halfW, headLen, Point.LEFT), fillPaint)
     }
 
-    private fun drawRoundaboutEnter(canvas: Canvas, cx: Float, cy: Float, w: Float, h: Float, stroke: Paint, fill: Paint) {
-        val r = w * 0.18f
-        val centerY = cy + h * 0.05f
-        val p = Path().apply {
-            addCircle(cx, centerY, r, Path.Direction.CCW)
-        }
-        canvas.drawPath(p, stroke)
-        canvas.drawLine(cx, centerY - r, cx, cy - h * 0.40f, stroke)
-        canvas.drawPath(triangleHead(cx, cy - h * 0.40f, cx, centerY - r, w * HEAD_HALF_WIDTH_RATIO), fill)
+    private fun drawRoundaboutEnter(
+        canvas: Canvas, cx: Float, cy: Float, w: Float, h: Float,
+        strokePaint: Paint, fillPaint: Paint
+    ) {
+        val halfW = w * HEAD_HALF_WIDTH_RATIO
+        val headLen = h * HEAD_LENGTH_RATIO
+        val ringRect = RectF(cx - w * 0.22f, cy - h * 0.05f, cx + w * 0.22f, cy + h * 0.39f)
+        canvas.drawArc(ringRect, 0f, 360f, false, strokePaint)
+        canvas.drawLine(cx, cy - h * 0.05f, cx, cy - h * 0.38f, strokePaint)
+        canvas.drawPath(triangle(cx, cy - h * 0.38f - headLen * 0.7f, halfW, headLen), fillPaint)
     }
 
-    private fun drawRoundaboutExit(canvas: Canvas, cx: Float, cy: Float, w: Float, h: Float, stroke: Paint, fill: Paint) {
-        val r = w * 0.18f
-        val centerY = cy + h * 0.05f
-        val p = Path().apply {
-            addCircle(cx, centerY, r, Path.Direction.CCW)
-        }
-        canvas.drawPath(p, stroke)
-        canvas.drawLine(cx, centerY + r, cx + w * 0.35f, cy + h * 0.30f, stroke)
-        canvas.drawPath(triangleHead(cx + w * 0.35f, cy + h * 0.30f, cx, centerY + r, h * HEAD_HALF_WIDTH_RATIO), fill)
+    private fun drawRoundaboutExit(
+        canvas: Canvas, cx: Float, cy: Float, w: Float, h: Float,
+        strokePaint: Paint, fillPaint: Paint
+    ) {
+        val halfW = w * HEAD_HALF_WIDTH_RATIO
+        val headLen = h * HEAD_LENGTH_RATIO
+        val ringRect = RectF(cx - w * 0.22f, cy - h * 0.32f, cx + w * 0.22f, cy + h * 0.12f)
+        canvas.drawArc(ringRect, 0f, 360f, false, strokePaint)
+        canvas.drawLine(cx + w * 0.05f, cy + h * 0.12f, cx + w * 0.28f, cy + h * 0.35f, strokePaint)
+        canvas.drawPath(
+            triangle(cx + w * 0.28f + headLen * 0.6f, cy + h * 0.35f + headLen * 0.6f, halfW, headLen, Point.RIGHT_BOTTOM),
+            fillPaint
+        )
     }
 
-    private fun drawArrive(canvas: Canvas, cx: Float, cy: Float, w: Float, h: Float, stroke: Paint, fill: Paint) {
-        val baseX = cx
-        val baseY = cy - h * 0.30f
-        val tipX = cx
-        val tipY = cy + h * 0.40f
-        canvas.drawLine(baseX, baseY, tipX, tipY, stroke)
-        canvas.drawPath(triangleHead(tipX, tipY, baseX, baseY, w * HEAD_HALF_WIDTH_RATIO), fill)
+    private fun drawArrive(
+        canvas: Canvas, cx: Float, cy: Float, w: Float, h: Float,
+        strokePaint: Paint, fillPaint: Paint
+    ) {
+        val halfW = w * HEAD_HALF_WIDTH_RATIO
+        val headLen = h * HEAD_LENGTH_RATIO
+        val bodyTop = cy - h * 0.42f
+        val bodyBottom = cy + h * 0.12f
+
+        canvas.drawLine(cx, bodyTop, cx, bodyBottom - headLen, strokePaint)
+        canvas.drawPath(triangle(cx, bodyBottom, halfW, headLen, Point.BOTTOM), fillPaint)
     }
 
-    /**
-     * 根据“尖端 + 底边中心”生成实心三角形箭头
-     */
-    private fun triangleHead(tipX: Float, tipY: Float, baseCenterX: Float, baseCenterY: Float, halfWidth: Float): Path {
-        val dx = tipX - baseCenterX
-        val dy = tipY - baseCenterY
-        val len = hypot(dx, dy)
-        if (len == 0f) return Path()
-        val ux = dx / len
-        val uy = dy / len
-        // 垂直于方向的向量
-        val px = -uy * halfWidth
-        val py = ux * halfWidth
+    private enum class Point { CENTER, LEFT, RIGHT, LEFT_TOP, RIGHT_TOP, LEFT_BOTTOM, RIGHT_BOTTOM, BOTTOM }
+
+    private fun triangle(x: Float, y: Float, halfW: Float, len: Float, point: Point = Point.CENTER): Path {
         return Path().apply {
-            moveTo(tipX, tipY)
-            lineTo(baseCenterX + px, baseCenterY + py)
-            lineTo(baseCenterX - px, baseCenterY - py)
+            when (point) {
+                Point.CENTER, Point.BOTTOM -> {
+                    moveTo(x, y + len)
+                    lineTo(x - halfW, y - len)
+                    lineTo(x + halfW, y - len)
+                }
+                Point.LEFT -> {
+                    moveTo(x - len, y)
+                    lineTo(x + len, y - halfW)
+                    lineTo(x + len, y + halfW)
+                }
+                Point.RIGHT -> {
+                    moveTo(x + len, y)
+                    lineTo(x - len, y - halfW)
+                    lineTo(x - len, y + halfW)
+                }
+                Point.LEFT_TOP -> {
+                    moveTo(x - len * 0.7f, y - len * 0.7f)
+                    lineTo(x + len * 0.6f, y - len * 0.3f)
+                    lineTo(x + len * 0.3f, y + len * 0.6f)
+                }
+                Point.RIGHT_TOP -> {
+                    moveTo(x + len * 0.7f, y - len * 0.7f)
+                    lineTo(x - len * 0.6f, y - len * 0.3f)
+                    lineTo(x - len * 0.3f, y + len * 0.6f)
+                }
+                Point.LEFT_BOTTOM -> {
+                    moveTo(x - len * 0.7f, y + len * 0.7f)
+                    lineTo(x + len * 0.6f, y + len * 0.3f)
+                    lineTo(x + len * 0.3f, y - len * 0.6f)
+                }
+                Point.RIGHT_BOTTOM -> {
+                    moveTo(x + len * 0.7f, y + len * 0.7f)
+                    lineTo(x - len * 0.6f, y + len * 0.3f)
+                    lineTo(x - len * 0.3f, y - len * 0.6f)
+                }
+                else -> {
+                    moveTo(x, y + len)
+                    lineTo(x - halfW, y - len)
+                    lineTo(x + halfW, y - len)
+                }
+            }
             close()
         }
     }

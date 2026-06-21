@@ -70,15 +70,6 @@
                 android:layout_marginBottom="24dp" />
 
             <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="应用信息"
-                android:textSize="12sp"
-                android:textColor="@color/md_primary"
-                android:textStyle="bold"
-                android:layout_marginBottom="8dp" />
-
-            <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="@string/about_desc"

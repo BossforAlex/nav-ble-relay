@@ -10,7 +10,6 @@ class NavBleApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        SettingsActivity.applyTheme(this)
         Log.i(TAG, "Application initialized")
     }
 }

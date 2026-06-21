@@ -38,15 +38,7 @@ jobs:
           gradle-version: "8.7"
 
       - name: Build Debug APK
-        run: gradle assembleDebug --stacktrace > build.log 2>&1 || (cat build.log && exit 1)
-
-      - name: Upload build log
-        uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: build-log
-          path: build.log
-          retention-days: 3
+        run: gradle assembleDebug --stacktrace
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4

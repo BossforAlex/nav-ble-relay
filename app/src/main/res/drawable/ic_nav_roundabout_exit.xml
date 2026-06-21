@@ -4,23 +4,23 @@
     android:height="96dp"
     android:viewportWidth="96"
     android:viewportHeight="96">
-    <!-- 环岛：空心圆，位于画面中心偏上 -->
+    <!-- 环岛：空心圆环 -->
     <path
         android:fillColor="#00000000"
         android:pathData="M72,42 A18,18 0 1,0 36,42 A18,18 0 1,0 72,42"
         android:strokeColor="@color/md_on_surface"
-        android:strokeWidth="8"
+        android:strokeWidth="12"
         android:strokeLineCap="round"
         android:strokeLineJoin="round" />
     <!-- 向右下驶出箭头 -->
     <path
         android:fillColor="#00000000"
-        android:pathData="M54,60 L72,78"
+        android:pathData="M54,60 L70,76"
         android:strokeColor="@color/md_on_surface"
-        android:strokeWidth="8"
+        android:strokeWidth="14"
         android:strokeLineCap="round"
         android:strokeLineJoin="round" />
     <path
         android:fillColor="@color/md_on_surface"
-        android:pathData="M78,84 L60,78 L72,66 Z" />
+        android:pathData="M78,82 L60,76 L72,64 Z" />
 </vector>

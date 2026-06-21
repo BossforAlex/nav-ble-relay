@@ -4,15 +4,14 @@
     android:height="96dp"
     android:viewportWidth="96"
     android:viewportHeight="96">
-    <!-- 掉头路径：向下竖线 + 左半圆 -->
+    <!-- 掉头：粗壮实心风格 -->
     <path
         android:fillColor="#00000000"
-        android:pathData="M48,76 L48,56 A20,20 0 1,0 28,56 L28,56"
+        android:pathData="M48,74 L48,56 A20,20 0 1,0 28,56 L28,56"
         android:strokeColor="@color/md_on_surface"
-        android:strokeWidth="8"
+        android:strokeWidth="16"
         android:strokeLineCap="round"
         android:strokeLineJoin="round" />
-    <!-- 左向箭头 -->
     <path
         android:fillColor="@color/md_on_surface"
         android:pathData="M18,56 L34,68 L34,44 Z" />

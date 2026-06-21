@@ -17,7 +17,6 @@ import androidx.core.content.ContextCompat
 import com.navblerelay.MainActivity
 import com.navblerelay.R
 import com.navblerelay.ble.BleGattServer
-import com.navblerelay.ble.BleLog
 import com.navblerelay.protocol.AmapAutoProtocol
 import com.navblerelay.protocol.NavDataHolder
 import com.navblerelay.receiver.NavBroadcastReceiver
@@ -73,35 +72,27 @@ class NavBleService : Service() {
         super.onCreate()
         running = true
         Log.i(TAG, "Service onCreate")
-        BleLog.i(TAG, "前台服务 onCreate")
 
         try {
             createNotificationChannel()
             startForeground(NOTIFICATION_ID, createNotification("等待 ESP32 连接..."))
-            val startedMsg = "前台服务已启动，通知 ID=$NOTIFICATION_ID"
-            Log.i(TAG, "✅ $startedMsg")
-            BleLog.i(TAG, startedMsg)
+            Log.i(TAG, "✅ 前台服务已启动，通知 ID=$NOTIFICATION_ID")
 
             bleServer = BleGattServer(this).apply {
                 onDeviceConnected = { device ->
-                    val msg = "ESP32 连接：${device.address}"
-                    Log.i(TAG, "🟢 $msg")
-                    BleLog.i(TAG, msg)
+                    Log.i(TAG, "🟢 ESP32 连接：${device.address}")
                     NavDataHolder.bleConnected = true
                     NavDataHolder.bleDeviceAddress = device.address
                     updateNotification("ESP32 已连接：${device.address}")
                 }
                 onDeviceDisconnected = { device ->
-                    val msg = "ESP32 断开：${device.address}"
-                    Log.i(TAG, "🔴 $msg")
-                    BleLog.i(TAG, msg)
+                    Log.i(TAG, "🔴 ESP32 断开：${device.address}")
                     NavDataHolder.bleConnected = false
                     NavDataHolder.bleDeviceAddress = null
                     updateNotification("等待 ESP32 连接...")
                 }
                 onError = { msg ->
                     Log.e(TAG, "BLE 错误：$msg")
-                    BleLog.e(TAG, "BLE 错误：$msg")
                 }
             }
 
@@ -132,7 +123,6 @@ class NavBleService : Service() {
     override fun onDestroy() {
         running = false
         Log.i(TAG, "Service onDestroy")
-        BleLog.i(TAG, "前台服务 onDestroy")
         try {
             broadcastReceiver?.let { unregisterReceiver(it) }
             broadcastReceiver = null
