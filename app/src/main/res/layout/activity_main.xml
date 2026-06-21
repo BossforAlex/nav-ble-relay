@@ -42,6 +42,15 @@
             app:tint="@color/md_on_surface_variant" />
 
         <ImageButton
+            android:id="@+id/btn_theme"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:src="@drawable/ic_theme_system"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/menu_theme"
+            app:tint="@color/md_on_surface_variant" />
+
+        <ImageButton
             android:id="@+id/btn_about"
             android:layout_width="40dp"
             android:layout_height="40dp"
@@ -275,6 +284,13 @@
                     android:textSize="13sp"
                     android:textColor="@color/md_on_surface_variant" />
 
+                <com.navblerelay.ui.LaneGuideView
+                    android:id="@+id/lane_guide_view"
+                    android:layout_width="match_parent"
+                    android:layout_height="56dp"
+                    android:layout_marginTop="16dp"
+                    android:visibility="gone" />
+
             </LinearLayout>
 
             <!-- 导航状态 -->
@@ -363,6 +379,13 @@
                     android:textStyle="bold"
                     android:letterSpacing="0.08"
                     android:layout_marginBottom="10dp" />
+                <com.navblerelay.ui.TrafficBarView
+                    android:id="@+id/traffic_bar_view"
+                    android:layout_width="match_parent"
+                    android:layout_height="12dp"
+                    android:layout_marginBottom="12dp"
+                    android:visibility="gone" />
+
                 <include layout="@layout/item_kv" android:id="@+id/row_tmc_total" />
                 <include layout="@layout/item_kv" android:id="@+id/row_tmc_remain" />
                 <include layout="@layout/item_kv" android:id="@+id/row_tmc_segments" />

@@ -15,6 +15,8 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import com.navblerelay.ui.LaneGuideView
+import com.navblerelay.ui.TrafficBarView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -44,6 +46,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var navDistance: TextView
     private lateinit var navNextRoad: TextView
     private lateinit var navIconLabel: TextView
+    private lateinit var laneGuideView: LaneGuideView
+    private lateinit var trafficBarView: TrafficBarView
+    private lateinit var btnTheme: ImageButton
 
     private val rows = mutableMapOf<String, Pair<TextView, TextView>>()
 
@@ -76,6 +81,7 @@ class MainActivity : AppCompatActivity() {
         }
         updateServiceState()
         refreshUI()
+        updateThemeIcon()
     }
 
     /**
@@ -111,6 +117,10 @@ class MainActivity : AppCompatActivity() {
         navDistance = findViewById(R.id.nav_distance)
         navNextRoad = findViewById(R.id.nav_next_road)
         navIconLabel = findViewById(R.id.nav_icon_label)
+        laneGuideView = findViewById(R.id.lane_guide_view)
+        trafficBarView = findViewById(R.id.traffic_bar_view)
+        btnTheme = findViewById(R.id.btn_theme)
+        updateThemeIcon()
 
         rows["map_state"] = bindRow(R.id.row_map_state, R.string.state)
         rows["cross_map"] = bindRow(R.id.row_cross_map, R.string.cross)
@@ -144,6 +154,7 @@ class MainActivity : AppCompatActivity() {
         findViewById<ImageButton>(R.id.btn_settings).setOnClickListener {
             SettingsActivity.start(this)
         }
+        btnTheme.setOnClickListener { cycleThemeMode() }
         findViewById<ImageButton>(R.id.btn_about).setOnClickListener {
             AboutActivity.start(this)
         }
@@ -261,6 +272,8 @@ class MainActivity : AppCompatActivity() {
         navDistance.text = getString(R.string.not_available)
         navNextRoad.text = getString(R.string.not_available)
         navIconLabel.text = getString(R.string.not_available)
+        laneGuideView.visibility = View.GONE
+        trafficBarView.visibility = View.GONE
     }
 
     // ── UI 刷新 ──────────────────────────────────────────
@@ -332,6 +345,8 @@ class MainActivity : AppCompatActivity() {
         val i = NavDataHolder.driveWayInfo ?: return
         rows["drive_way_size"]?.second?.text = if (i.enabled) "${i.size} 车道" else getString(R.string.not_available)
         if (i.enabled && i.lanes.isNotEmpty()) {
+            laneGuideView.setLanes(i.lanes)
+            laneGuideView.visibility = View.VISIBLE
             rows["drive_way_detail"]?.second?.text = i.lanes.joinToString(" ") {
                 when (it.backIcon) {
                     0 -> "↑" ; 1 -> "↖" ; 2 -> "↗" ; 3 -> "←"
@@ -339,7 +354,10 @@ class MainActivity : AppCompatActivity() {
                     else -> "•"
                 }
             }
-        } else rows["drive_way_detail"]?.second?.text = getString(R.string.not_available)
+        } else {
+            laneGuideView.visibility = View.GONE
+            rows["drive_way_detail"]?.second?.text = getString(R.string.not_available)
+        }
     }
 
     private fun refreshTmc() {
@@ -348,10 +366,13 @@ class MainActivity : AppCompatActivity() {
             rows["tmc_total"]?.second?.text = "%.1f 公里".format(i.totalDistance / 1000f)
             rows["tmc_remain"]?.second?.text = "%.1f 公里".format(i.residualDistance / 1000f)
             rows["tmc_segments"]?.second?.text = "${i.size}"
+            trafficBarView.setData(i.segments, i.totalDistance.coerceAtLeast(1))
+            trafficBarView.visibility = View.VISIBLE
         } else {
             rows["tmc_total"]?.second?.text = getString(R.string.not_available)
             rows["tmc_remain"]?.second?.text = getString(R.string.not_available)
             rows["tmc_segments"]?.second?.text = getString(R.string.not_available)
+            trafficBarView.visibility = View.GONE
         }
     }
 
@@ -360,5 +381,30 @@ class MainActivity : AppCompatActivity() {
         rows["loc_speed"]?.second?.text = if (i.speed > 0) "${i.speed} km/h" else getString(R.string.not_available)
         rows["loc_bearing"]?.second?.text = if (i.bearing > 0) "${i.bearing}°" else getString(R.string.not_available)
         rows["loc_accuracy"]?.second?.text = if (i.accuracy > 0) "${i.accuracy} m" else getString(R.string.not_available)
+    }
+
+    private fun cycleThemeMode() {
+        val current = SettingsActivity.getThemeMode(this)
+        val next = (current + 1) % 3
+        SettingsActivity.setThemeMode(this, next)
+        Toast.makeText(this, getString(R.string.theme_changed, themeLabelFor(next)), Toast.LENGTH_SHORT).show()
+        recreate()
+    }
+
+    private fun updateThemeIcon() {
+        val mode = SettingsActivity.getThemeMode(this)
+        val (icon, label) = when (mode) {
+            SettingsActivity.THEME_LIGHT -> R.drawable.ic_theme_light to R.string.theme_light
+            SettingsActivity.THEME_DARK -> R.drawable.ic_theme_dark to R.string.theme_dark
+            else -> R.drawable.ic_theme_system to R.string.theme_system
+        }
+        btnTheme.setImageResource(icon)
+        btnTheme.contentDescription = getString(label)
+    }
+
+    private fun themeLabelFor(mode: Int): String = when (mode) {
+        SettingsActivity.THEME_LIGHT -> getString(R.string.theme_light)
+        SettingsActivity.THEME_DARK -> getString(R.string.theme_dark)
+        else -> getString(R.string.theme_system)
     }
 }

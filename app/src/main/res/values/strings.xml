@@ -60,8 +60,6 @@
     <string name="keep_screen_on_summary">主界面保持屏幕不熄灭</string>
     <string name="auto_start">开机自启</string>
     <string name="auto_start_summary">系统启动后自动开始转发</string>
-    <string name="theme">主题模式</string>
-    <string name="theme_summary">跟随系统 / 浅色 / 深色</string>
     <string name="theme_system">跟随系统</string>
     <string name="theme_light">浅色</string>
     <string name="theme_dark">深色</string>
@@ -85,6 +83,8 @@
     <!-- Misc -->
     <string name="menu_settings">设置</string>
     <string name="menu_about">关于</string>
+    <string name="menu_theme">切换主题</string>
+    <string name="theme_changed">已切换至 %s</string>
     <string name="back">返回</string>
     <string name="save">保存</string>
     <string name="unknown">未知</string>

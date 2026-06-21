@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Thanox Material 3 Expressive dark palette -->
+    <!-- Google Blue Material 3 dark palette -->
     <color name="md_primary">#AAC7FF</color>
     <color name="md_on_primary">#0A305F</color>
     <color name="md_primary_container">#284777</color>

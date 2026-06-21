@@ -1,20 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Thanox Material 3 Expressive light palette -->
-    <color name="md_primary">#415F91</color>
+    <!-- Google Blue Material 3 light palette -->
+    <color name="md_primary">#4285F4</color>
     <color name="md_on_primary">#FFFFFF</color>
-    <color name="md_primary_container">#D6E3FF</color>
-    <color name="md_on_primary_container">#284777</color>
+    <color name="md_primary_container">#D2E3FC</color>
+    <color name="md_on_primary_container">#174EA6</color>
 
-    <color name="md_secondary">#565E71</color>
+    <color name="md_secondary">#5F6368</color>
     <color name="md_on_secondary">#FFFFFF</color>
-    <color name="md_secondary_container">#DAE2F9</color>
-    <color name="md_on_secondary_container">#3E4759</color>
+    <color name="md_secondary_container">#E8EAED</color>
+    <color name="md_on_secondary_container">#3C4043</color>
 
-    <color name="md_tertiary">#705575</color>
+    <color name="md_tertiary">#34A853</color>
     <color name="md_on_tertiary">#FFFFFF</color>
-    <color name="md_tertiary_container">#FAD8FD</color>
-    <color name="md_on_tertiary_container">#573E5C</color>
+    <color name="md_tertiary_container">#CEF0D6</color>
+    <color name="md_on_tertiary_container">#1E8E3E</color>
 
     <!-- Surfaces -->
     <color name="md_surface">#F9F9FF</color>
@@ -43,4 +43,16 @@
     <color name="md_status_running">#E07B39</color>
     <color name="md_status_connected">#008375</color>
     <color name="md_status_disconnected">#BA1A1A</color>
+
+    <!-- Lane guidance -->
+    <color name="lane_bg">#4285F4</color>
+    <color name="lane_divider">#80FFFFFF</color>
+    <color name="lane_arrow">#FFFFFF</color>
+
+    <!-- TMC traffic status -->
+    <color name="tmc_smooth">#00C853</color>
+    <color name="tmc_slow">#FFD600</color>
+    <color name="tmc_congested">#FF3D00</color>
+    <color name="tmc_severe">#DD2C00</color>
+    <color name="tmc_unknown">#9E9E9E</color>
 </resources>
