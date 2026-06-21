@@ -256,6 +256,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun resetAllData() {
         rows.values.forEach { it.second.text = getString(R.string.not_available) }
+        navArrow.setImageResource(R.drawable.ic_nav_straight)
         navArrow.rotation = 0f
         navDistance.text = getString(R.string.not_available)
         navNextRoad.text = getString(R.string.not_available)
@@ -317,7 +318,8 @@ class MainActivity : AppCompatActivity() {
         rows["sapa_dist"]?.second?.text = if (i.sapaDist > 0) "${i.sapaName} ${i.sapaDist}m" else getString(R.string.not_available)
         rows["traffic_light"]?.second?.text = if (i.trafficLightNum > 0) "${i.trafficLightNum}" else getString(R.string.not_available)
 
-        navArrow.rotation = AmapAutoProtocol.iconRotation(i.icon).toFloat()
+        navArrow.setImageResource(AmapAutoProtocol.iconDrawableRes(i.icon))
+        navArrow.rotation = 0f
         navDistance.text = if (i.segRemainDis > 0) {
             if (i.segRemainDis >= 1000) "%.1f km".format(i.segRemainDis / 1000f)
             else "${i.segRemainDis} m"
