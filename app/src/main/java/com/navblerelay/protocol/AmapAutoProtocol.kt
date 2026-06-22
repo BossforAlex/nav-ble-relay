@@ -136,16 +136,32 @@ object AmapAutoProtocol {
         14 to "收费站",
         15 to "到达",
         16 to "隧道",
-        17 to "环岛",
-        18 to "出环岛",
-        19 to "右转掉头",
+        17 to "人行横道",
+        18 to "过街天桥",
+        19 to "地下通道",
         20 to "顺行"
+    )
+
+    /**
+     * 车道指引图标含义（drive_way_info 中的 backIcon 字段）。
+     * 参考高德 iOS 导航 SDK 的 CreateLaneInfoImageWithLaneInfo 规范。
+     */
+    val LANE_BACK_ICON_MAP = mapOf(
+        0 to "直行",
+        1 to "左转",
+        2 to "直行和左转",
+        3 to "右转",
+        4 to "直行和右转",
+        5 to "左转掉头",
+        6 to "左转和右转",
+        7 to "直行和左转和右转"
     )
 
     /** 便捷方法：获取中文描述，不存在时返回 "未知(值)" */
     fun iconLabel(id: Int): String = ICON_MAP[id] ?: "未知($id)"
     fun iconShort(id: Int): String = ICON_SHORT[id] ?: "未知($id)"
     fun iconRotation(id: Int): Int = ICON_ROTATION[id] ?: 0
+    fun laneBackIconLabel(id: Int): String = LANE_BACK_ICON_MAP[id] ?: "未知($id)"
     fun roadLabel(id: Int): String = ROAD_TYPE_MAP[id] ?: "未知($id)"
     fun cameraLabel(id: Int): String = CAMERA_TYPE_MAP[id] ?: "未知($id)"
     fun tmcLabel(id: Int): String = TMC_STATUS_MAP[id] ?: "未知($id)"

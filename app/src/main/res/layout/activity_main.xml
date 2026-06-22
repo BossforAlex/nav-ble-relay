@@ -342,6 +342,14 @@
                     android:textStyle="bold"
                     android:letterSpacing="0.08"
                     android:layout_marginBottom="10dp" />
+                <com.navblerelay.ui.LaneGuideView
+                    android:id="@+id/lane_guide_view"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="10dp"
+                    android:padding="4dp"
+                    android:visibility="gone" />
+
                 <include layout="@layout/item_kv" android:id="@+id/row_drive_way_size" />
                 <include layout="@layout/item_kv" android:id="@+id/row_drive_way_detail" />
             </LinearLayout>

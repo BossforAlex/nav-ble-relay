@@ -6,6 +6,7 @@ import android.content.Intent
 import android.util.Log
 import com.navblerelay.protocol.AmapAutoProtocol
 import com.navblerelay.protocol.AmapAutoProtocol.iconLabel
+import com.navblerelay.protocol.AmapAutoProtocol.laneBackIconLabel
 import com.navblerelay.protocol.AmapAutoProtocol.roadLabel
 import com.navblerelay.protocol.AmapAutoProtocol.cameraLabel
 import com.navblerelay.protocol.AmapAutoProtocol.tmcLabel
@@ -207,7 +208,7 @@ class NavBroadcastReceiver : BroadcastReceiver() {
                 lanes = lanes
             )
             Log.i(TAG, "[车道] enabled=${info.enabled} size=${info.size} " +
-                    "车道图标=${lanes.joinToString(",") { iconLabel(it.backIcon) }}")
+                    "车道图标=${lanes.joinToString(",") { laneBackIconLabel(it.backIcon) }}")
             onDriveWay?.invoke(info) ?: run { NavDataHolder.driveWayInfo = info }
         } catch (e: Exception) {
             Log.e(TAG, "车道信息解析失败", e)
