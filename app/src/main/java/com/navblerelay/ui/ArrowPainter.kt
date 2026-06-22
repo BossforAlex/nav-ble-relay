@@ -15,8 +15,9 @@ import android.graphics.RectF
  * - 车道线信息通过 AMapLaneInfo 回调获取，官方提供 CreateLaneInfoImage 能力。
  *
  * 本项目通过 AmapAuto 公版广播协议接收导航数据，没有直接接入高德导航 SDK。
- * 路口转向大图标已改用统一的 ic_nav_*.xml 矢量资源；ArrowPainter 仅用于车道指引
- * 小图标绘制，对齐官方视觉风格：
+ * 路口转向大图标已改用高德 iOS Watch 导航演示库中的 default_navi_hud_*.png
+ * 位图资源（ic_nav_0 .. ic_nav_20）；ArrowPainter 仅用于车道指引小图标绘制，
+ * 对齐官方视觉风格：
  * - 使用粗线描边（约 24% 宽度）+ 圆角线端/连接，保证箭头不会断裂；
  * - 箭头头部使用实心三角形，方向与最后一段路径一致；
  * - 单一颜色，便于在车道蓝色背景上保持可读性。

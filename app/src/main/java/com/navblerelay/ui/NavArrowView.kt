@@ -8,12 +8,13 @@ import com.navblerelay.R
 /**
  * 路口转向大图标
  *
- * 使用统一的矢量图标资源（ic_nav_*.xml）替代易断裂/可读性差的旧图标：
- * - 16dp 粗描边 + 圆角线端/连接，呈现圆润、饱满的实心箭头效果；
- * - 实心三角箭头头部，方向清晰；
- * - 使用 @color/md_on_surface，自动适配 day/night；
- * - 矢量资源在任意 dpi 下都不会被压缩模糊；
- * - 如需替换为 iconfont.cn 下载的图标，只需覆盖对应的 ic_nav_*.xml 文件并保持命名即可。
+ * 使用高德官方 iOS Watch 导航演示库（amap-demo/iOS-watch-navi）中的
+ * default_navi_hud_*.png 转向指示图片资源，替换可读性较差的旧矢量图标：
+ * - 图标圆润、粗壮、方向清晰；
+ * - PNG 位图资源放置在 drawable-xxhdpi，与 iOS @3x 资源密度对应；
+ * - 资源命名与 AMapAutoProtocol icon 编码一一对应（ic_nav_0 ~ ic_nav_20），
+ *   便于直接根据广播中的 icon 字段加载对应图片；
+ * - 0 / 1 / 20 等无专用图片的编码复用直行图标。
  */
 class NavArrowView @JvmOverloads constructor(
     context: Context,
@@ -31,20 +32,31 @@ class NavArrowView @JvmOverloads constructor(
     }
 
     /**
-     * AMapAutoProtocol 的 icon 编码（0-20）映射到矢量图标资源
+     * AMapAutoProtocol 的 icon 编码（0-20）映射到对应的 PNG 图标资源。
+     * 资源名称与编码一一对应（ic_nav_0 .. ic_nav_20），超出范围时回退到直行图标。
      */
     private fun mapNavDrawable(id: Int): Int = when (id) {
-        0, 1, 9, 16, 20 -> R.drawable.ic_nav_straight
-        2 -> R.drawable.ic_nav_left
-        3 -> R.drawable.ic_nav_right
-        4 -> R.drawable.ic_nav_left_front
-        5 -> R.drawable.ic_nav_right_front
-        6 -> R.drawable.ic_nav_left_back
-        7 -> R.drawable.ic_nav_right_back
-        8, 19 -> R.drawable.ic_nav_uturn
-        11, 17 -> R.drawable.ic_nav_roundabout_enter
-        12, 18 -> R.drawable.ic_nav_roundabout_exit
-        10, 13, 14, 15 -> R.drawable.ic_nav_arrive
-        else -> R.drawable.ic_nav_straight
+        0 -> R.drawable.ic_nav_0
+        1 -> R.drawable.ic_nav_1
+        2 -> R.drawable.ic_nav_2
+        3 -> R.drawable.ic_nav_3
+        4 -> R.drawable.ic_nav_4
+        5 -> R.drawable.ic_nav_5
+        6 -> R.drawable.ic_nav_6
+        7 -> R.drawable.ic_nav_7
+        8 -> R.drawable.ic_nav_8
+        9 -> R.drawable.ic_nav_9
+        10 -> R.drawable.ic_nav_10
+        11 -> R.drawable.ic_nav_11
+        12 -> R.drawable.ic_nav_12
+        13 -> R.drawable.ic_nav_13
+        14 -> R.drawable.ic_nav_14
+        15 -> R.drawable.ic_nav_15
+        16 -> R.drawable.ic_nav_16
+        17 -> R.drawable.ic_nav_17
+        18 -> R.drawable.ic_nav_18
+        19 -> R.drawable.ic_nav_19
+        20 -> R.drawable.ic_nav_20
+        else -> R.drawable.ic_nav_9
     }
 }

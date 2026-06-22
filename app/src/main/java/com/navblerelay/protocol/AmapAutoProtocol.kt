@@ -34,6 +34,8 @@ object AmapAutoProtocol {
     const val STATE_ARRIVE_DEST = 39
 
     // ── 转向图标含义（§3.1.3 guide_info 中的 ICON 字段）───
+    // 图标资源引用高德官方 iOS Watch 导航演示库（amap-demo/iOS-watch-navi）中的
+    // default_navi_hud_*.png，编号与 AMapNaviInfo.iconType 一致。
     val ICON_MAP = mapOf(
         0 to "未定义",
         1 to "直行",
@@ -52,9 +54,9 @@ object AmapAutoProtocol {
         14 to "到达收费站",
         15 to "到达目的地",
         16 to "进入隧道",
-        17 to "进入环岛(左行)",
-        18 to "驶出环岛(左行)",
-        19 to "右转掉头",
+        17 to "人行横道",
+        18 to "过街天桥",
+        19 to "地下通道",
         20 to "顺行"
     )
 
@@ -136,9 +138,9 @@ object AmapAutoProtocol {
         14 to "收费站",
         15 to "到达",
         16 to "隧道",
-        17 to "环岛",
-        18 to "出环岛",
-        19 to "右转掉头",
+        17 to "人行横道",
+        18 to "过街天桥",
+        19 to "地下通道",
         20 to "顺行"
     )
 
