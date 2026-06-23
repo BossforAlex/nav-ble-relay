@@ -14,7 +14,7 @@ static void safeStrCopy(char* dst, size_t dstLen, const char* src) {
 
 bool parseGuideInfo(const char* json, GuideInfo& out) {
     out.clear();
-    JsonDocument doc(1024); // 预分配容量，减少堆碎片
+    JsonDocument doc;
     DeserializationError err = deserializeJson(doc, json);
     if (err) return false;
 
@@ -39,7 +39,7 @@ bool parseGuideInfo(const char* json, GuideInfo& out) {
 
 bool parseDriveWayInfo(const char* json, DriveWayInfo& out) {
     out.clear();
-    JsonDocument doc(1024);
+    JsonDocument doc;
     DeserializationError err = deserializeJson(doc, json);
     if (err) return false;
 
@@ -64,7 +64,7 @@ bool parseDriveWayInfo(const char* json, DriveWayInfo& out) {
 
 bool parseTmcInfo(const char* json, TmcSegmentInfo& out) {
     out.clear();
-    JsonDocument doc(1024);
+    JsonDocument doc;
     DeserializationError err = deserializeJson(doc, json);
     if (err) return false;
 
@@ -92,7 +92,7 @@ bool parseTmcInfo(const char* json, TmcSegmentInfo& out) {
 
 bool parseLocationInfo(const char* json, LocationInfo& out) {
     out.clear();
-    JsonDocument doc(1024);
+    JsonDocument doc;
     DeserializationError err = deserializeJson(doc, json);
     if (err) return false;
 

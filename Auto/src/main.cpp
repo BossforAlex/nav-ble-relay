@@ -54,7 +54,7 @@ static void onBleData(const char* uuid, const uint8_t* data, size_t len) {
         ok = Nav::parseLocationInfo(sJsonBuffer, sNavState.location);
     } else if (strstr(uuid, BleUUID::CHAR_STATE)) {
         // 状态报文可能是简单整数，也可能是 JSON {"state":1}
-        JsonDocument doc(256);
+        JsonDocument doc;
         DeserializationError err = deserializeJson(doc, sJsonBuffer);
         int state = err ? atoi(sJsonBuffer) : doc["state"] | doc["data"]["state"] | -1;
         sNavState.mapState = Nav::parseMapState(state);
