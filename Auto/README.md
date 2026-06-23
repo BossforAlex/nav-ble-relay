@@ -1,6 +1,11 @@
 # AutoNavDisplay
 
+[![Build ESP32 Firmware](https://github.com/BossforAlex/nav-ble-relay/actions/workflows/build.yml/badge.svg)](https://github.com/BossforAlex/nav-ble-relay/actions/workflows/build.yml)
+[![Release](https://img.shields.io/github/v/release/BossforAlex/nav-ble-relay?label=release)](https://github.com/BossforAlex/nav-ble-relay/releases)
+
 ESP32-C3 Super Mini 导航信息接收与显示项目（PlatformIO）。
+
+> **快速下载固件**：访问 [Releases](https://github.com/BossforAlex/nav-ble-relay/releases) 页面，下载对应板型的 `firmware-*.bin`，使用 esptool 或 PlatformIO 直接烧录。
 
 ## 项目特点
 
@@ -120,6 +125,50 @@ sBleClient.setTargetAddress("AA:BB:CC:DD:EE:FF");
 ### 协议瘦身
 
 当前使用 JSON 便于调试。若数据量大或屏幕刷新要求高，可在 Android 端改为二进制 TLV 格式，ESP32 端解析更快。
+
+## 使用 GitHub Actions / Codespaces 编译
+
+### 在线编译（无需本地安装 PlatformIO）
+
+#### 方式一：GitHub Codespaces
+
+点击仓库首页的 **Code → Codespaces → Create codespace on main**，容器启动后执行：
+
+```bash
+pio run -e esp32-c3-supermini
+```
+
+Codespaces 已预装 PlatformIO CLI，编译完成后可在 `.pio/build/esp32-c3-supermini/firmware.bin` 下载固件。
+
+#### 方式二：GitHub Actions
+
+每次推送 `main` 或 `trae/solo-agent-*` 分支，以及提交 `v*` 标签时，Actions 会自动编译三种板型：
+
+- `firmware-esp32-c3-supermini.bin`
+- `firmware-esp32dev.bin`
+- `firmware-esp32-s3-devkitc-1.bin`
+
+编译产物可在：
+
+- **Actions 页面** → 对应 workflow run → Artifacts
+- **Releases 页面**（仅 tag 推送时自动创建）
+
+### 直接刷入 Release 固件
+
+1. 到 [Releases](https://github.com/BossforAlex/nav-ble-relay/releases) 下载对应板型的 `.bin`。
+2. 使用 esptool：
+
+```bash
+esptool.py --chip esp32c3 --port COMx write_flash 0x0 firmware-esp32-c3-supermini.bin
+```
+
+3. 或使用 [ESPtool 在线工具](https://esphome.github.io/esp-web-tools/)、Thonny、PlatformIO 等烧录。
+
+## 版本与分支说明
+
+- `main`：稳定主线。
+- `trae/solo-agent-*`：开发/实验分支。
+- Tags `v*`：每次发布固件版本，Actions 会自动生成 Release 并上传二进制。
 
 ## 常见问题
 

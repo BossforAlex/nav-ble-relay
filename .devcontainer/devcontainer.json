@@ -1,0 +1,19 @@
+{
+  "name": "ESP32 PlatformIO",
+  "image": "mcr.microsoft.com/devcontainers/python:3.11",
+  "workspaceFolder": "/workspaces/nav-ble-relay/Auto",
+  "features": {},
+  "postCreateCommand": "pip install platformio",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "platformio.platformio-ide"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  },
+  "forwardPorts": [],
+  "remoteUser": "vscode"
+}

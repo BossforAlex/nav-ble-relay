@@ -1,59 +1,86 @@
-name: Android CI Build
+name: Build ESP32 Firmware
 
 on:
   push:
-    branches: [main, master]
+    branches:
+      - main
+      - trae/solo-agent-*
+    tags:
+      - 'v*'
+  pull_request:
   workflow_dispatch:
 
-permissions:
-  contents: write
+defaults:
+  run:
+    working-directory: Auto
 
 jobs:
   build:
-    name: Build APK
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    strategy:
+      matrix:
+        environment:
+          - esp32-c3-supermini
+          - esp32dev
+          - esp32-s3-devkitc-1
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
         with:
-          java-version: '17'
-          distribution: 'temurin'
+          path: |
+            ~/.platformio
+            Auto/.pio
+          key: ${{ runner.os }}-platformio-${{ matrix.environment }}-${{ hashFiles('Auto/platformio.ini') }}
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          packages: 'platforms;android-35 build-tools;35.0.0'
+          python-version: '3.11'
 
-      - name: Grant gradlew execute permission
-        run: chmod +x gradlew
+      - name: Install PlatformIO
+        run: pip install platformio
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: "8.7"
+      - name: Build firmware (${{ matrix.environment }})
+        run: pio run -e ${{ matrix.environment }}
 
-      - name: Build Debug APK
-        run: gradle assembleDebug --stacktrace
-
-      - name: Upload Debug APK
+      - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
         with:
-          name: nav-ble-relay-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 7
-        if: success()
+          name: firmware-${{ matrix.environment }}
+          path: Auto/.pio/build/${{ matrix.environment }}/firmware.bin
+          if-no-files-found: error
 
-      - name: Publish APK to GitHub Release
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all firmware artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./firmware
+
+      - name: Rename artifacts for release
+        working-directory: .
+        run: |
+          mkdir -p release
+          cp firmware/firmware-esp32-c3-supermini/firmware.bin release/firmware-esp32-c3-supermini.bin
+          cp firmware/firmware-esp32dev/firmware.bin release/firmware-esp32dev.bin
+          cp firmware/firmware-esp32-s3-devkitc-1/firmware.bin release/firmware-esp32-s3-devkitc-1.bin
+          ls -la release/
+
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: "Build ${{ github.run_number }}"
-          tag_name: "build-${{ github.run_number }}"
-          files: app/build/outputs/apk/debug/app-debug.apk
-          prerelease: true
-          fail_on_unmatched_files: true
-        if: success()
+          name: Release ${{ github.ref_name }}
+          files: release/*.bin
+          generate_release_notes: true
