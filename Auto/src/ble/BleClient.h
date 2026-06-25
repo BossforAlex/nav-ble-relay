@@ -10,6 +10,7 @@
 
 #include <Arduino.h>
 #include <BLEDevice.h>
+#include <BLEScan.h>
 #include <functional>
 #include "config/Config.h"
 
@@ -46,15 +47,21 @@ private:
     bool connectToServer();
     void subscribeCharacteristics(BLERemoteService* service);
     void startScan();
+    void stopScan();
     static void notifyCallback(BLERemoteCharacteristic* pChar, uint8_t* pData, size_t length, bool isNotify);
 
     // 当前实例指针，供静态回调使用
     static BleClient* sInstance;
 
     std::string targetMac;
+    esp_ble_addr_type_t targetAddrType = BLE_ADDR_TYPE_PUBLIC;
     DataCallback dataCallback;
     BLEClient* client = nullptr;
+    BLEScan* scan = nullptr;
+    AdvertisedDeviceCallbacks* advertisedCallbacks = nullptr;
+    ClientCallbacks* clientCallbacks = nullptr;
     bool connected = false;
     bool doConnect = false;
+    bool isScanning = false;
     unsigned long lastReconnectAttemptMs = 0;
 };

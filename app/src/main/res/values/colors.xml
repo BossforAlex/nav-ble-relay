@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Thanox Material 3 Expressive light palette -->
+    <!-- Material 3 Expressive light palette -->
     <color name="md_primary">#415F91</color>
     <color name="md_on_primary">#FFFFFF</color>
     <color name="md_primary_container">#D6E3FF</color>
@@ -43,4 +43,9 @@
     <color name="md_status_running">#E07B39</color>
     <color name="md_status_connected">#008375</color>
     <color name="md_status_disconnected">#BA1A1A</color>
+
+    <!-- Lane guide view -->
+    <color name="lane_arrow">@color/md_on_surface</color>
+    <color name="lane_bg">@color/md_surface_variant</color>
+    <color name="lane_divider">@color/md_outline</color>
 </resources>

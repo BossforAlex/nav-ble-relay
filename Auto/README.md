@@ -11,8 +11,9 @@ ESP32-C3 Super Mini 导航信息接收与显示项目（PlatformIO）。
 
 - **可移植**：通过 `Screen` 抽象层解耦显示驱动，当前用串口虚拟屏幕调试，后续可无缝替换为 OLED/LCD/TFT。
 - **模块化**：BLE、协议解析、渲染逻辑分层清晰，便于单独测试和修改。
-- **调试友好**：所有关键状态通过串口输出，无需屏幕即可验证数据链路。
+- **调试友好**：所有关键状态通过串口输出，无需屏幕即可验证数据链路；支持 Android 端下发的预格式化显示字段，C3 可直接显示路口/转向/距离。
 - **iOS Watch 风格 UI 预留**：动画相位、大箭头、车道指引等显示逻辑已预留，真实屏幕实现时直接复用。
+- **图标资源**：导航转向图标来自 [iconfont.cn](https://www.iconfont.cn/) 开源图标库。
 
 ## 目录结构
 
@@ -96,11 +97,21 @@ namespace Debug {
 
 ### 指定 Android MAC
 
-在 `main.cpp` 中取消注释并填入真实 MAC：
+在 `main.cpp` 中取消注释并填入真实 MAC，避免连到附近其他 BLE 设备：
 
 ```cpp
 sBleClient.setTargetAddress("AA:BB:CC:DD:EE:FF");
 ```
+
+### 配合 Android 简化模式
+
+如果使用的是 **ESP32-C3 Super Mini** 等小内存/小 Flash 板，建议在 Android 端开启 **ESP32 简化模式**。此时固件会优先使用 Android 已经格式化好的字段：
+
+- `turn_label`：转向简短标签（如“左转”）
+- `distance_text`：路口距离文本（如“350m”）
+- `intersection`：路口信息（如“当前路 → 下一道路”）
+
+这些字段在 `NavParser` 中会自动解析；若未下发，固件也会使用本地 `ScreenRenderer` 进行转换。
 
 ### 模拟数据测试
 
@@ -177,6 +188,15 @@ A: 确保 PlatformIO 已下载依赖，执行 `pio lib install` 或删除 `.pio/
 
 **Q: C3 Super Mini 上传失败**  
 A: 按住 BOOT 键再上电/复位进入下载模式；部分板子需选择正确的 `board` 定义。
+
+**Q: 刷写固件后蓝牙无法启动或扫描不到设备**  
+A: 请确认：
+  1. `platformio.ini` 中的 `board` 与你的板型一致（C3 Super Mini 多数用 `esp32-c3-devkitm-1`，Lolin C3 Mini 用 `lolin_c3_mini`）。
+  2. 首次烧录建议先执行 `pio run -e esp32-c3-supermini --target erase`，清除旧分区表。
+  3. 确保天线附近没有强干扰，并在 Android 端确认 BLE 服务已启动。
+
+**Q: 数据解析失败或中文道路名显示乱码**  
+A: 打开 Android 端 **ESP32 简化模式**，只发送必要字段；同时检查固件日志中 `JsonDocument` 是否成功解析。
 
 **Q: 扫描不到 Android 设备**  
 A: 确保 Android 端 NavBleService 已启动，并且 BLE 广播中包含服务 UUID `0000FFE0-...`。

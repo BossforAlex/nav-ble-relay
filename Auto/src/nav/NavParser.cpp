@@ -1,5 +1,7 @@
 #include "NavParser.h"
 #include <ArduinoJson.h>
+#include <stdio.h>
+#include "screen/ScreenRenderer.h"
 
 namespace Nav {
 
@@ -33,6 +35,25 @@ bool parseGuideInfo(const char* json, GuideInfo& out) {
     out.cameraType = data["cameraType"] | data["CAMERA_TYPE"] | -1;
     out.cameraSpeed = data["cameraSpeed"] | data["CAMERA_SPEED"] | 0;
     out.trafficLightNum = data["trafficLightNum"] | data["TRAFFIC_LIGHT_NUM"] | 0;
+
+    // 兼容 Android 端“ESP32 简化模式”预格式化字段
+    safeStrCopy(out.turnLabel, sizeof(out.turnLabel), data["turn_label"] | data["TURN_LABEL"]);
+    safeStrCopy(out.distanceText, sizeof(out.distanceText), data["distance_text"] | data["DISTANCE_TEXT"]);
+    safeStrCopy(out.intersection, sizeof(out.intersection), data["intersection"] | data["INTERSECTION"]);
+
+    // 若软件端没有预计算路口信息，则在固件侧本地拼接，确保小屏一定能显示
+    if (out.intersection[0] == '\0' && (out.curRoadName[0] || out.nextRoadName[0])) {
+        snprintf(out.intersection, sizeof(out.intersection), "%s → %s",
+                 out.curRoadName[0] ? out.curRoadName : "未知道路",
+                 out.nextRoadName[0] ? out.nextRoadName : "未知道路");
+    }
+    if (out.turnLabel[0] == '\0' && out.icon >= 0) {
+        safeStrCopy(out.turnLabel, sizeof(out.turnLabel), ScreenRenderer::turnIconLabel(out.icon));
+    }
+    if (out.distanceText[0] == '\0' && out.segRemainDis > 0) {
+        ScreenRenderer::formatDistance(out.segRemainDis, out.distanceText, sizeof(out.distanceText));
+    }
+
     out.valid = true;
     return true;
 }

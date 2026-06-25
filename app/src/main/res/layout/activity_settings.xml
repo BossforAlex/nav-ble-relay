@@ -108,6 +108,41 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
+                            android:text="@string/compact_mode"
+                            android:textSize="15sp"
+                            android:textColor="@color/md_on_surface" />
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/compact_mode_summary"
+                            android:textSize="12sp"
+                            android:textColor="@color/md_on_surface_variant" />
+                    </LinearLayout>
+                    <androidx.appcompat.widget.SwitchCompat
+                        android:id="@+id/switch_compact_mode"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:background="@color/md_outline_variant"
+                    android:layout_marginVertical="14dp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
                             android:text="@string/keep_screen_on"
                             android:textSize="15sp"
                             android:textColor="@color/md_on_surface" />
@@ -224,6 +259,43 @@
                         android:text="0000FFE1-..."
                         android:textSize="12sp"
                         android:textColor="@color/md_on_surface_variant" />
+                </LinearLayout>
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:background="@color/md_outline_variant"
+                    android:layout_marginVertical="14dp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/target_device"
+                        android:textSize="15sp"
+                        android:textColor="@color/md_on_surface" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/target_device_summary"
+                        android:textSize="12sp"
+                        android:textColor="@color/md_on_surface_variant" />
+                    <EditText
+                        android:id="@+id/et_target_mac"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:hint="@string/target_device_hint"
+                        android:inputType="textCapCharacters"
+                        android:textSize="14sp"
+                        android:fontFamily="monospace"
+                        android:background="@drawable/ic_item_bg"
+                        android:padding="12dp"
+                        android:textColor="?attr/colorOnSurface"
+                        android:textColorHint="@color/md_on_surface_variant" />
                 </LinearLayout>
             </LinearLayout>
 

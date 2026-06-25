@@ -34,7 +34,9 @@ static char sJsonBuffer[1024];
 
 // ===================== BLE 数据回调 =====================
 static void onBleData(const char* uuid, const uint8_t* data, size_t len) {
-    // 拷贝并截断，确保是合法 C 字符串
+    if (len == 0 || data == nullptr) return;
+
+    // 拷贝并截断，确保是合法 C 字符串；防止异常字符导致 printf 越界
     size_t copyLen = len < sizeof(sJsonBuffer) - 1 ? len : sizeof(sJsonBuffer) - 1;
     memcpy(sJsonBuffer, data, copyLen);
     sJsonBuffer[copyLen] = '\0';
@@ -64,6 +66,8 @@ static void onBleData(const char* uuid, const uint8_t* data, size_t len) {
     if (ok) {
         sNavState.lastUpdateMs = millis();
         sScreen.setNavState(sNavState);
+    } else if (Debug::LOG_SYSTEM) {
+        Serial.printf("[BLE][%s] 数据解析失败，请检查 JSON 格式或启用简化模式\n", uuid);
     }
 }
 

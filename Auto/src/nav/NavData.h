@@ -37,6 +37,12 @@ struct GuideInfo {
     int trafficLightNum = 0;       // 红绿灯个数
     bool valid = false;            // 是否有效
 
+    // 当 Android 端开启“ESP32 简化模式”时，会额外下发已经格式化好的显示字符串，
+    // 方便 C3 等小内存设备直接显示，无需再次计算。
+    char turnLabel[32] = {0};      // 转向简短标签，如“左转”
+    char distanceText[32] = {0};   // 路口距离文本，如“350m”
+    char intersection[128] = {0};  // 路口信息，如“当前路 → 下一道路”
+
     void clear() {
         icon = -1;
         curRoadName[0] = '\0';
@@ -51,6 +57,9 @@ struct GuideInfo {
         cameraSpeed = 0;
         trafficLightNum = 0;
         valid = false;
+        turnLabel[0] = '\0';
+        distanceText[0] = '\0';
+        intersection[0] = '\0';
     }
 };
 

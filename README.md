@@ -11,7 +11,7 @@
 - **实时导航数据转发**：引导信息、车道信息、路况光柱图、地图状态、定位信息
 - **BLE 外设模式**：Android 设备作为 GATT Server，ESP32 作为 Central 连接并订阅通知
 - **Beline Moto 风格导航引导**：主界面提供大箭头转向预览 + 剩余距离 + 下条道路，适配后续 ESP32 小屏显示
-- **Thanox 同款 Material 3 主题**：基于 [Thanox](https://github.com/Tornaco/Thanox) 的 Material 3 Expressive 配色，支持浅色 / 深色模式
+- **Material 3 Expressive 主题**：支持浅色 / 深色模式，界面色彩遵循 Material 3 规范
 - **前台服务保活**：服务在通知栏运行，支持启动 / 停止 / 自启动
 - **GitHub Actions 自动构建**：每次推送到 `main` 自动编译 Debug APK 并发布到 Release
 
@@ -48,11 +48,13 @@
 
 ### 使用步骤
 
-1. 打开应用，授予蓝牙和通知权限
-2. 点击 **启动服务**
-3. 打开高德地图车机版并开始导航
-4. ESP32 扫描并连接名为 `NavBleRelay` 的 BLE 设备
-5. 订阅对应的特征值通知，即可接收 JSON 格式的导航数据
+1. 打开应用，授予蓝牙和通知权限。
+2. （可选）进入 **设置**，填写 ESP32 的 MAC 地址开启白名单，防止附近其他 BLE 设备误连。
+3. （可选）如果你的 ESP32 是 **ESP32-C3 Super Mini** 等小内存板，建议开启 **ESP32 简化模式**，Android 端会只发送转向、路口、距离等必要字段，降低解析负担。
+4. 点击 **启动服务**，应用会在通知栏以前台服务运行。
+5. 打开高德地图车机版并开始导航。
+6. ESP32 扫描并连接名为 `NavBleRelay` 的 BLE 设备，订阅对应特征值通知后即可接收 JSON 导航数据。
+7. 如蓝牙连接异常，可点击主界面右上角 **蓝牙日志** 图标查看实时 BLE 日志，方便排查问题。
 
 ---
 
@@ -102,9 +104,10 @@ Android 端作为 GATT Server，提供以下服务与特征值：
 
 ---
 
-## 主题
+## 主题与图标
 
-本应用采用与开源项目 [Thanox](https://github.com/Tornaco/Thanox) 相同的 Material 3 Expressive 配色风格，并完整适配了浅色与深色模式。
+- 界面采用 **Material 3 Expressive** 配色风格，完整适配浅色与深色模式。
+- 导航转向图标、工具栏图标等来自 **[iconfont.cn](https://www.iconfont.cn/) 开源图标库**，遵循其开源使用协议。
 
 ---
 

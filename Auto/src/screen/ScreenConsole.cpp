@@ -47,20 +47,25 @@ void ScreenConsole::renderFrame() {
                    mBleConnected ? "已连接" : "未连接", mFrameCounter);
     Serial.println("╠════════════════════════════════════════╣");
 
-    // 1. 转向指示（iOS Watch 风格核心信息：大箭头 + 距离）
+    // 1. 路口信息（高德设计规范：当前道路 → 下一道路）
+    Serial.printf("路口信息: %s\n",
+                  mState.guide.intersection[0] ? mState.guide.intersection : "--");
+
+    // 2. 转向指示（iOS Watch 风格核心信息：大箭头 + 距离）
     char turnArt[256];
     ScreenRenderer::renderTurnAscii(mState.guide.icon, turnArt, sizeof(turnArt));
     Serial.println(turnArt);
 
-    // 2. 下一路口距离
-    ScreenRenderer::formatDistance(mState.guide.segRemainDis, disBuf, sizeof(disBuf));
-    Serial.printf("路口距离: %s\n", disBuf);
-
-    // 3. 道路名
-    Serial.printf("当前道路: %s\n",
-                  mState.guide.curRoadName[0] ? mState.guide.curRoadName : "--");
-    Serial.printf("下一道路: %s\n",
-                  mState.guide.nextRoadName[0] ? mState.guide.nextRoadName : "--");
+    // 3. 下一路口距离 / 转向标签：优先使用 Android 预格式化的显示文本
+    if (mState.guide.distanceText[0]) {
+        Serial.printf("路口距离: %s\n", mState.guide.distanceText);
+    } else {
+        ScreenRenderer::formatDistance(mState.guide.segRemainDis, disBuf, sizeof(disBuf));
+        Serial.printf("路口距离: %s\n", disBuf);
+    }
+    if (mState.guide.turnLabel[0]) {
+        Serial.printf("转向: %s\n", mState.guide.turnLabel);
+    }
 
     // 4. 车道指引
     if (mState.driveWay.enabled && mState.driveWay.laneCount > 0) {

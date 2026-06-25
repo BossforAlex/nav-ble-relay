@@ -23,12 +23,16 @@ public:
 
         if (!match) return;
 
-        if (mClient->targetMac.empty() || advertisedDevice.getAddress().toString() == mClient->targetMac) {
-            BLEDevice::getScan()->stop();
-            mClient->targetMac = advertisedDevice.getAddress().toString();
+        const std::string addr = advertisedDevice.getAddress().toString();
+        if (mClient->targetMac.empty() || addr == mClient->targetMac) {
+            mClient->targetMac = addr;
+            mClient->targetAddrType = advertisedDevice.getAddressType();
             mClient->doConnect = true;
+            mClient->stopScan();
             if (Debug::LOG_SYSTEM) {
-                Serial.printf("[BLE] 匹配目标设备: %s\n", mClient->targetMac.c_str());
+                Serial.printf("[BLE] 匹配目标设备: %s (type=%d)\n",
+                              mClient->targetMac.c_str(),
+                              static_cast<int>(mClient->targetAddrType));
             }
         }
     }
@@ -66,22 +70,45 @@ BleClient* BleClient::sInstance = nullptr;
 
 void BleClient::begin(const char* deviceName) {
     sInstance = this;
+
     BLEDevice::init(deviceName);
+    // 提高发射功率，有助于 C3 Super Mini 在车内复杂环境下被发现和连接
+    BLEDevice::setPower(ESP_PWR_LVL_P9, ESP_BLE_PWR_TYPE_DEFAULT);
+
     if (Debug::LOG_SYSTEM) {
         Serial.printf("[BLE] 初始化完成，设备名: %s\n", deviceName);
     }
+
+    // 扫描器与回调只创建一次，避免 startScan 反复 new 造成内存碎片
+    scan = BLEDevice::getScan();
+    advertisedCallbacks = new AdvertisedDeviceCallbacks(this);
+    clientCallbacks = new ClientCallbacks(this);
+    scan->setAdvertisedDeviceCallbacks(advertisedCallbacks, false);
+    scan->setInterval(1349);
+    scan->setWindow(449);
+    scan->setActiveScan(true);
+
     startScan();
 }
 
 void BleClient::startScan() {
-    BLEScan* scan = BLEDevice::getScan();
-    scan->setAdvertisedDeviceCallbacks(new AdvertisedDeviceCallbacks(this), false);
-    scan->setInterval(1349);
-    scan->setWindow(449);
-    scan->setActiveScan(true);
-    // 参数：扫描持续秒数，是否继续上次扫描
-    scan->start(Feature::BLE_SCAN_TIMEOUT_MS / 1000, false);
+    if (isScanning || scan == nullptr) return;
+
     if (Debug::LOG_SYSTEM) Serial.println("[BLE] 开始扫描...");
+    bool ok = scan->start(Feature::BLE_SCAN_TIMEOUT_MS / 1000, false);
+    if (!ok) {
+        // 部分 core 版本在扫描未完全释放时返回 false，尝试停止后重启一次
+        scan->stop();
+        delay(100);
+        ok = scan->start(Feature::BLE_SCAN_TIMEOUT_MS / 1000, false);
+    }
+    isScanning = ok;
+}
+
+void BleClient::stopScan() {
+    if (!isScanning || scan == nullptr) return;
+    scan->stop();
+    isScanning = false;
 }
 
 bool BleClient::connectToServer() {
@@ -91,14 +118,15 @@ bool BleClient::connectToServer() {
     }
 
     if (Debug::LOG_SYSTEM) {
-        Serial.printf("[BLE] 正在连接 %s ...\n", targetMac.c_str());
+        Serial.printf("[BLE] 正在连接 %s (type=%d) ...\n",
+                      targetMac.c_str(), static_cast<int>(targetAddrType));
     }
 
     client = BLEDevice::createClient();
-    client->setClientCallbacks(new ClientCallbacks(this));
+    client->setClientCallbacks(clientCallbacks);
 
     BLEAddress address(targetMac);
-    if (!client->connect(address)) {
+    if (!client->connect(address, targetAddrType)) {
         if (Debug::LOG_SYSTEM) Serial.println("[BLE] 连接失败");
         client = nullptr;
         connected = false;

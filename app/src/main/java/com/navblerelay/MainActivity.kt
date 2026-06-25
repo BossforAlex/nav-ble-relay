@@ -15,6 +15,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import com.navblerelay.ui.NavArrowView
+import com.navblerelay.ui.LaneGuideView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -44,6 +45,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var navDistance: TextView
     private lateinit var navNextRoad: TextView
     private lateinit var navIconLabel: TextView
+    private lateinit var navIntersectionInfo: TextView
+    private lateinit var laneGuideView: LaneGuideView
 
     private val rows = mutableMapOf<String, Pair<TextView, TextView>>()
 
@@ -111,6 +114,8 @@ class MainActivity : AppCompatActivity() {
         navDistance = findViewById(R.id.nav_distance)
         navNextRoad = findViewById(R.id.nav_next_road)
         navIconLabel = findViewById(R.id.nav_icon_label)
+        navIntersectionInfo = findViewById(R.id.tv_intersection_info)
+        laneGuideView = findViewById(R.id.lane_guide_view)
 
         rows["map_state"] = bindRow(R.id.row_map_state, R.string.state)
         rows["cross_map"] = bindRow(R.id.row_cross_map, R.string.cross)
@@ -146,6 +151,9 @@ class MainActivity : AppCompatActivity() {
         }
         findViewById<ImageButton>(R.id.btn_about).setOnClickListener {
             AboutActivity.start(this)
+        }
+        findViewById<ImageButton>(R.id.btn_ble_logs).setOnClickListener {
+            BleLogActivity.start(this)
         }
 
         btnStart.setOnClickListener {
@@ -260,6 +268,9 @@ class MainActivity : AppCompatActivity() {
         navDistance.text = getString(R.string.not_available)
         navNextRoad.text = getString(R.string.not_available)
         navIconLabel.text = getString(R.string.not_available)
+        navIntersectionInfo.text = getString(R.string.not_available)
+        laneGuideView.visibility = View.GONE
+        laneGuideView.setLanes(emptyList())
     }
 
     // ── UI 刷新 ──────────────────────────────────────────
@@ -317,6 +328,13 @@ class MainActivity : AppCompatActivity() {
         rows["sapa_dist"]?.second?.text = if (i.sapaDist > 0) "${i.sapaName} ${i.sapaDist}m" else getString(R.string.not_available)
         rows["traffic_light"]?.second?.text = if (i.trafficLightNum > 0) "${i.trafficLightNum}" else getString(R.string.not_available)
 
+        // 路口信息：当前道路 → 下一道路，高德地图设计规范中的路口指引文案
+        navIntersectionInfo.text = if (i.curRoadName.isNotEmpty() || i.nextRoadName.isNotEmpty()) {
+            val cur = i.curRoadName.ifEmpty { getString(R.string.unknown_road) }
+            val next = i.nextRoadName.ifEmpty { getString(R.string.unknown_road) }
+            "$cur → $next"
+        } else getString(R.string.not_available)
+
         navArrow.setIconType(i.icon)
         navDistance.text = if (i.segRemainDis > 0) {
             if (i.segRemainDis >= 1000) "%.1f km".format(i.segRemainDis / 1000f)
@@ -330,6 +348,8 @@ class MainActivity : AppCompatActivity() {
         val i = NavDataHolder.driveWayInfo ?: return
         rows["drive_way_size"]?.second?.text = if (i.enabled) "${i.size} 车道" else getString(R.string.not_available)
         if (i.enabled && i.lanes.isNotEmpty()) {
+            laneGuideView.visibility = View.VISIBLE
+            laneGuideView.setLanes(i.lanes.map { it.backIcon })
             rows["drive_way_detail"]?.second?.text = i.lanes.joinToString(" ") {
                 when (it.backIcon) {
                     0 -> "↑" ; 1 -> "↖" ; 2 -> "↗" ; 3 -> "←"
@@ -337,7 +357,11 @@ class MainActivity : AppCompatActivity() {
                     else -> "•"
                 }
             }
-        } else rows["drive_way_detail"]?.second?.text = getString(R.string.not_available)
+        } else {
+            laneGuideView.visibility = View.GONE
+            laneGuideView.setLanes(emptyList())
+            rows["drive_way_detail"]?.second?.text = getString(R.string.not_available)
+        }
     }
 
     private fun refreshTmc() {
