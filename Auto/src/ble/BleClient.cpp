@@ -95,14 +95,10 @@ void BleClient::startScan() {
     if (isScanning || scan == nullptr) return;
 
     if (Debug::LOG_SYSTEM) Serial.println("[BLE] 开始扫描...");
-    bool ok = scan->start(Feature::BLE_SCAN_TIMEOUT_MS / 1000, false);
-    if (!ok) {
-        // 部分 core 版本在扫描未完全释放时返回 false，尝试停止后重启一次
-        scan->stop();
-        delay(100);
-        ok = scan->start(Feature::BLE_SCAN_TIMEOUT_MS / 1000, false);
-    }
-    isScanning = ok;
+    // 本版本 BLEScan::start 返回 BLEScanResults，不能按 bool 判断；
+    // 只要没有正在扫描，就直接启动，并通过 isScanning 防止重复调用。
+    scan->start(Feature::BLE_SCAN_TIMEOUT_MS / 1000, false);
+    isScanning = true;
 }
 
 void BleClient::stopScan() {
