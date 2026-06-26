@@ -20,6 +20,7 @@ import android.os.Build
 import android.os.ParcelUuid
 import android.util.Log
 import androidx.core.content.ContextCompat
+import com.navblerelay.R
 import com.navblerelay.SettingsActivity
 import com.navblerelay.protocol.AmapAutoProtocol
 import com.navblerelay.protocol.DriveWayInfo
