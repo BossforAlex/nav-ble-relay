@@ -1,4 +1,4 @@
-name: Build ESP32 Firmware
+name: Build Firmware & Android App
 
 on:
   push:
@@ -10,20 +10,13 @@ on:
   pull_request:
   workflow_dispatch:
 
-defaults:
-  run:
-    working-directory: Auto
-
 jobs:
-  build:
+  build-firmware:
+    name: Build ESP32-C3 Super Mini Firmware
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        environment:
-          - esp32-c3-supermini
-          - esp32dev
-          - esp32-s3-devkitc-1
-
+    defaults:
+      run:
+        working-directory: Auto
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -34,7 +27,7 @@ jobs:
           path: |
             ~/.platformio
             Auto/.pio
-          key: ${{ runner.os }}-platformio-${{ matrix.environment }}-${{ hashFiles('Auto/platformio.ini') }}
+          key: ${{ runner.os }}-platformio-esp32-c3-supermini-${{ hashFiles('Auto/platformio.ini') }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -44,18 +37,48 @@ jobs:
       - name: Install PlatformIO
         run: pip install platformio
 
-      - name: Build firmware (${{ matrix.environment }})
-        run: pio run -e ${{ matrix.environment }}
+      - name: Build firmware (esp32-c3-supermini)
+        run: pio run -e esp32-c3-supermini
 
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
         with:
-          name: firmware-${{ matrix.environment }}
-          path: Auto/.pio/build/${{ matrix.environment }}/firmware.bin
+          name: firmware-esp32-c3-supermini
+          path: Auto/.pio/build/esp32-c3-supermini/firmware.bin
+          if-no-files-found: error
+
+  build-android:
+    name: Build Android App
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
   release:
-    needs: build
+    name: Create Release
+    needs: [build-firmware, build-android]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
@@ -64,23 +87,29 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download all firmware artifacts
+      - name: Download firmware artifact
         uses: actions/download-artifact@v4
         with:
+          name: firmware-esp32-c3-supermini
           path: ./firmware
+
+      - name: Download APK artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: app-debug
+          path: ./apk
 
       - name: Rename artifacts for release
         working-directory: .
         run: |
           mkdir -p release
-          cp firmware/firmware-esp32-c3-supermini/firmware.bin release/firmware-esp32-c3-supermini.bin
-          cp firmware/firmware-esp32dev/firmware.bin release/firmware-esp32dev.bin
-          cp firmware/firmware-esp32-s3-devkitc-1/firmware.bin release/firmware-esp32-s3-devkitc-1.bin
+          cp firmware/firmware.bin release/firmware-esp32-c3-supermini.bin
+          cp apk/app-debug.apk release/app-debug.apk
           ls -la release/
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           name: Release ${{ github.ref_name }}
-          files: release/*.bin
+          files: release/*
           generate_release_notes: true

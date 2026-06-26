@@ -88,7 +88,9 @@ void BleClient::begin(const char* deviceName) {
     scan->setWindow(449);
     scan->setActiveScan(true);
 
-    startScan();
+    // 不在 setup() 中立即启动扫描，避免部分 core 版本 startScan 阻塞导致看门狗复位。
+    // 扫描由 loop() 在 3 秒后自动开始。
+    isScanning = false;
 }
 
 void BleClient::startScan() {
