@@ -49,7 +49,7 @@
   - `0x10000` firmware.bin
 - Release 固件为 `esptool merge_bin` 合并的工厂镜像，烧录地址 `0x0000`。
 - 避免在 `setup()` 中阻塞，BLE 扫描延迟到 `loop()` 启动。
-- `BLEDevice::setPower` 使用 `ESP_PWR_LVL_P7`，避免高功率在部分 C3 核心上导致异常。
+- `BLEDevice::setPower` 使用 `ESP_PWR_LVL_P6`，避免高功率在部分 C3 核心上导致异常。
 
 ## 7. 代码约定
 

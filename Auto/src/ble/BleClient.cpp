@@ -79,8 +79,8 @@ void BleClient::begin(const char* deviceName) {
 
     BLEDevice::init(deviceName);
 
-    // C3 部分核心版本对 P9 发射功率兼容性不佳，降为 P7 确保稳定
-    BLEDevice::setPower(ESP_PWR_LVL_P7, ESP_BLE_PWR_TYPE_DEFAULT);
+    // C3 部分核心版本对 P9 发射功率兼容性不佳，降为 P6 确保稳定
+    BLEDevice::setPower(ESP_PWR_LVL_P6, ESP_BLE_PWR_TYPE_DEFAULT);
 
     // 短暂延时让 BLE 协议栈完全就绪，避免后续 getScan() 返回空指针
     delay(300);
