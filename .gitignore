@@ -1,16 +1,28 @@
-*.iml
-.gradle
-/local.properties
-/.idea
-.DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# PlatformIO
+.pio/
+.pioenvs/
+.piolibdeps/
+
+# Android
+.gradle/
+build/
+app/build/
 local.properties
-/app/build
-/app/release
 *.apk
 *.aab
-*.jks
 *.keystore
+*.jks
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.pyc
