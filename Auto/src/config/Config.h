@@ -22,6 +22,11 @@
 // ===================== BLE 配置 =====================
 // Android 端 BLE GATT 服务与特征值 UUID
 // 必须与 BleGattServer.kt 中定义的 UUID 保持一致
+
+// 设备名前缀：Android 端广播名与 ESP32 本地名均使用此前缀，
+// 双方仅在识别到对方名称以此前缀开头时才建立/接受连接。
+constexpr const char* DEVICE_NAME_PREFIX = "ICA";
+
 namespace BleUUID {
     constexpr const char* SERVICE       = "0000FFE0-0000-1000-8000-00805F9B34FB";
     constexpr const char* CHAR_GUIDE    = "0000FFE1-0000-1000-8000-00805F9B34FB"; // 导航引导信息

@@ -15,12 +15,18 @@ public:
                           advertisedDevice.getRSSI());
         }
 
-        bool match = false;
-        if (advertisedDevice.haveServiceUUID() &&
-            advertisedDevice.isAdvertisingService(BLEUUID(BleUUID::SERVICE))) {
-            match = true;
+        // 只连接名称以 DEVICE_NAME_PREFIX（ICA）开头的 Android 设备
+        if (!advertisedDevice.haveName()) return;
+        const std::string name = advertisedDevice.getName();
+        if (name.compare(0, strlen(DEVICE_NAME_PREFIX), DEVICE_NAME_PREFIX) != 0) {
+            if (Debug::LOG_SYSTEM) {
+                Serial.printf("[BLE] 跳过非目标设备: %s\n", name.c_str());
+            }
+            return;
         }
 
+        bool match = advertisedDevice.haveServiceUUID() &&
+                     advertisedDevice.isAdvertisingService(BLEUUID(BleUUID::SERVICE));
         if (!match) return;
 
         const std::string addr = advertisedDevice.getAddress().toString();

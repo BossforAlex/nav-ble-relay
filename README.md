@@ -38,6 +38,23 @@
 2. 安装高德地图车机版（AmapAuto）
 3. 一台 ESP32 设备（作为 BLE Central）
 
+### 刷写 ESP32 固件
+
+Release 中的 `firmware-esp32-c3-supermini.bin` 是合并后的工厂镜像，可直接从 `0x0000` 地址烧录：
+
+1. 下载 Release 中的 `firmware-esp32-c3-supermini.bin`。
+2. 使用 **flash_download_tool_3.9.11**：
+   - ChipType: `ESP32-C3`
+   - WorkMode: `Develop`
+   - SPI Speed: `40MHz`
+   - SPI Mode: `DIO`
+   - Flash Size: `32Mbit(4MB)`
+   - 载入固件，地址填 `0x0000`
+   - 选择正确串口，点击 **START** 烧录
+3. 烧录完成后按一下板子 **RST** 重启。
+
+> 若之前刷写过异常固件导致无法启动，建议先执行 `Erase` 或 `esptool.py erase_flash` 清空 Flash 后再烧录。
+
 ### 安装 APK
 
 每次推送到 `main` 分支后，GitHub Actions 会自动构建 APK 并上传到 Release：
@@ -53,7 +70,7 @@
 3. （可选）如果你的 ESP32 是 **ESP32-C3 Super Mini** 等小内存板，建议开启 **ESP32 简化模式**，Android 端会只发送转向、路口、距离等必要字段，降低解析负担。
 4. 点击 **启动服务**，应用会在通知栏以前台服务运行。
 5. 打开高德地图车机版并开始导航。
-6. ESP32 扫描并连接名为 `NavBleRelay` 的 BLE 设备，订阅对应特征值通知后即可接收 JSON 导航数据。
+6. ESP32 扫描并连接名为 `ICA` 的 BLE 设备，订阅对应特征值通知后即可接收 JSON 导航数据。
 7. 如蓝牙连接异常，可点击主界面右上角 **蓝牙日志** 图标查看实时 BLE 日志，方便排查问题。
 
 ---

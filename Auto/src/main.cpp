@@ -91,8 +91,8 @@ void setup() {
     sScreen.init();
     sScreen.log("系统启动，准备连接蓝牙...");
 
-    // 初始化 BLE
-    sBleClient.begin("ESP32-C3-Nav");
+    // 初始化 BLE（设备名使用统一前缀，便于 Android 端识别）
+    sBleClient.begin(DEVICE_NAME_PREFIX);
     sBleClient.setDataCallback(onBleData);
 
     // 如需指定 Android 设备 MAC，取消下行注释（替换为真实 MAC）

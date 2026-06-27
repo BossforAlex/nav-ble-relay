@@ -54,7 +54,7 @@
             android:id="@+id/btn_ble_logs"
             android:layout_width="40dp"
             android:layout_height="40dp"
-            android:src="@drawable/ic_settings"
+            android:src="@drawable/ic_ble_logs"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="@string/menu_ble_logs"
             app:tint="@color/md_on_surface_variant" />

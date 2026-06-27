@@ -45,6 +45,9 @@ class BleGattServer(private val context: Context) {
         private val CHAR_LOCATION_UUID =  UUID.fromString("0000FFE5-0000-1000-8000-00805F9B34FB")
 
         private val CCCD_UUID = UUID.fromString("00002902-0000-1000-8000-00805F9B34FB")
+
+        // 设备名前缀：Android 端广播名与 ESP32 本地名均使用此前缀
+        private const val DEVICE_NAME_PREFIX = "ICA"
     }
 
     private val bluetoothManager: BluetoothManager =
@@ -104,12 +107,22 @@ class BleGattServer(private val context: Context) {
                 onError?.invoke(msg)
                 return
             }
+
+            // 将本机蓝牙广播名设为 ICA，便于 ESP32 端识别
+            if (hasBluetoothPermission() && adapter?.name != DEVICE_NAME_PREFIX) {
+                try {
+                    adapter?.name = DEVICE_NAME_PREFIX
+                } catch (t: Throwable) {
+                    Log.w(TAG, "设置蓝牙名称失败：${t.message}")
+                }
+            }
+
             setupService()
             startAdvertising()
             val target = SettingsActivity.getTargetDeviceMac(context)
             val filterMsg = if (target.isNotEmpty()) "，已启用 MAC 白名单：$target" else ""
-            Log.i(TAG, "✅ BLE GATT Server 已启动，服务 UUID=$SERVICE_UUID$filterMsg")
-            blog(BleLogStore.Entry.Level.INFO, "GATT Server 已启动$filterMsg")
+            Log.i(TAG, "✅ BLE GATT Server 已启动，设备名=$DEVICE_NAME_PREFIX，服务 UUID=$SERVICE_UUID$filterMsg")
+            blog(BleLogStore.Entry.Level.INFO, "GATT Server 已启动，设备名=$DEVICE_NAME_PREFIX$filterMsg")
         } catch (se: SecurityException) {
             isRunning.set(false)
             Log.e(TAG, "启动 BLE 时缺少权限", se)
@@ -366,9 +379,30 @@ class BleGattServer(private val context: Context) {
                     }
                     return
                 }
+
+                // 仅接受名称以 ICA 开头的设备，防止附近其他 BLE 设备误连
+                val remoteName = try {
+                    if (hasBluetoothPermission()) device.name else null
+                } catch (t: Throwable) {
+                    null
+                }
+                if (remoteName.isNullOrBlank() || !remoteName.startsWith(DEVICE_NAME_PREFIX)) {
+                    val msg = "拒绝非 ICA 设备连接：$address / 名称=${remoteName ?: "未知"}"
+                    blog(BleLogStore.Entry.Level.WARN, msg)
+                    Log.w(TAG, "🚫 $msg")
+                    try {
+                        if (hasBluetoothPermission()) {
+                            gattServer?.cancelConnection(device)
+                        }
+                    } catch (t: Throwable) {
+                        Log.w(TAG, "断开非 ICA 设备失败", t)
+                    }
+                    return
+                }
+
                 connectedDevice = device
-                Log.i(TAG, "🟢 ESP32 已连接：$address")
-                blog(BleLogStore.Entry.Level.INFO, "ESP32 已连接：$address")
+                Log.i(TAG, "🟢 ESP32 已连接：$address / 名称=$remoteName")
+                blog(BleLogStore.Entry.Level.INFO, "ESP32 已连接：$address / 名称=$remoteName")
                 onDeviceConnected?.invoke(device)
             } else if (newState == BluetoothGatt.STATE_DISCONNECTED) {
                 Log.i(TAG, "🔴 ESP32 已断开：$address")
