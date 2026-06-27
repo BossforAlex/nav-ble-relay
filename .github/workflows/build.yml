@@ -38,7 +38,11 @@ jobs:
         run: pip install platformio
 
       - name: Build firmware (esp32-c3-supermini)
-        run: pio run -e esp32-c3-supermini
+        run: |
+          pio system info
+          # 清理旧构建产物，避免缓存污染导致编译秒退
+          rm -rf .pio/build
+          pio run -e esp32-c3-supermini
 
       - name: Create factory firmware image
         run: |
