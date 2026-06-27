@@ -40,7 +40,7 @@
 
 ### 刷写 ESP32 固件
 
-Release 中的 `firmware-esp32-c3-supermini.bin` 是合并后的工厂镜像，可直接从 `0x0000` 地址烧录：
+Release 中的 `firmware-esp32-c3-supermini.bin` 是**合并后的工厂镜像**（bootloader + 分区表 + 应用程序），可直接从 `0x0000` 地址烧录：
 
 1. 下载 Release 中的 `firmware-esp32-c3-supermini.bin`。
 2. 使用 **flash_download_tool_3.9.11**：
@@ -49,11 +49,13 @@ Release 中的 `firmware-esp32-c3-supermini.bin` 是合并后的工厂镜像，�
    - SPI Speed: `40MHz`
    - SPI Mode: `DIO`
    - Flash Size: `32Mbit(4MB)`
-   - 载入固件，地址填 `0x0000`
+   - 载入固件，地址填 `0x0000`，勾选 DoNotChgBin
    - 选择正确串口，点击 **START** 烧录
 3. 烧录完成后按一下板子 **RST** 重启。
 
-> 若之前刷写过异常固件导致无法启动，建议先执行 `Erase` 或 `esptool.py erase_flash` 清空 Flash 后再烧录。
+> **重要**：ESP32-C3 的 bootloader 位于 `0x0000`（与经典 ESP32 的 `0x1000` 不同）。不能使用 `0x1000` 地址烧录 bootloader，否则芯片无法启动。
+>
+> 若之前刷写过异常固件导致无法启动，建议先执行 `Erase` 清空 Flash 后再烧录。
 
 ### 安装 APK
 

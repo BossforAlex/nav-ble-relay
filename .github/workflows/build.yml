@@ -43,14 +43,22 @@ jobs:
       - name: Create factory firmware image
         run: |
           pip install esptool
+          # ESP32-C3 内存布局（与经典 ESP32 不同）：
+          #   0x0000  bootloader.bin   （第二阶段引导程序）
+          #   0x8000  partitions.bin   （分区表）
+          #   0x10000 firmware.bin     （应用程序）
           esptool.py --chip esp32c3 merge_bin \
             -o firmware-merged.bin \
             --flash_mode dio \
+            --flash_freq 40m \
             --flash_size 4MB \
-            0x1000 .pio/build/esp32-c3-supermini/bootloader.bin \
+            0x0000 .pio/build/esp32-c3-supermini/bootloader.bin \
             0x8000 .pio/build/esp32-c3-supermini/partitions.bin \
             0x10000 .pio/build/esp32-c3-supermini/firmware.bin
+          echo "=== Merged firmware info ==="
           ls -la firmware-merged.bin
+          # 验证固件前几个字节：应包含 ESP32-C3 的合法 bootloader 头
+          xxd firmware-merged.bin | head -n 4
 
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4

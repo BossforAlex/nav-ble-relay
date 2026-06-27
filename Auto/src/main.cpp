@@ -77,7 +77,7 @@ void setup() {
 
     // 等待串口就绪，但最多 2 秒；无串口连接时也不阻塞启动
     while (!Serial && millis() < 2000) { delay(10); }
-    delay(300);
+    delay(500);
 
     Serial.println();
     Serial.println("╔══════════════════════════════════════════╗");
@@ -86,6 +86,7 @@ void setup() {
     Serial.printf("║  Board: %s\n", BOARD_NAME);
     #endif
     Serial.println("╚══════════════════════════════════════════╝");
+    Serial.flush();
 
     // 初始化虚拟屏幕
     sScreen.init();
