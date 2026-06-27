@@ -13,7 +13,7 @@ on:
 jobs:
   build-firmware:
     name: Build ESP32-C3 Super Mini Firmware
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     defaults:
       run:
         working-directory: Auto
@@ -27,7 +27,7 @@ jobs:
           path: |
             ~/.platformio
             Auto/.pio
-          key: ${{ runner.os }}-pio-v2-esp32-c3-supermini-${{ hashFiles('Auto/platformio.ini') }}
+          key: ${{ runner.os }}-pio-v3-esp32-c3-supermini-${{ hashFiles('Auto/platformio.ini') }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -35,13 +35,12 @@ jobs:
           python-version: '3.11'
 
       - name: Install PlatformIO
-        run: pip install "platformio>=6.1,<7"
+        run: pip install platformio
 
       - name: Build firmware (esp32-c3-supermini)
         run: |
-          which pio || echo "pio not found in PATH"
+          set -x
           python3 -m platformio system info
-          # 清理旧构建产物，避免缓存污染导致编译秒退
           rm -rf .pio/build
           python3 -m platformio run -e esp32-c3-supermini
 
