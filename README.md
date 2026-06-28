@@ -53,9 +53,27 @@ Release 中的 `firmware-esp32-c3-supermini.bin` 是**合并后的工厂镜像**
    - 选择正确串口，点击 **START** 烧录
 3. 烧录完成后按一下板子 **RST** 重启。
 
-> **重要**：ESP32-C3 的 bootloader 位于 `0x0000`（与经典 ESP32 的 `0x1000` 不同）。不能使用 `0x1000` 地址烧录 bootloader，否则芯片无法启动。
+> **重要**：ESP32-C3 的 bootloader 位于 `0x0000`（与经典 ESP32 的 `0x1000` 不同）。**必须**使用 `0x0000` 地址烧录，不能使用 `0x1000`，否则芯片读到空 Flash（`invalid header: 0xffffffff`）后反复重启。
 >
 > 若之前刷写过异常固件导致无法启动，建议先执行 `Erase` 清空 Flash 后再烧录。
+
+#### 命令行刷写（esptool）
+
+推荐先完整擦除，再用 **DIO 模式 + 40MHz + 4MB** 参数烧录，并做校验：
+
+```bash
+# 1. 擦除整片 Flash（解决旧固件/分区表残留导致的启动异常）
+esptool.py --chip esp32c3 --port COMx erase_flash
+
+# 2. 烧录合并工厂镜像到 0x0000，显式指定 DIO 模式
+esptool.py --chip esp32c3 --port COMx --baud 460800 write_flash -z \
+  --flash-mode dio --flash-freq 40m --flash-size 4MB \
+  0x0 firmware-esp32-c3-supermini.bin
+
+# 3. 校验（回读前 8 字节应为 e9 03 02 20 ...，其中 0x02=DIO，0x20=4MB+40MHz）
+esptool.py --chip esp32c3 --port COMx read_flash 0x0 8 header.bin
+python3 -c "print(open('header.bin','rb').read().hex())"
+```
 
 ### 安装 APK
 
@@ -143,6 +161,40 @@ Android 端作为 GATT Server，提供以下服务与特征值：
 ## 贡献
 
 欢迎提交 Issue 和 PR。
+
+## 常见问题
+
+### 串口一直输出 `invalid header: 0xffffffff` 并反复重启
+
+`0xffffffff` 表示 ROM bootloader 从 Flash `0x0000` 读到的不是合法 bootloader 头（合法首字节应为 `0xE9`），而是空 Flash。请按以下顺序排查：
+
+1. **烧录地址必须是 `0x0000`**  
+   ESP32-C3 的 bootloader 在 `0x0000`，经典 ESP32 在 `0x1000`。很多教程/工具默认 `0x1000`，刷到 C3 上就会读空。
+
+2. **先擦除再烧录**  
+   旧固件或损坏的分区表会污染新固件：
+   ```bash
+   esptool.py --chip esp32c3 --port COMx erase_flash
+   ```
+
+3. **强制 DIO 模式 + 40MHz**  
+   C3 Super Mini 很多 clone 板 Flash 兼容性差，QIO 模式容易读失败。烧录时显式指定：
+   ```bash
+   esptool.py --chip esp32c3 --port COMx write_flash -z \
+     --flash-mode dio --flash-freq 40m --flash-size 4MB \
+     0x0 firmware-esp32-c3-supermini.bin
+   ```
+
+4. **校验是否真写进去了**  
+   劣质 USB 线、供电不足、接触不良会导致“看起来烧录成功，实际没写进去”：
+   ```bash
+   esptool.py --chip esp32c3 --port COMx read_flash 0x0 8 header.bin
+   python3 -c "print(open('header.bin','rb').read().hex())"
+   ```
+   正常应为 `e9030220...`（`02`=DIO，`20`=4MB+40MHz）。
+
+5. **检查硬件**  
+   如果以上都正确仍报 `invalid header`，可能是 Flash 芯片虚焊、供电不足、USB 线压降过大，或该批次 clone 板 Flash 质量极差。尝试换线、加独立供电、换一块板子，或把 Flash 频率降到 `26m`/`20m` 再试。
 
 ## 许可证
 

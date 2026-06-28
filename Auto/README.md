@@ -170,7 +170,11 @@ Codespaces 已预装 PlatformIO CLI，编译完成后可在 `.pio/build/esp32-c3
 2. 使用 esptool：
 
 ```bash
-esptool.py --chip esp32c3 --port COMx write_flash 0x0 firmware-esp32-c3-supermini.bin
+# 建议先擦除，再显式指定 DIO 模式烧录
+esptool.py --chip esp32c3 --port COMx erase_flash
+esptool.py --chip esp32c3 --port COMx --baud 460800 write_flash -z \
+  --flash-mode dio --flash-freq 40m --flash-size 4MB \
+  0x0 firmware-esp32-c3-supermini.bin
 ```
 
 3. 或使用 [ESPtool 在线工具](https://esphome.github.io/esp-web-tools/)、Thonny、PlatformIO 等烧录。
