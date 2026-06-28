@@ -330,6 +330,13 @@ class BleGattServer(private val context: Context) {
             .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_HIGH)
             .build()
 
+        // 确保设备名已设置再广播；如果设置失败，打印警告但继续尝试广播
+        val currentName = adapter?.name ?: ""
+        if (!currentName.startsWith(DEVICE_NAME_PREFIX)) {
+            Log.w(TAG, "⚠️ 当前蓝牙名 '$currentName' 不符合 ICA 前缀，ESP32 可能无法识别")
+            blog(BleLogStore.Entry.Level.WARN, "当前蓝牙名 '$currentName' 不是 ICA 前缀，ESP32 可能无法识别")
+        }
+
         val data = AdvertiseData.Builder()
             .setIncludeDeviceName(true)
             .addServiceUuid(ParcelUuid(SERVICE_UUID))

@@ -9,15 +9,22 @@ public:
     explicit AdvertisedDeviceCallbacks(BleClient* client) : mClient(client) {}
 
     void onResult(BLEAdvertisedDevice advertisedDevice) override {
+        const std::string addr = advertisedDevice.getAddress().toString();
+        const int rssi = advertisedDevice.getRSSI();
+        const bool hasName = advertisedDevice.haveName();
+        const std::string name = hasName ? advertisedDevice.getName() : "";
+        const bool hasSvc = advertisedDevice.haveServiceUUID();
+
+        // 打印所有扫描结果，便于诊断蓝牙名/UUID匹配问题
         if (Debug::LOG_SYSTEM) {
-            Serial.printf("[BLE] 发现设备: %s  RSSI=%d\n",
-                          advertisedDevice.getAddress().toString().c_str(),
-                          advertisedDevice.getRSSI());
+            Serial.printf("[BLE] 扫描结果: %s RSSI=%d name=%s hasName=%d hasSvc=%d\n",
+                          addr.c_str(), rssi,
+                          name.empty() ? "(none)" : name.c_str(),
+                          hasName ? 1 : 0, hasSvc ? 1 : 0);
         }
 
         // 只连接名称以 DEVICE_NAME_PREFIX（ICA）开头的 Android 设备
-        if (!advertisedDevice.haveName()) return;
-        const std::string name = advertisedDevice.getName();
+        if (!hasName || name.empty()) return;
         if (name.compare(0, strlen(DEVICE_NAME_PREFIX), DEVICE_NAME_PREFIX) != 0) {
             if (Debug::LOG_SYSTEM) {
                 Serial.printf("[BLE] 跳过非目标设备: %s\n", name.c_str());
@@ -25,11 +32,14 @@ public:
             return;
         }
 
-        bool match = advertisedDevice.haveServiceUUID() &&
-                     advertisedDevice.isAdvertisingService(BLEUUID(BleUUID::SERVICE));
-        if (!match) return;
+        bool match = hasSvc && advertisedDevice.isAdvertisingService(BLEUUID(BleUUID::SERVICE));
+        if (!match) {
+            if (Debug::LOG_SYSTEM) {
+                Serial.printf("[BLE] 设备 %s 未广播目标服务 UUID\n", name.c_str());
+            }
+            return;
+        }
 
-        const std::string addr = advertisedDevice.getAddress().toString();
         if (mClient->targetMac.empty() || addr == mClient->targetMac) {
             mClient->targetMac = addr;
             mClient->targetAddrType = advertisedDevice.getAddressType();
@@ -98,8 +108,9 @@ void BleClient::begin(const char* deviceName) {
     advertisedCallbacks = new AdvertisedDeviceCallbacks(this);
     clientCallbacks = new ClientCallbacks(this);
     scan->setAdvertisedDeviceCallbacks(advertisedCallbacks, false);
-    scan->setInterval(1349);
-    scan->setWindow(449);
+    // 降低扫描间隔/窗口，提高部分 C3 核心版本与 Android 广播的兼容性
+    scan->setInterval(160);
+    scan->setWindow(80);
     scan->setActiveScan(true);
 
     // 不在 setup() 中立即启动扫描，避免部分 core 版本 startScan 阻塞导致看门狗复位。
