@@ -5,6 +5,7 @@
 #include <BLEServer.h>
 #include <BLECharacteristic.h>
 #include <BLEAdvertising.h>
+#include <BLESecurity.h>
 #include <functional>
 #include "config/Config.h"
 #include <esp_task_wdt.h>

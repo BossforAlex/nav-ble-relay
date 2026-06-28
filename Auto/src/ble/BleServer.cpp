@@ -7,6 +7,11 @@ void BleServer::begin(const char* deviceName) {
     // C3 部分核心版本对 P9 发射功率兼容性不佳，降为 P6 确保稳定
     BLEDevice::setPower(ESP_PWR_LVL_P6, ESP_BLE_PWR_TYPE_DEFAULT);
 
+    // 配置 BLE 安全：不绑定、无 IO 能力，使用 Just Works 加密，避免 Android 写入时反复检查安全标志
+    static BLESecurity bleSecurity;
+    bleSecurity.setAuthenticationMode(ESP_LE_AUTH_NO_BOND);
+    bleSecurity.setCapability(ESP_IO_CAP_NONE);
+
     // 短暂延时让 BLE 协议栈就绪，同时喂狗避免初始化耗时触发看门狗复位
     delay(300);
     esp_task_wdt_reset();
@@ -22,6 +27,7 @@ void BleServer::begin(const char* deviceName) {
             BLEUUID(desc.uuid),
             BLECharacteristic::PROPERTY_WRITE
         );
+        desc.characteristic->setAccessPermissions(ESP_GATT_PERM_WRITE);
         desc.characteristic->setCallbacks(this);
     }
 
