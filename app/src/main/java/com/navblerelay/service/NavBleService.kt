@@ -16,7 +16,7 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import com.navblerelay.MainActivity
 import com.navblerelay.R
-import com.navblerelay.ble.BleGattServer
+import com.navblerelay.ble.BleGattClient
 import com.navblerelay.protocol.AmapAutoProtocol
 import com.navblerelay.protocol.NavDataHolder
 import com.navblerelay.receiver.NavBroadcastReceiver
@@ -25,7 +25,7 @@ import com.navblerelay.receiver.NavBroadcastReceiver
  * 前台 Service：持续监听高德导航广播并通过 BLE 转发
  *
  * - Service 启动后注册广播接收器 NavBroadcastReceiver（动态注册）
- * - 启动 BLE GattServer，等待 ESP32 连接
+ * - 启动 BLE GattClient，扫描并连接 ICA* 名称的 ESP32
  * - 前台服务保证应用在后台时依然活跃
  * - 支持 ACTION_STOP 主动停止
  */
@@ -66,7 +66,7 @@ class NavBleService : Service() {
     }
 
     private var broadcastReceiver: NavBroadcastReceiver? = null
-    private var bleServer: BleGattServer? = null
+    private var bleClient: BleGattClient? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -78,7 +78,7 @@ class NavBleService : Service() {
             startForeground(NOTIFICATION_ID, createNotification("等待 ESP32 连接..."))
             Log.i(TAG, "✅ 前台服务已启动，通知 ID=$NOTIFICATION_ID")
 
-            bleServer = BleGattServer(this).apply {
+            bleClient = BleGattClient(this).apply {
                 onDeviceConnected = { device ->
                     Log.i(TAG, "🟢 ESP32 连接：${device.address}")
                     NavDataHolder.bleConnected = true
@@ -86,7 +86,7 @@ class NavBleService : Service() {
                     updateNotification("ESP32 已连接：${device.address}")
                 }
                 onDeviceDisconnected = { device ->
-                    Log.i(TAG, "🔴 ESP32 断开：${device.address}")
+                    Log.i(TAG, "🔴 ESP32 断开：${device?.address}")
                     NavDataHolder.bleConnected = false
                     NavDataHolder.bleDeviceAddress = null
                     updateNotification("等待 ESP32 连接...")
@@ -97,9 +97,9 @@ class NavBleService : Service() {
             }
 
             if (hasBluetoothPermission()) {
-                bleServer?.start()
+                bleClient?.start()
             } else {
-                Log.w(TAG, "缺少 BLUETOOTH_CONNECT/BLUETOOTH_ADVERTISE 权限，暂不启动 BLE")
+                Log.w(TAG, "缺少 BLUETOOTH_SCAN/BLUETOOTH_CONNECT 权限，暂不启动 BLE")
             }
 
             registerBroadcastReceiver()
@@ -129,10 +129,10 @@ class NavBleService : Service() {
         } catch (t: Throwable) {
             Log.w(TAG, "注销广播接收器失败", t)
         }
-        try { bleServer?.stop() } catch (t: Throwable) {
-            Log.w(TAG, "停止 BLE Server 失败", t)
+        try { bleClient?.stop() } catch (t: Throwable) {
+            Log.w(TAG, "停止 BLE Client 失败", t)
         }
-        bleServer = null
+        bleClient = null
         super.onDestroy()
     }
 
@@ -140,12 +140,15 @@ class NavBleService : Service() {
 
     private fun hasBluetoothPermission(): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) ==
+            ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN) ==
                     PackageManager.PERMISSION_GRANTED &&
-                    ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_ADVERTISE) ==
+                    ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) ==
                     PackageManager.PERMISSION_GRANTED
         } else {
-            true
+            ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH) ==
+                    PackageManager.PERMISSION_GRANTED &&
+                    ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_ADMIN) ==
+                    PackageManager.PERMISSION_GRANTED
         }
     }
 
@@ -155,12 +158,12 @@ class NavBleService : Service() {
         val receiver = NavBroadcastReceiver().apply {
             onGuideInfo = { info ->
                 NavDataHolder.guideInfo = info
-                bleServer?.sendGuideInfo(info)
+                bleClient?.sendGuideInfo(info)
             }
             onMapState = { state, crossMap ->
                 NavDataHolder.mapState = state
                 NavDataHolder.crossMap = crossMap
-                bleServer?.sendMapState(state, crossMap)
+                bleClient?.sendMapState(state, crossMap)
                 when (state) {
                     AmapAutoProtocol.STATE_START_NAV -> updateNotification("导航进行中")
                     AmapAutoProtocol.STATE_STOP_NAV -> updateNotification("导航已结束")
@@ -169,15 +172,15 @@ class NavBleService : Service() {
             }
             onDriveWay = { info ->
                 NavDataHolder.driveWayInfo = info
-                bleServer?.sendDriveWay(info)
+                bleClient?.sendDriveWay(info)
             }
             onTmcSegment = { info ->
                 NavDataHolder.tmcSegmentInfo = info
-                bleServer?.sendTmcSegment(info)
+                bleClient?.sendTmcSegment(info)
             }
             onLocation = { info ->
                 NavDataHolder.locationInfo = info
-                bleServer?.sendLocation(info)
+                bleClient?.sendLocation(info)
             }
         }
         broadcastReceiver = receiver

@@ -20,12 +20,12 @@
 #include <string.h>
 
 #include "config/Config.h"
-#include "ble/BleClient.h"
+#include "ble/BleServer.h"
 #include "nav/NavParser.h"
 #include "screen/ScreenConsole.h"
 
 // ===================== 全局对象 =====================
-static BleClient sBleClient;
+static BleServer sBleServer;
 static ScreenConsole sScreen;
 static Nav::NavState sNavState;
 
@@ -92,18 +92,17 @@ void setup() {
     sScreen.init();
     sScreen.log("系统启动，准备连接蓝牙...");
 
-    // 初始化 BLE（设备名使用统一前缀，便于 Android 端识别）
-    sBleClient.begin(DEVICE_NAME_PREFIX);
-    sBleClient.setDataCallback(onBleData);
+    // 初始化 BLE（ESP32 作为 Peripheral 广播 ICA* 名称，等待 Android 连接）
+    sBleServer.begin(DEVICE_NAME_PREFIX);
+    sBleServer.setDataCallback(onBleData);
 
-    // 如需指定 Android 设备 MAC，取消下行注释（替换为真实 MAC）
-    // sBleClient.setTargetAddress("AA:BB:CC:DD:EE:FF");
+
 }
 
 // ===================== 主循环 =====================
 void loop() {
-    sBleClient.loop();
-    sScreen.setBleConnected(sBleClient.isConnected());
+    sBleServer.loop();
+    sScreen.setBleConnected(sBleServer.isConnected());
     sScreen.update();
 
     // 空闲时降低循环频率，减少 CPU 占用
