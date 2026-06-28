@@ -63,25 +63,34 @@ jobs:
           ls -la firmware-merged.bin
           # 验证固件前几个字节：应包含 ESP32-C3 的合法 bootloader 头
           xxd firmware-merged.bin | head -n 4
-          # 验证 bootloader 镜像头第 2 字节为 SPI 模式字段：DIO=0x02，QIO=0x00
-          # 第 3 字节为 Flash 频率字段：40MHz=0x04
+          # 验证 bootloader 镜像头：
+          #   第 2 字节为 SPI 模式字段：DIO=0x02，QIO=0x00
+          #   第 3 字节高 4 位为 Flash 容量：0x20=4MB；低 4 位为 Flash 频率：0x00=40MHz
           python3 -c "
           import sys
           with open('firmware-merged.bin', 'rb') as f:
               header = f.read(8)
           print('Header bytes:', header.hex())
           spi_mode = header[2]
-          flash_freq = header[3]
+          flash_byte = header[3]
+          flash_size = flash_byte >> 4
+          flash_freq = flash_byte & 0x0f
           mode_name = {0x00:'QIO', 0x01:'QOUT', 0x02:'DIO', 0x03:'DOUT'}.get(spi_mode, 'UNKNOWN')
+          size_name = {0x00:'1MB', 0x01:'2MB', 0x02:'4MB', 0x03:'8MB', 0x04:'16MB'}.get(flash_size, 'UNKNOWN')
+          freq_name = {0x00:'40MHz', 0x01:'26MHz', 0x02:'20MHz', 0x0f:'80MHz'}.get(flash_freq, 'UNKNOWN')
           print(f'SPI mode field: 0x{spi_mode:02x} ({mode_name})')
-          print(f'Flash freq field: 0x{flash_freq:02x}')
+          print(f'Flash size field: 0x{flash_size:02x} ({size_name})')
+          print(f'Flash freq field: 0x{flash_freq:02x} ({freq_name})')
           if spi_mode != 0x02:
               print('ERROR: bootloader is not DIO mode', file=sys.stderr)
               sys.exit(1)
-          if flash_freq != 0x04:
+          if flash_size != 0x02:
+              print('ERROR: flash size is not 4MB', file=sys.stderr)
+              sys.exit(1)
+          if flash_freq != 0x00:
               print('ERROR: flash frequency is not 40MHz', file=sys.stderr)
               sys.exit(1)
-          print('OK: bootloader header uses DIO + 40MHz')
+          print('OK: bootloader header uses DIO + 4MB + 40MHz')
           "
 
       - name: Upload firmware artifact
