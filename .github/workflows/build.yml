@@ -63,6 +63,26 @@ jobs:
           ls -la firmware-merged.bin
           # 验证固件前几个字节：应包含 ESP32-C3 的合法 bootloader 头
           xxd firmware-merged.bin | head -n 4
+          # 验证 bootloader 镜像头第 2 字节为 SPI 模式字段：DIO=0x02，QIO=0x00
+          # 第 3 字节为 Flash 频率字段：40MHz=0x04
+          python3 -c "
+import sys
+with open('firmware-merged.bin', 'rb') as f:
+    header = f.read(8)
+print('Header bytes:', header.hex())
+spi_mode = header[2]
+flash_freq = header[3]
+mode_name = {0x00:'QIO', 0x01:'QOUT', 0x02:'DIO', 0x03:'DOUT'}.get(spi_mode, 'UNKNOWN')
+print(f'SPI mode field: 0x{spi_mode:02x} ({mode_name})')
+print(f'Flash freq field: 0x{flash_freq:02x}')
+if spi_mode != 0x02:
+    print('ERROR: bootloader is not DIO mode', file=sys.stderr)
+    sys.exit(1)
+if flash_freq != 0x04:
+    print('ERROR: flash frequency is not 40MHz', file=sys.stderr)
+    sys.exit(1)
+print('OK: bootloader header uses DIO + 40MHz')
+"
 
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4

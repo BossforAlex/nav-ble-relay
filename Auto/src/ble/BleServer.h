@@ -7,6 +7,7 @@
 #include <BLEAdvertising.h>
 #include <functional>
 #include "config/Config.h"
+#include <esp_task_wdt.h>
 
 class BleServer : public BLEServerCallbacks, public BLECharacteristicCallbacks {
 public:

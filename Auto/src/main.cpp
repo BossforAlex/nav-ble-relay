@@ -18,6 +18,7 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <string.h>
+#include <esp_task_wdt.h>
 
 #include "config/Config.h"
 #include "ble/BleServer.h"
@@ -75,9 +76,9 @@ static void onBleData(const char* uuid, const uint8_t* data, size_t len) {
 void setup() {
     Serial.begin(SERIAL_BAUD);
 
-    // 等待串口就绪，但最多 2 秒；无串口连接时也不阻塞启动
-    while (!Serial && millis() < 2000) { delay(10); }
-    delay(500);
+    // 等待串口就绪，但最多 1.5 秒；无串口连接时也不阻塞启动
+    while (!Serial && millis() < 1500) { delay(10); }
+    delay(300);
 
     Serial.println();
     Serial.println("╔══════════════════════════════════════════╗");
@@ -88,6 +89,9 @@ void setup() {
     Serial.println("╚══════════════════════════════════════════╝");
     Serial.flush();
 
+    // 启动阶段主动喂狗，避免初始化耗时触发看门狗复位
+    esp_task_wdt_reset();
+
     // 初始化虚拟屏幕
     sScreen.init();
     sScreen.log("系统启动，准备连接蓝牙...");
@@ -95,8 +99,6 @@ void setup() {
     // 初始化 BLE（ESP32 作为 Peripheral 广播 ICA* 名称，等待 Android 连接）
     sBleServer.begin(DEVICE_NAME_PREFIX);
     sBleServer.setDataCallback(onBleData);
-
-
 }
 
 // ===================== 主循环 =====================
