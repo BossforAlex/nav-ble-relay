@@ -14,12 +14,6 @@ void BleServer::begin(const char* deviceName) {
     BLEUUID serviceUuid(BleUUID::SERVICE);
     BLEService* service = server->createService(serviceUuid);
 
-    chars[0] = {"Guide",    BleUUID::CHAR_GUIDE,    nullptr};
-    chars[1] = {"DriveWay", BleUUID::CHAR_DRIVE,    nullptr};
-    chars[2] = {"Tmc",      BleUUID::CHAR_TMC,      nullptr};
-    chars[3] = {"State",    BleUUID::CHAR_STATE,    nullptr};
-    chars[4] = {"Location", BleUUID::CHAR_LOCATION, nullptr};
-
     for (auto& desc : chars) {
         desc.characteristic = service->createCharacteristic(
             BLEUUID(desc.uuid),

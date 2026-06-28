@@ -37,7 +37,13 @@ private:
     struct CharDesc {
         const char* name;
         const char* uuid;
-        BLECharacteristic* characteristic = nullptr;
+        BLECharacteristic* characteristic;
     };
-    CharDesc chars[5];
+    CharDesc chars[5] = {
+        {"Guide",    BleUUID::CHAR_GUIDE,    nullptr},
+        {"DriveWay", BleUUID::CHAR_DRIVE,    nullptr},
+        {"Tmc",      BleUUID::CHAR_TMC,      nullptr},
+        {"State",    BleUUID::CHAR_STATE,    nullptr},
+        {"Location", BleUUID::CHAR_LOCATION, nullptr}
+    };
 };
