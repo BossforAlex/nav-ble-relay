@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 启动器图标前景：HUD 风格导航箭头（与 ESP32 TFT 屏幕 HUD 一致）-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- 中心向上导航箭头 -->
+    <path
+        android:fillColor="@color/ic_launcher_foreground"
+        android:pathData="M54,28 L76,68 L54,58 L32,68 Z" />
+    <!-- 限速标志外圈（橙色） -->
+    <path
+        android:strokeColor="@color/ic_launcher_accent"
+        android:strokeWidth="3"
+        android:fillColor="#00000000"
+        android:pathData="M86,86 m-14,0 a14,14 0 1,0 28,0 a14,14 0 1,0 -28,0" />
+    <!-- 限速标志内圈数字（简化为点阵）-->
+    <path
+        android:fillColor="@color/ic_launcher_accent"
+        android:pathData="M80,82 h12 v2 h-12 z M80,86 h12 v2 h-12 z M80,90 h12 v2 h-12 z" />
+</vector>

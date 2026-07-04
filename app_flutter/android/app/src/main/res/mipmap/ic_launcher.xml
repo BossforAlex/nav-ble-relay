@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 启动器图标（Android 7 及以下回退，使用矢量）-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <path
+        android:fillColor="@color/ic_launcher_background"
+        android:pathData="M0,0h48v48h-48z" />
+    <path
+        android:fillColor="@color/ic_launcher_foreground"
+        android:pathData="M24,10 L34,32 L24,27 L14,32 Z" />
+</vector>
