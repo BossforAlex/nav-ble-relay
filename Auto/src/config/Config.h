@@ -12,7 +12,7 @@
 
 // ===================== 项目信息 =====================
 #define PROJECT_NAME    "AutoNavDisplay"
-#define PROJECT_VERSION "0.1.0"
+#define PROJECT_VERSION "0.4.0"
 
 // ===================== 串口配置 =====================
 #ifndef SERIAL_BAUD
@@ -36,28 +36,45 @@ namespace BleUUID {
     constexpr const char* CHAR_LOCATION = "0000FFE5-0000-1000-8000-00805F9B34FB"; // 定位信息
 }
 
+// ===================== 屏幕配置 =====================
+#ifndef SCREEN_SERIAL_ONLY
+#define SCREEN_SERIAL_ONLY 0
+#endif
+
+// TFT 屏幕默认分辨率，运行时会自适应
+#ifndef TFT_WIDTH
+#define TFT_WIDTH 240
+#endif
+#ifndef TFT_HEIGHT
+#define TFT_HEIGHT 240
+#endif
+
+// HUD 配色（与视频中的 HUD 风格一致：高对比、夜间友好）
+namespace HudColor {
+    constexpr uint16_t BG       = 0x0000;  // 黑底
+    constexpr uint16_t PRIMARY  = 0x07FF;  // 青色（主信息）
+    constexpr uint16_t ACCENT   = 0x07E0;  // 绿色（车速）
+    constexpr uint16_t WARN     = 0xFD20;  // 橙色（警告）
+    constexpr uint16_t DANGER   = 0xF800;  // 红色（限速/超速）
+    constexpr uint16_t DIM      = 0x4208;  // 暗灰（次要信息）
+    constexpr uint16_t WHITE    = 0xFFFF;
+    constexpr uint16_t YELLOW   = 0xFFE0;
+}
+
 // ===================== 功能开关 =====================
 namespace Feature {
-    // 当前阶段关闭真实屏幕，使用串口虚拟屏幕输出
-    constexpr bool ENABLE_PHYSICAL_SCREEN = false;
-
-    // 是否启用 iOS Watch 风格的动画效果（无屏幕时在串口打印动画帧）
-    constexpr bool ENABLE_ANIMATION = true;
-
-    // 是否自动重连 BLE
-    constexpr bool BLE_AUTO_RECONNECT = true;
-
-    // BLE 扫描超时（毫秒）
-    constexpr uint32_t BLE_SCAN_TIMEOUT_MS = 5000;
-
-    // 无导航数据时是否降低刷新频率（省电）
-    constexpr bool LOW_POWER_WHEN_IDLE = false;
+    constexpr bool ENABLE_PHYSICAL_SCREEN = true;   // 启用真实 TFT 屏幕
+    constexpr bool ENABLE_ANIMATION = true;          // 转向箭头脉冲动画
+    constexpr bool BLE_AUTO_RECONNECT = true;        // 自动重连 BLE
+    constexpr uint32_t BLE_SCAN_TIMEOUT_MS = 5000;   // BLE 扫描超时
+    constexpr bool LOW_POWER_WHEN_IDLE = false;      // 空闲降频
+    constexpr uint32_t SCREEN_REFRESH_MS = 200;     // 屏幕刷新间隔（~5fps）
 }
 
 // ===================== 调试开关 =====================
 namespace Debug {
-    constexpr bool LOG_BLE_RAW      = true;  // 打印原始 BLE JSON
-    constexpr bool LOG_RENDER_STATE = true;  // 打印渲染状态
-    constexpr bool LOG_ANIMATION    = true;  // 打印动画帧信息
-    constexpr bool LOG_SYSTEM       = true;  // 打印系统/连接日志
+    constexpr bool LOG_BLE_RAW      = true;
+    constexpr bool LOG_RENDER_STATE = false;
+    constexpr bool LOG_ANIMATION    = false;
+    constexpr bool LOG_SYSTEM       = true;
 }

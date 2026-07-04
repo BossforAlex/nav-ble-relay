@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- 蓝牙（Android 11 及以下） -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+    <!-- 蓝牙（Android 12+），扫描不用于定位 -->
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" android:usesPermissionFlags="neverForLocation" />
+    <!-- 定位（Android 11 及以下 BLE 扫描需要） -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30" />
+    <!-- 前台服务 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <!-- 通知（Android 13+） -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 高德广播接收权限 -->
+    <uses-permission android:name="com.autonavi.amapauto.permission.RECEIVE_BROADCAST" />
+    <uses-permission android:name="autonavi.permission.RECEIVE_BROADCAST" />
+
+    <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />
+    <uses-feature android:name="android.hardware.location" android:required="false" />
+
+    <application
+        android:label="导航BLE转发"
+        android:icon="@mipmap/ic_launcher"
+        android:supportsRtl="true">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- 高德导航广播接收器：监听多种 action，兼容车机版与手机版 -->
+        <receiver
+            android:name=".NavBroadcastReceiver"
+            android:exported="true"
+            android:priority="999">
+            <intent-filter android:priority="999">
+                <action android:name="AUTONAVI_STANDARD_BROADCAST_SEND" />
+                <action android:name="AUTONAVI_STANDARD_BROADCAST_RECV" />
+                <action android:name="com.autonavi.amapauto.ACTION_STANDARD_BROADCAST_SEND" />
+                <action android:name="com.autonavi.amapauto.ACTION_STANDARD_BROADCAST_RECV" />
+                <action android:name="com.autonavi.amapauto.action.STANDARD_BROADCAST" />
+                <action android:name="com.autonavi.action.STANDARD_BROADCAST_SEND" />
+                <action android:name="com.autonavi.minimap.ACTION_BROADCAST" />
+                <action android:name="com.autonavi.minimap.action.NAV_INFO" />
+                <action android:name="com.autonavi.action.NAVIGATION_INFO" />
+                <action android:name="AUTONAVI_NAVI_INFO" />
+                <action android:name="AutonaviNaviInfo" />
+                <action android:name="com.autonavi.autonavi.action.BROADCAST_SEND" />
+                <action android:name="com.navblerelay.SELF_TEST" />
+            </intent-filter>
+        </receiver>
+
+        <!-- flutter_blue_plus 插件需要的元数据 -->
+        <meta-data
+            android:name="flutterEmbedding"
+            android:value="2" />
+
+    </application>
+
+    <!-- flutter_blue_plus 需要后台扫描（不用于定位） -->
+    <queries>
+        <intent>
+            <action android:name="android.bluetooth.adapter.action.REQUEST_ENABLE" />
+        </intent>
+    </queries>
+
+</manifest>

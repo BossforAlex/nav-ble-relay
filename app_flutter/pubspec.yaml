@@ -1,0 +1,29 @@
+name: nav_ble_relay
+description: 导航蓝牙中继 - 接收高德地图广播并通过 BLE 转发给 ESP32 屏幕
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+  flutter: '>=3.22.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # BLE GATT Server（外设模式）
+  flutter_blue_plus: ^1.32.12
+  # 状态管理
+  provider: ^6.1.2
+  # 本地设置存储
+  shared_preferences: ^2.3.0
+  # Material You 动态主题
+  dynamic_color: ^1.7.0
+  # 字体
+  google_fonts: ^6.2.1
+
+dev_dependencies:
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true

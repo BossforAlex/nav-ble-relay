@@ -1,18 +1,14 @@
 /**
  * @file main.cpp
- * @brief ESP32-C3 Super Mini 导航显示主程序
+ * @brief ESP32-S3 Super Mini 导航 HUD 显示主程序
  *
  * 架构：
  *   main.cpp (组合器)
- *   ├─ ble::BleClient   负责 BLE 扫描/连接/订阅
+ *   ├─ ble::BleServer   负责 BLE 接收手机写入的导航数据
  *   ├─ nav::NavParser   负责 JSON -> 结构化数据
  *   ├─ Screen (抽象)    负责显示输出
- *      └─ ScreenConsole  当前阶段：串口虚拟屏幕
- *
- * 后续接入 OLED/LCD/TFT 时，只需：
- *   1. 新增 ScreenOled 继承 Screen；
- *   2. 把 screen 实例替换为 ScreenOled；
- *   3. 复用 ScreenRenderer 中的标签/格式化函数。
+ *      ├─ ScreenTFT     ESP32-S3: ST7789 TFT HUD 显示
+ *      └─ ScreenConsole ESP32-C3: 串口虚拟屏幕（向后兼容）
  */
 
 #include <Arduino.h>
@@ -23,11 +19,16 @@
 #include "config/Config.h"
 #include "ble/BleServer.h"
 #include "nav/NavParser.h"
-#include "screen/ScreenConsole.h"
 
-// ===================== 全局对象 =====================
+#if SCREEN_SERIAL_ONLY
+  #include "screen/ScreenConsole.h"
+  static ScreenConsole sScreen;
+#else
+  #include "screen/ScreenTFT.h"
+  static ScreenTFT sScreen;
+#endif
+
 static BleServer sBleServer;
-static ScreenConsole sScreen;
 static Nav::NavState sNavState;
 
 // BLE 数据接收缓冲区（静态，避免堆碎片）
@@ -37,7 +38,6 @@ static char sJsonBuffer[1024];
 static void onBleData(const char* uuid, const uint8_t* data, size_t len) {
     if (len == 0 || data == nullptr) return;
 
-    // 拷贝并截断，确保是合法 C 字符串；防止异常字符导致 printf 越界
     size_t copyLen = len < sizeof(sJsonBuffer) - 1 ? len : sizeof(sJsonBuffer) - 1;
     memcpy(sJsonBuffer, data, copyLen);
     sJsonBuffer[copyLen] = '\0';
@@ -56,7 +56,6 @@ static void onBleData(const char* uuid, const uint8_t* data, size_t len) {
     } else if (strstr(uuid, BleUUID::CHAR_LOCATION)) {
         ok = Nav::parseLocationInfo(sJsonBuffer, sNavState.location);
     } else if (strstr(uuid, BleUUID::CHAR_STATE)) {
-        // 状态报文可能是简单整数，也可能是 JSON {"state":1}
         JsonDocument doc;
         DeserializationError err = deserializeJson(doc, sJsonBuffer);
         int state = err ? atoi(sJsonBuffer) : doc["state"] | doc["data"]["state"] | -1;
@@ -76,7 +75,7 @@ static void onBleData(const char* uuid, const uint8_t* data, size_t len) {
 void setup() {
     Serial.begin(SERIAL_BAUD);
 
-    // 等待串口就绪，但最多 1.5 秒；无串口连接时也不阻塞启动
+    // 等待串口就绪，但最多 1.5 秒
     while (!Serial && millis() < 1500) { delay(10); }
     delay(300);
 
@@ -89,14 +88,14 @@ void setup() {
     Serial.println("╚══════════════════════════════════════════╝");
     Serial.flush();
 
-    // 启动阶段主动喂狗，避免初始化耗时触发看门狗复位
+    // 启动阶段主动喂狗
     esp_task_wdt_reset();
 
-    // 初始化虚拟屏幕
+    // 初始化屏幕
     sScreen.init();
     sScreen.log("系统启动，准备连接蓝牙...");
 
-    // 初始化 BLE（ESP32 作为 Peripheral 广播 ICA* 名称，等待 Android 连接）
+    // 初始化 BLE
     sBleServer.begin(DEVICE_NAME_PREFIX);
     sBleServer.setDataCallback(onBleData);
 }
@@ -107,7 +106,6 @@ void loop() {
     sScreen.setBleConnected(sBleServer.isConnected());
     sScreen.update();
 
-    // 空闲时降低循环频率，减少 CPU 占用
     if (Feature::LOW_POWER_WHEN_IDLE &&
         sNavState.mapState != Nav::MapState::Navigating) {
         delay(50);

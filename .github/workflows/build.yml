@@ -1,18 +1,16 @@
-name: Build Firmware & Android App
+name: Build Firmware & Flutter App
 
 on:
   push:
     branches:
       - main
-      - trae/solo-agent-*
     tags:
       - 'v*'
-  pull_request:
   workflow_dispatch:
 
 jobs:
   build-firmware:
-    name: Build ESP32-C3 Super Mini Firmware
+    name: Build ESP32-S3 Firmware
     runs-on: ubuntu-22.04
     defaults:
       run:
@@ -27,7 +25,7 @@ jobs:
           path: |
             ~/.platformio
             Auto/.pio
-          key: ${{ runner.os }}-pio-v3-esp32-c3-supermini-${{ hashFiles('Auto/platformio.ini') }}
+          key: ${{ runner.os }}-pio-v4-esp32-s3-${{ hashFiles('Auto/platformio.ini') }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -35,103 +33,126 @@ jobs:
           python-version: '3.11'
 
       - name: Install PlatformIO
-        run: pip install platformio
+        run: pip install platformio esptool
 
-      - name: Build firmware (esp32-c3-supermini)
+      - name: Build ESP32-S3 firmware (with TFT screen)
         run: |
           set -x
           python3 -m platformio system info
           rm -rf .pio/build
+          python3 -m platformio run -e esp32-s3-supermini
+
+      - name: Build ESP32-C3 firmware (serial-only fallback)
+        run: |
           python3 -m platformio run -e esp32-c3-supermini
 
-      - name: Create factory firmware image
+      - name: Create factory firmware images
         run: |
-          pip install esptool
-          # ESP32-C3 内存布局（与经典 ESP32 不同）：
-          #   0x0000  bootloader.bin   （第二阶段引导程序）
-          #   0x8000  partitions.bin   （分区表）
-          #   0x10000 firmware.bin     （应用程序）
+          # ESP32-S3 内存布局：
+          #   0x0000  bootloader.bin
+          #   0x8000  partitions.bin
+          #   0x10000 firmware.bin
+          esptool.py --chip esp32s3 merge-bin \
+            -o firmware-s3-merged.bin \
+            --flash-mode dio \
+            --flash-freq 40m \
+            --flash-size 8MB \
+            0x0000 .pio/build/esp32-s3-supermini/bootloader.bin \
+            0x8000 .pio/build/esp32-s3-supermini/partitions.bin \
+            0x10000 .pio/build/esp32-s3-supermini/firmware.bin
+
+          # ESP32-C3 内存布局：
           esptool.py --chip esp32c3 merge-bin \
-            -o firmware-merged.bin \
+            -o firmware-c3-merged.bin \
             --flash-mode dio \
             --flash-freq 40m \
             --flash-size 4MB \
             0x0000 .pio/build/esp32-c3-supermini/bootloader.bin \
             0x8000 .pio/build/esp32-c3-supermini/partitions.bin \
             0x10000 .pio/build/esp32-c3-supermini/firmware.bin
-          echo "=== Merged firmware info ==="
-          ls -la firmware-merged.bin
-          # 验证固件前几个字节：应包含 ESP32-C3 的合法 bootloader 头
-          xxd firmware-merged.bin | head -n 4
-          # 验证 bootloader 镜像头：
-          #   第 2 字节为 SPI 模式字段：DIO=0x02，QIO=0x00
-          #   第 3 字节高 4 位为 Flash 容量：0x20=4MB；低 4 位为 Flash 频率：0x00=40MHz
+
+          echo "=== S3 Merged firmware ==="
+          ls -la firmware-s3-merged.bin
+          xxd firmware-s3-merged.bin | head -n 4
+
+          echo "=== C3 Merged firmware ==="
+          ls -la firmware-c3-merged.bin
+
+      - name: Validate firmware headers
+        run: |
           python3 -c "
           import sys
-          with open('firmware-merged.bin', 'rb') as f:
-              header = f.read(8)
-          print('Header bytes:', header.hex())
-          spi_mode = header[2]
-          flash_byte = header[3]
-          flash_size = flash_byte >> 4
-          flash_freq = flash_byte & 0x0f
-          mode_name = {0x00:'QIO', 0x01:'QOUT', 0x02:'DIO', 0x03:'DOUT'}.get(spi_mode, 'UNKNOWN')
-          size_name = {0x00:'1MB', 0x01:'2MB', 0x02:'4MB', 0x03:'8MB', 0x04:'16MB'}.get(flash_size, 'UNKNOWN')
-          freq_name = {0x00:'40MHz', 0x01:'26MHz', 0x02:'20MHz', 0x0f:'80MHz'}.get(flash_freq, 'UNKNOWN')
-          print(f'SPI mode field: 0x{spi_mode:02x} ({mode_name})')
-          print(f'Flash size field: 0x{flash_size:02x} ({size_name})')
-          print(f'Flash freq field: 0x{flash_freq:02x} ({freq_name})')
-          if spi_mode != 0x02:
-              print('ERROR: bootloader is not DIO mode', file=sys.stderr)
-              sys.exit(1)
-          if flash_size != 0x02:
-              print('ERROR: flash size is not 4MB', file=sys.stderr)
-              sys.exit(1)
-          if flash_freq != 0x00:
-              print('ERROR: flash frequency is not 40MHz', file=sys.stderr)
-              sys.exit(1)
-          print('OK: bootloader header uses DIO + 4MB + 40MHz')
+          for name, chip in [('firmware-s3-merged.bin', 'S3'), ('firmware-c3-merged.bin', 'C3')]:
+              with open(name, 'rb') as f:
+                  header = f.read(8)
+              print(f'{chip} header: {header.hex()}')
+              spi_mode = header[2]
+              flash_byte = header[3]
+              flash_size = flash_byte >> 4
+              flash_freq = flash_byte & 0x0f
+              mode_name = {0x00:'QIO', 0x02:'DIO', 0x03:'DOUT'}.get(spi_mode, 'UNKNOWN')
+              print(f'  SPI mode: 0x{spi_mode:02x} ({mode_name})')
+              print(f'  Flash size/freq: 0x{flash_byte:02x}')
+              if spi_mode != 0x02:
+                  print(f'ERROR: {chip} bootloader is not DIO mode', file=sys.stderr)
+                  sys.exit(1)
+              print(f'  OK: {chip} uses DIO mode')
           "
 
-      - name: Upload firmware artifact
+      - name: Upload S3 firmware artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-esp32-s3-supermini
+          path: Auto/firmware-s3-merged.bin
+          if-no-files-found: error
+
+      - name: Upload C3 firmware artifact
         uses: actions/upload-artifact@v4
         with:
           name: firmware-esp32-c3-supermini
-          path: Auto/firmware-merged.bin
+          path: Auto/firmware-c3-merged.bin
           if-no-files-found: error
 
-  build-android:
-    name: Build Android App
+  build-flutter:
+    name: Build Flutter APK
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
+      - name: Flutter pub get
+        working-directory: app_flutter
+        run: flutter pub get
 
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug
+      - name: Build APK
+        working-directory: app_flutter
+        run: flutter build apk --release
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: app-flutter-release
+          path: app_flutter/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
 
   release:
     name: Create Release
-    needs: [build-firmware, build-android]
+    needs: [build-firmware, build-flutter]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
@@ -140,29 +161,59 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download firmware artifact
+      - name: Download S3 firmware
+        uses: actions/download-artifact@v4
+        with:
+          name: firmware-esp32-s3-supermini
+          path: ./firmware-s3
+
+      - name: Download C3 firmware
         uses: actions/download-artifact@v4
         with:
           name: firmware-esp32-c3-supermini
-          path: ./firmware
+          path: ./firmware-c3
 
-      - name: Download APK artifact
+      - name: Download APK
         uses: actions/download-artifact@v4
         with:
-          name: app-debug
+          name: app-flutter-release
           path: ./apk
 
       - name: Rename artifacts for release
-        working-directory: .
         run: |
           mkdir -p release
-          cp firmware/firmware-merged.bin release/firmware-esp32-c3-supermini.bin
-          cp apk/app-debug.apk release/app-debug.apk
+          cp firmware-s3/firmware-s3-merged.bin release/firmware-esp32-s3-supermini.bin
+          cp firmware-c3/firmware-c3-merged.bin release/firmware-esp32-c3-supermini.bin
+          cp apk/app-release.apk release/app-flutter-release.apk
           ls -la release/
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           name: Release ${{ github.ref_name }}
+          body: |
+            ## ${{ github.ref_name }}
+
+            ### 固件
+            - `firmware-esp32-s3-supermini.bin` — ESP32-S3 Super Mini + ST7789 TFT 屏幕（推荐）
+            - `firmware-esp32-c3-supermini.bin` — ESP32-C3 Super Mini 串口版（向后兼容）
+
+            ### APP
+            - `app-flutter-release.apk` — Flutter 版 Android APP（Material 3 + 动态主题）
+
+            ### 刷写方法
+            ```bash
+            # ESP32-S3
+            esptool.py --chip esp32s3 --port COMx erase_flash
+            esptool.py --chip esp32s3 --port COMx write_flash -z \
+              --flash-mode dio --flash-freq 40m --flash-size 8MB \
+              0x0 firmware-esp32-s3-supermini.bin
+
+            # ESP32-C3
+            esptool.py --chip esp32c3 --port COMx erase_flash
+            esptool.py --chip esp32c3 --port COMx write_flash -z \
+              --flash-mode dio --flash-freq 40m --flash-size 4MB \
+              0x0 firmware-esp32-c3-supermini.bin
+            ```
           files: release/*
           generate_release_notes: true

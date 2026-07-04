@@ -9,10 +9,15 @@
 .pioenvs/
 .piolibdeps/
 
-# Android
+# Android / Flutter
 .gradle/
 build/
 app/build/
+app_flutter/build/
+app_flutter/.dart_tool/
+app_flutter/.flutter-plugins
+app_flutter/.flutter-plugins-dependencies
+app_flutter/android/local.properties
 local.properties
 *.apk
 *.aab
