@@ -68,9 +68,9 @@ Release 中的 `firmware-esp32-s3-supermini.bin` 是**合并后的工厂镜像**
 # 擦除
 esptool.py --chip esp32s3 --port COMx erase_flash
 
-# 烧录（DIO + 80MHz + 8MB）
+# 烧录（DIO + 80MHz + 4MB）
 esptool.py --chip esp32s3 --port COMx --baud 460800 write_flash -z \
-  --flash-mode dio --flash-freq 80m --flash-size 8MB \
+  --flash-mode dio --flash-freq 80m --flash-size 4MB \
   0x0 firmware-esp32-s3-supermini.bin
 ```
 

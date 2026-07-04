@@ -56,7 +56,7 @@ jobs:
             -o firmware-s3-merged.bin \
             --flash-mode dio \
             --flash-freq 80m \
-            --flash-size 8MB \
+            --flash-size 4MB \
             0x0000 .pio/build/esp32-s3-supermini/bootloader.bin \
             0x8000 .pio/build/esp32-s3-supermini/partitions.bin \
             0x10000 .pio/build/esp32-s3-supermini/firmware.bin
@@ -82,21 +82,44 @@ jobs:
         run: |
           python3 -c "
           import sys
+          # 期望值：与 platformio.ini 中 board_build.flash_size / f_flash 必须保持一致。
+          # 任何修改 platformio.ini 中 flash 配置的人必须同步更新这里，CI 会强制校验。
+          # ESP32 image header byte[3] 格式：
+          #   高 4 bit = flash size ID, 低 4 bit = flash freq ID
+          # size ID: 0x02=1MB, 0x03=2MB, 0x04=4MB, 0x05=8MB, 0x06=16MB
+          # freq ID: 0x00=40MHz, 0x01=26MHz, 0x02=20MHz, 0x0F=80MHz
+          expected = {
+              'S3': {'mode': 0x02, 'size_id': 0x04, 'size_name': '4MB', 'freq_id': 0x0F, 'freq_name': '80MHz'},
+              'C3': {'mode': 0x02, 'size_id': 0x04, 'size_name': '4MB', 'freq_id': 0x00, 'freq_name': '40MHz'},
+          }
+          size_map = {0x02:'1MB', 0x03:'2MB', 0x04:'4MB', 0x05:'8MB', 0x06:'16MB'}
+          freq_map = {0x00:'40MHz', 0x01:'26MHz', 0x02:'20MHz', 0x0F:'80MHz'}
+          mode_map = {0x00:'QIO', 0x02:'DIO', 0x03:'DOUT'}
+          ok = True
           for name, chip in [('firmware-s3-merged.bin', 'S3'), ('firmware-c3-merged.bin', 'C3')]:
               with open(name, 'rb') as f:
                   header = f.read(8)
-              print(f'{chip} header: {header.hex()}')
+              exp = expected[chip]
               spi_mode = header[2]
               flash_byte = header[3]
-              flash_size = flash_byte >> 4
-              flash_freq = flash_byte & 0x0f
-              mode_name = {0x00:'QIO', 0x02:'DIO', 0x03:'DOUT'}.get(spi_mode, 'UNKNOWN')
-              print(f'  SPI mode: 0x{spi_mode:02x} ({mode_name})')
-              print(f'  Flash size/freq: 0x{flash_byte:02x}')
-              if spi_mode != 0x02:
-                  print(f'ERROR: {chip} bootloader is not DIO mode', file=sys.stderr)
-                  sys.exit(1)
-              print(f'  OK: {chip} uses DIO mode')
+              size_id = flash_byte >> 4
+              freq_id = flash_byte & 0x0f
+              print(f'=== {chip} header: {header.hex()} ===')
+              print(f'  SPI mode    : 0x{spi_mode:02x} ({mode_map.get(spi_mode, \"UNKNOWN\")})  expect 0x{exp[\"mode\"]:02x} (DIO)')
+              print(f'  Flash size  : 0x{size_id:x} ({size_map.get(size_id, \"UNKNOWN\")})  expect 0x{exp[\"size_id\"]:x} ({exp[\"size_name\"]})')
+              print(f'  Flash freq  : 0x{freq_id:x} ({freq_map.get(freq_id, \"UNKNOWN\")})  expect 0x{exp[\"freq_id\"]:x} ({exp[\"freq_name\"]})')
+              if spi_mode != exp['mode']:
+                  print(f'  ERROR: {chip} SPI mode mismatch', file=sys.stderr); ok = False
+              if size_id != exp['size_id']:
+                  print(f'  ERROR: {chip} flash size mismatch (image header declares {size_map.get(size_id)} but expected {exp[\"size_name\"]})', file=sys.stderr)
+                  print(f'         这通常是因为 platformio.ini 中 board_build.flash_size 与板子实际 Flash 不一致。', file=sys.stderr)
+                  print(f'         ESP32-S3 Super Mini 实测为 4MB Flash（ESP32-S3FH4R2），不应配置为 8MB。', file=sys.stderr)
+                  ok = False
+              if freq_id != exp['freq_id']:
+                  print(f'  ERROR: {chip} flash freq mismatch', file=sys.stderr); ok = False
+          if not ok:
+              sys.exit(1)
+          print('=== OK: all firmware headers match expected flash config ===')
           "
 
       - name: Upload S3 firmware artifact
@@ -206,7 +229,7 @@ jobs:
             # ESP32-S3
             esptool.py --chip esp32s3 --port COMx erase_flash
             esptool.py --chip esp32s3 --port COMx write_flash -z \
-              --flash-mode dio --flash-freq 80m --flash-size 8MB \
+              --flash-mode dio --flash-freq 80m --flash-size 4MB \
               0x0 firmware-esp32-s3-supermini.bin
 
             # ESP32-C3
