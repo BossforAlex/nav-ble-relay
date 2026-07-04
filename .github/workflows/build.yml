@@ -86,13 +86,14 @@ jobs:
           # 任何修改 platformio.ini 中 flash 配置的人必须同步更新这里，CI 会强制校验。
           # ESP32 image header byte[3] 格式：
           #   高 4 bit = flash size ID, 低 4 bit = flash freq ID
-          # size ID: 0x02=1MB, 0x03=2MB, 0x04=4MB, 0x05=8MB, 0x06=16MB
+          # size ID（来自 esptool.py ESP_IMAGE_FLASH_SIZES）：
+          #   0x00=1MB, 0x01=2MB, 0x02=4MB, 0x03=8MB, 0x04=16MB, 0x05=32MB
           # freq ID: 0x00=40MHz, 0x01=26MHz, 0x02=20MHz, 0x0F=80MHz
           expected = {
-              'S3': {'mode': 0x02, 'size_id': 0x04, 'size_name': '4MB', 'freq_id': 0x0F, 'freq_name': '80MHz'},
-              'C3': {'mode': 0x02, 'size_id': 0x04, 'size_name': '4MB', 'freq_id': 0x00, 'freq_name': '40MHz'},
+              'S3': {'mode': 0x02, 'size_id': 0x02, 'size_name': '4MB', 'freq_id': 0x0F, 'freq_name': '80MHz'},
+              'C3': {'mode': 0x02, 'size_id': 0x02, 'size_name': '4MB', 'freq_id': 0x00, 'freq_name': '40MHz'},
           }
-          size_map = {0x02:'1MB', 0x03:'2MB', 0x04:'4MB', 0x05:'8MB', 0x06:'16MB'}
+          size_map = {0x00:'1MB', 0x01:'2MB', 0x02:'4MB', 0x03:'8MB', 0x04:'16MB', 0x05:'32MB'}
           freq_map = {0x00:'40MHz', 0x01:'26MHz', 0x02:'20MHz', 0x0F:'80MHz'}
           mode_map = {0x00:'QIO', 0x02:'DIO', 0x03:'DOUT'}
           ok = True
