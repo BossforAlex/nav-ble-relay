@@ -21,14 +21,17 @@ bool ScreenTFT::init() {
 
     computeScale();
 
-    // 背光
+    // 背光（GPIO 操作，不涉及 SPI）
 #ifdef TFT_BL
     pinMode(TFT_BL, OUTPUT);
     digitalWrite(TFT_BL, TFT_BACKLIGHT_ON);
 #endif
 
-    tft.setRotation(0);
-    tft.fillScreen(HudColor::BG);
+    // ⚠️ 关键：init() 中不调用任何 tft 绘制操作（setRotation/fillScreen/
+    //    drawRect/fillTriangle 等），因为 ESP32-S3 上 TFT_eSPI 的 SPI
+    //    DMA / 像素写入路径存在 StoreProhibited crash（NULL + 0x10）。
+    //    所有渲染推迟到 renderFrame() 通过 sprite 帧缓冲（RAM）完成，
+    //    仅用 pushSprite() 做一次 SPI bulk 传输。
 
     // 3. 创建离屏 sprite（双缓冲，避免闪烁）
     sprite.setColorDepth(16);
@@ -40,7 +43,6 @@ bool ScreenTFT::init() {
         spriteBuf = (uint16_t*)sprite.createSprite(halfW, halfH);
         if (spriteBuf == nullptr) {
             Serial.println("[Screen] sprite 帧缓冲分配失败，将禁用渲染");
-            // 不设置 mInited，让 renderFrame 直接跳过
             return false;
         }
         Serial.printf("[Screen] sprite 降级为 %dx%d（内存不足）\n", halfW, halfH);
@@ -49,14 +51,10 @@ bool ScreenTFT::init() {
     mInited = true;
     mSpriteOk = true;
 
-    // 4. 启动画面：纯几何图形，不依赖字体渲染
-    //    TFT_eSPI 在 ESP32-S3 上 drawString 字体渲染路径存在 StoreProhibited
-    //    crash（NULL + 0x10 offset），因此 drawBootScreen 完全使用几何图形
-    drawBootScreen();
-
     if (Debug::LOG_SYSTEM) {
         Serial.printf("[Screen] TFT 初始化完成 %dx%d scale=%.2f\n", mWidth, mHeight, mScale);
     }
+    Serial.println("[Screen] 启动画面将在首帧渲染时显示");
     return true;
 }
 
@@ -103,6 +101,13 @@ void ScreenTFT::log(const char* msg) {
 
 void ScreenTFT::renderFrame() {
     if (!mInited || !mSpriteOk) return;
+
+    // 首帧渲染启动画面（在 sprite 帧缓冲中绘制，避免 tft 直接 SPI 操作）
+    if (mFrameCounter == 0) {
+        drawBootScreen();
+        sprite.pushSprite(0, 0);
+        return;
+    }
 
     drawBackground();
 
@@ -443,22 +448,22 @@ void ScreenTFT::drawIdleScreen() {
 }
 
 // ══════════════════════════════════════════════════════════════
-// 启动画面：纯几何图形，不使用 drawString / 字体渲染
-// 原因：TFT_eSPI 在 ESP32-S3 上 drawString 字体渲染路径存在
-// StoreProhibited crash（NULL + 0x10 offset），根因是 S3 的 SPI
-// 总线与经典 ESP32 不同，TFT_eSPI 的字体渲染内部指针未正确初始化。
-// 使用 fillTriangle / fillRect / drawRect / fillCircle 替代。
+// 启动画面：在 sprite 帧缓冲（RAM）中绘制，避免 tft 直接 SPI 操作
+// 原因：ESP32-S3 上 TFT_eSPI 的 tft.fillTriangle / tft.fillRect /
+// tft.drawRect / tft.fillCircle 等直接 SPI 像素写入路径存在
+// StoreProhibited crash（EXCVADDR: 0x00000010 = NULL + 0x10）。
+// 在 sprite 中绘制完全在 RAM 中进行，仅 pushSprite 做一次 SPI bulk。
 // ══════════════════════════════════════════════════════════════
 void ScreenTFT::drawBootScreen() {
-    tft.fillScreen(HudColor::BG);
+    sprite.fillSprite(HudColor::BG);
 
     int cx = mWidth / 2;
     int cy = mHeight / 2;
 
     // ── 外框（double border） ──
-    tft.drawRect(scale(8),  scale(8),
+    sprite.drawRect(scale(8),  scale(8),
                  mWidth - scale(16), mHeight - scale(16), HudColor::PRIMARY);
-    tft.drawRect(scale(12), scale(12),
+    sprite.drawRect(scale(12), scale(12),
                  mWidth - scale(24), mHeight - scale(24), HudColor::DIM);
 
     // ── 中心导航箭头（HUD 风格） ──
@@ -472,27 +477,27 @@ void ScreenTFT::drawBootScreen() {
     int leftY  = arrowY + arrowSize / 2;
     int rightX = cx + arrowSize;
     int rightY = arrowY + arrowSize / 2;
-    tft.fillTriangle(tipX, tipY, leftX, leftY, rightX, rightY, HudColor::PRIMARY);
+    sprite.fillTriangle(tipX, tipY, leftX, leftY, rightX, rightY, HudColor::PRIMARY);
 
     // 箭头杆
     int shaftW = scale(8);
     int shaftH = scale(18);
     int shaftBaseY = arrowY + arrowSize / 2;
-    tft.fillRect(cx - shaftW / 2, shaftBaseY, shaftW, shaftH, HudColor::PRIMARY);
+    sprite.fillRect(cx - shaftW / 2, shaftBaseY, shaftW, shaftH, HudColor::PRIMARY);
 
     // ── 底部进度条（表示启动中） ──
     int barY = mHeight - scale(28);
     int barW = mWidth - scale(36);
     int barX = scale(18);
     int barH = scale(4);
-    tft.drawRect(barX, barY, barW, barH, HudColor::DIM);
+    sprite.drawRect(barX, barY, barW, barH, HudColor::DIM);
 
     // 分三段填充（视觉效果：启动进度）
     int segW = barW / 3;
-    tft.fillRect(barX + 2, barY + 1, segW - 2, barH - 2, HudColor::ACCENT);
-    tft.fillRect(barX + segW + 2, barY + 1, segW - 2, barH - 2, HudColor::PRIMARY);
-    tft.fillRect(barX + segW * 2 + 2, barY + 1, segW - 4, barH - 2, HudColor::DIM);
+    sprite.fillRect(barX + 2, barY + 1, segW - 2, barH - 2, HudColor::ACCENT);
+    sprite.fillRect(barX + segW + 2, barY + 1, segW - 2, barH - 2, HudColor::PRIMARY);
+    sprite.fillRect(barX + segW * 2 + 2, barY + 1, segW - 4, barH - 2, HudColor::DIM);
 
     // ── 版本标记（右下角小圆点） ──
-    tft.fillCircle(mWidth - scale(14), mHeight - scale(14), scale(3), HudColor::DIM);
+    sprite.fillCircle(mWidth - scale(14), mHeight - scale(14), scale(3), HudColor::DIM);
 }
