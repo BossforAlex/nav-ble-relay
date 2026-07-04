@@ -1,7 +1,6 @@
 plugins {
     id "com.android.application"
     id "kotlin-android"
-    // Flutter Gradle Plugin 从 settings.gradle 的 includeBuild 加载
     id "dev.flutter.flutter-gradle-plugin"
 }
 
@@ -33,7 +32,6 @@ android {
 
     buildTypes {
         release {
-            // Flutter 调试符号，CI 中使用 debug 签名即可
             signingConfig signingConfigs.debug
             minifyEnabled false
         }

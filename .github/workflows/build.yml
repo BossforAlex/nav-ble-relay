@@ -55,7 +55,7 @@ jobs:
           esptool.py --chip esp32s3 merge-bin \
             -o firmware-s3-merged.bin \
             --flash-mode dio \
-            --flash-freq 40m \
+            --flash-freq 80m \
             --flash-size 8MB \
             0x0000 .pio/build/esp32-s3-supermini/bootloader.bin \
             0x8000 .pio/build/esp32-s3-supermini/partitions.bin \
@@ -206,7 +206,7 @@ jobs:
             # ESP32-S3
             esptool.py --chip esp32s3 --port COMx erase_flash
             esptool.py --chip esp32s3 --port COMx write_flash -z \
-              --flash-mode dio --flash-freq 40m --flash-size 8MB \
+              --flash-mode dio --flash-freq 80m --flash-size 8MB \
               0x0 firmware-esp32-s3-supermini.bin
 
             # ESP32-C3
