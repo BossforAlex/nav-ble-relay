@@ -33,7 +33,10 @@ android {
     buildTypes {
         release {
             signingConfig signingConfigs.debug
+            // 显式关闭资源压缩，避免 Flutter 自动升级 build.gradle 时
+            // 启用 shrinkResources 但 minifyEnabled=false 引发的配置错误
             minifyEnabled false
+            shrinkResources false
         }
     }
 }
