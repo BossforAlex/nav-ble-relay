@@ -69,12 +69,6 @@ public:
         if (Debug::LOG_SYSTEM) Serial.println("[BLE] 已断开，将尝试重连");
     }
 
-    void onMtuChanged(BLEClient* pClient, int mtu) override {
-        if (Debug::LOG_SYSTEM) {
-            Serial.printf("[BLE] MTU 协商完成: %d 字节\n", mtu);
-        }
-    }
-
 private:
     BleClient* mClient;
 };
@@ -158,8 +152,10 @@ bool BleClient::connectToServer() {
 
     if (Debug::LOG_SYSTEM) Serial.println("[BLE] 连接成功，开始 MTU 协商...");
 
-    // ESP32 Arduino BLE 库不暴露 requestMTU()；MTU 在连接/MTU-change 回调中
-    // 异步设置（见 ClientCallbacks::onMtuChanged）。先读取当前协商值。
+    // ESP32 Arduino BLE 库的 MTU 协商由 GATT 内部完成（连接/MTU-change 回调），
+    // 不暴露 requestMTU() API。连接后通过 getMTU() 读取当前值；
+    // 若需强制扩展 MTU，需在 Android 端 GATT Server 的
+    // BluetoothGattServerCallback.onMtuChanged 中返回更高值。
     int mtu = client->getMTU();
     if (Debug::LOG_SYSTEM) {
         Serial.printf("[BLE] 当前 MTU: %d 字节（默认=23）\n", mtu);
@@ -167,7 +163,7 @@ bool BleClient::connectToServer() {
     if (mtu < 100) {
         if (Debug::LOG_SYSTEM) {
             Serial.println("[BLE] 警告：MTU 较小，JSON 大包可能被截断");
-            Serial.println("[BLE] 提示：需确认 Android 端有 GATT_MTU 协商或调高");
+            Serial.println("[BLE] 提示：需在 Android 端 GATT Server 协商 MTU");
         }
     }
 
