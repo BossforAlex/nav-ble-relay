@@ -227,13 +227,22 @@ class MainActivity : FlutterActivity() {
             override fun onConnectionStateChange(device: BluetoothDevice, status: Int, newState: Int) {
                 val address = device.address
                 if (newState == BluetoothGatt.STATE_CONNECTED) {
-                    // 仅接受名称以 ICA 开头的设备，防止附近其他 BLE 设备误连
+                    // 仅接受特定名称的 ESP32 设备
+                    // 允许列表：AutoNavDisplay / NavDisplay / 任何以 ICA 开头的设备
                     val remoteName = try {
                         if (context.hasBluetoothPermission()) device.name else null
                     } catch (t: Throwable) { null }
 
-                    if (remoteName.isNullOrBlank() || !remoteName.startsWith(DEVICE_NAME_PREFIX)) {
-                        Log.w(TAG, "拒绝非 ICA 设备连接：$address / 名称=${remoteName ?: "未知"}")
+                    val isAllowedName = remoteName?.let { name ->
+                        name.startsWith(DEVICE_NAME_PREFIX) ||           // ICA*
+                        name.equals("AutoNavDisplay", true) ||           // 旧默认
+                        name.equals("NavDisplay", true) ||               // 简称
+                        name.startsWith("ESP32") ||                      // 开发板默认
+                        name.startsWith("espressif")
+                    } ?: false
+
+                    if (!isAllowedName) {
+                        Log.w(TAG, "拒绝未知设备连接：$address / 名称=${remoteName ?: "未知"}")
                         try {
                             if (context.hasBluetoothPermission()) gattServer?.cancelConnection(device)
                         } catch (t: Throwable) { }
