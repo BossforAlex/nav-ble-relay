@@ -69,6 +69,12 @@ public:
         if (Debug::LOG_SYSTEM) Serial.println("[BLE] 已断开，将尝试重连");
     }
 
+    void onMtuChanged(BLEClient* pClient, int mtu) override {
+        if (Debug::LOG_SYSTEM) {
+            Serial.printf("[BLE] MTU 协商完成: %d 字节\n", mtu);
+        }
+    }
+
 private:
     BleClient* mClient;
 };
@@ -152,16 +158,16 @@ bool BleClient::connectToServer() {
 
     if (Debug::LOG_SYSTEM) Serial.println("[BLE] 连接成功，开始 MTU 协商...");
 
-    // 请求 MTU 协商：BLE 默认 MTU=23，可用 20 字节。
-    // 高德/导航 JSON 单包通常 100-300 字节，必须扩到最大 247 才能一次发完。
-    int mtu = client->requestMTU(BLE_MTU_MAX);
+    // ESP32 Arduino BLE 库不暴露 requestMTU()；MTU 在连接/MTU-change 回调中
+    // 异步设置（见 ClientCallbacks::onMtuChanged）。先读取当前协商值。
+    int mtu = client->getMTU();
     if (Debug::LOG_SYSTEM) {
-        Serial.printf("[BLE] MTU 协商结果: %d 字节（请求 %d）\n",
-                      mtu, BLE_MTU_MAX);
+        Serial.printf("[BLE] 当前 MTU: %d 字节（默认=23）\n", mtu);
     }
     if (mtu < 100) {
         if (Debug::LOG_SYSTEM) {
             Serial.println("[BLE] 警告：MTU 较小，JSON 大包可能被截断");
+            Serial.println("[BLE] 提示：需确认 Android 端有 GATT_MTU 协商或调高");
         }
     }
 
