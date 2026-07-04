@@ -92,7 +92,11 @@ void setup() {
     esp_task_wdt_reset();
 
     // 初始化屏幕
-    sScreen.init();
+    bool screenOk = sScreen.init();
+    if (!screenOk) {
+        Serial.println("[Screen] 屏幕初始化失败，切换为串口模式");
+        Serial.println("[Screen] 导航数据将通过串口输出，BLE 功能正常");
+    }
     sScreen.log("系统启动，准备连接蓝牙...");
 
     // 初始化 BLE

@@ -35,6 +35,7 @@ private:
     unsigned long mLastRenderMs = 0;
     unsigned long mFrameCounter = 0;
     bool mInited = false;
+    bool mSpriteOk = false;  // sprite 帧缓冲是否分配成功
 
     // 屏幕尺寸（运行时获取）
     int mWidth = 240;
@@ -59,7 +60,8 @@ private:
     void drawRouteInfo();           // 全程剩余
     void drawCamera();              // 电子眼
     void drawIdleScreen();         // 无导航时显示
-    void drawBootScreen(const char* msg);  // 启动画面
+    // 启动画面：纯几何图形，不使用 drawString（避免 S3 字体渲染 crash）
+    void drawBootScreen();  // 启动画面
 
     // 工具
     int scale(int v) const { return (int)(v * mScale); }

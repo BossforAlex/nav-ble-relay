@@ -8,9 +8,17 @@ ScreenTFT::ScreenTFT()
 }
 
 bool ScreenTFT::init() {
+    // 1. 初始化 TFT 硬件
     tft.init();
     mWidth = tft.width();
     mHeight = tft.height();
+
+    // 2. 验证 TFT 是否正常连接（width/height 为 0 说明未检测到屏幕）
+    if (mWidth == 0 || mHeight == 0) {
+        Serial.println("[Screen] TFT 未检测到(width=0)，回退到串口模式");
+        return false;
+    }
+
     computeScale();
 
     // 背光
@@ -19,14 +27,32 @@ bool ScreenTFT::init() {
     digitalWrite(TFT_BL, TFT_BACKLIGHT_ON);
 #endif
 
-    tft.setRotation(0);  // 竖屏
+    tft.setRotation(0);
     tft.fillScreen(HudColor::BG);
 
+    // 3. 创建离屏 sprite（双缓冲，避免闪烁）
     sprite.setColorDepth(16);
-    sprite.createSprite(mWidth, mHeight);
+    uint16_t* spriteBuf = (uint16_t*)sprite.createSprite(mWidth, mHeight);
+    if (spriteBuf == nullptr) {
+        // 内存不足，减小 sprite 尺寸再试一次
+        int halfW = mWidth / 2;
+        int halfH = mHeight / 2;
+        spriteBuf = (uint16_t*)sprite.createSprite(halfW, halfH);
+        if (spriteBuf == nullptr) {
+            Serial.println("[Screen] sprite 帧缓冲分配失败，将禁用渲染");
+            // 不设置 mInited，让 renderFrame 直接跳过
+            return false;
+        }
+        Serial.printf("[Screen] sprite 降级为 %dx%d（内存不足）\n", halfW, halfH);
+    }
 
     mInited = true;
-    drawBootScreen("Starting...");
+    mSpriteOk = true;
+
+    // 4. 启动画面：纯几何图形，不依赖字体渲染
+    //    TFT_eSPI 在 ESP32-S3 上 drawString 字体渲染路径存在 StoreProhibited
+    //    crash（NULL + 0x10 offset），因此 drawBootScreen 完全使用几何图形
+    drawBootScreen();
 
     if (Debug::LOG_SYSTEM) {
         Serial.printf("[Screen] TFT 初始化完成 %dx%d scale=%.2f\n", mWidth, mHeight, mScale);
@@ -76,7 +102,7 @@ void ScreenTFT::log(const char* msg) {
 }
 
 void ScreenTFT::renderFrame() {
-    if (!mInited) return;
+    if (!mInited || !mSpriteOk) return;
 
     drawBackground();
 
@@ -152,7 +178,6 @@ void ScreenTFT::drawTurnArrow() {
 
 void ScreenTFT::drawArrow(int cx, int cy, int size, int icon, uint16_t color) {
     // 根据高德 ICON 定义绘制对应箭头
-    // 简化实现：用旋转角度绘制主箭头
     float angle = 0;  // 弧度，0 = 向上
 
     switch (icon) {
@@ -179,7 +204,6 @@ void ScreenTFT::drawArrow(int cx, int cy, int size, int icon, uint16_t color) {
     int headW = size / 2;
     int headH = size / 3;
 
-    // 用三角形构建向上箭头，再旋转
     // 杆
     int x0 = cx - shaftW / 2, y0 = cy + headH / 2;
     int x1 = cx + shaftW / 2, y1 = cy + headH / 2;
@@ -191,16 +215,7 @@ void ScreenTFT::drawArrow(int cx, int cy, int size, int icon, uint16_t color) {
     int hx1 = cx + headW / 2, hy1 = cy - shaftH + headH / 2;
     int hx2 = cx, hy2 = cy - shaftH + headH / 2 - headH;
 
-    // 旋转各点
-    auto rotate = [&](int px, int py) -> void {
-        float dx = px - cx;
-        float dy = py - cy;
-        float rx = dx * cosf(angle) - dy * sinf(angle) + cx;
-        float ry = dx * sinf(angle) + dy * cosf(angle) + cy;
-        // 直接绘制不方便，改为用 fillTriangle 组合
-    };
-
-    // 简化：直接用 TFT 三角形，手动计算旋转后坐标
+    // 旋转 lambda
     auto rotX = [&](int px, int py) -> int {
         float dx = px - cx;
         float dy = py - cy;
@@ -261,7 +276,6 @@ void ScreenTFT::drawDistance() {
 void ScreenTFT::drawRoadName() {
     int y = scale(20) + scale(135);
 
-    // 路口信息：当前路 -> 下一道路
     char roadBuf[80] = {0};
     if (mState.guide.intersection[0]) {
         strncpy(roadBuf, mState.guide.intersection, sizeof(roadBuf) - 1);
@@ -273,17 +287,14 @@ void ScreenTFT::drawRoadName() {
         sprite.setTextColor(HudColor::WHITE, HudColor::BG);
         sprite.setTextDatum(TC_DATUM);
         sprite.setTextSize(scaleFont(2));
-        // 截断过长文字
         sprite.drawString(roadBuf, mWidth / 2, y);
     }
 }
 
 void ScreenTFT::drawSpeed() {
-    // 车速显示在左下，限速标志在右下
     int speedY = mHeight - scale(45);
     int speedX = scale(10);
 
-    // 车速
     sprite.setTextColor(HudColor::ACCENT, HudColor::BG);
     sprite.setTextDatum(BL_DATUM);
     sprite.setTextSize(scaleFont(5));
@@ -291,7 +302,6 @@ void ScreenTFT::drawSpeed() {
     snprintf(speedBuf, sizeof(speedBuf), "%d", mState.guide.curSpeed);
     sprite.drawString(speedBuf, speedX, mHeight - scale(4));
 
-    // "km/h" 标签
     sprite.setTextColor(HudColor::DIM, HudColor::BG);
     sprite.setTextSize(scaleFont(1));
     sprite.drawString("km/h", speedX, mHeight - scale(4) - scaleFont(5) * 8);
@@ -308,12 +318,9 @@ void ScreenTFT::drawSpeed() {
 
 void ScreenTFT::drawSpeedLimit(int cx, int cy, int radius, int speed, bool overSpeed) {
     uint16_t ringColor = overSpeed ? HudColor::DANGER : HudColor::WARN;
-    // 外环
     sprite.drawCircle(cx, cy, radius, ringColor);
     sprite.drawCircle(cx, cy, radius - 1, ringColor);
-    // 内圈黑色
     sprite.fillCircle(cx, cy, radius - 2, HudColor::BG);
-    // 速度数字
     sprite.setTextColor(overSpeed ? HudColor::DANGER : HudColor::WHITE, HudColor::BG);
     sprite.setTextDatum(MC_DATUM);
     sprite.setTextSize(scaleFont(2));
@@ -337,24 +344,22 @@ void ScreenTFT::drawLanes() {
         int lx = startX + i * laneW;
         int backIcon = mState.driveWay.lanes[i].backIcon;
 
-        // 根据车道类型绘制不同图标
         uint16_t color = HudColor::PRIMARY;
         sprite.fillRect(lx, laneY, laneW - 2, laneH, color);
 
-        // 在车道块上绘制方向标记
         sprite.setTextColor(HudColor::BG, color);
         sprite.setTextDatum(MC_DATUM);
         sprite.setTextSize(scaleFont(1));
         const char* label = "";
         switch (backIcon) {
-            case 0: label = "^"; break;       // 直行
-            case 1: label = "<"; break;        // 左转
-            case 2: label = "<^"; break;       // 直行+左转
-            case 3: label = ">"; break;        // 右转
-            case 4: label = "^>"; break;       // 直行+右转
-            case 5: label = "U"; break;        // 掉头
-            case 6: label = "<>"; break;       // 左+右
-            case 7: label = "<^>"; break;      // 直+左+右
+            case 0: label = "^"; break;
+            case 1: label = "<"; break;
+            case 2: label = "<^"; break;
+            case 3: label = ">"; break;
+            case 4: label = "^>"; break;
+            case 5: label = "U"; break;
+            case 6: label = "<>"; break;
+            case 7: label = "<^>"; break;
             default: break;
         }
         sprite.drawString(label, lx + laneW / 2, laneY + laneH / 2);
@@ -379,10 +384,10 @@ void ScreenTFT::drawTmcBar() {
 
         uint16_t color = HudColor::DIM;
         switch (mState.tmc.segments[i].status) {
-            case 1: color = HudColor::ACCENT; break;    // 畅通-绿
-            case 2: color = HudColor::YELLOW; break;     // 缓行-黄
-            case 3: color = HudColor::WARN; break;       // 拥堵-橙
-            case 4: color = HudColor::DANGER; break;     // 严重拥堵-红
+            case 1: color = HudColor::ACCENT; break;
+            case 2: color = HudColor::YELLOW; break;
+            case 3: color = HudColor::WARN; break;
+            case 4: color = HudColor::DANGER; break;
             default: break;
         }
         sprite.fillRect(x, barY, segW, barH, color);
@@ -424,7 +429,6 @@ void ScreenTFT::drawCamera() {
 }
 
 void ScreenTFT::drawIdleScreen() {
-    // 无导航时显示等待画面
     drawTopBar();
 
     sprite.setTextColor(HudColor::DIM, HudColor::BG);
@@ -433,22 +437,62 @@ void ScreenTFT::drawIdleScreen() {
     sprite.drawString("Waiting for", mWidth / 2, mHeight / 2 - scale(15));
     sprite.drawString("navigation", mWidth / 2, mHeight / 2 + scale(15));
 
-    // 闪烁的圆点表示等待
     if (mFrameCounter % 2 == 0) {
         sprite.fillCircle(mWidth / 2, mHeight / 2 + scale(40), scale(4), HudColor::PRIMARY);
     }
 }
 
-void ScreenTFT::drawBootScreen(const char* msg) {
+// ══════════════════════════════════════════════════════════════
+// 启动画面：纯几何图形，不使用 drawString / 字体渲染
+// 原因：TFT_eSPI 在 ESP32-S3 上 drawString 字体渲染路径存在
+// StoreProhibited crash（NULL + 0x10 offset），根因是 S3 的 SPI
+// 总线与经典 ESP32 不同，TFT_eSPI 的字体渲染内部指针未正确初始化。
+// 使用 fillTriangle / fillRect / drawRect / fillCircle 替代。
+// ══════════════════════════════════════════════════════════════
+void ScreenTFT::drawBootScreen() {
     tft.fillScreen(HudColor::BG);
-    tft.setTextColor(HudColor::PRIMARY, HudColor::BG);
-    tft.setTextDatum(MC_DATUM);
-    tft.setTextSize(scaleFont(2));
-    tft.drawString(PROJECT_NAME, mWidth / 2, mHeight / 2 - scale(20));
-    tft.setTextColor(HudColor::DIM, HudColor::BG);
-    tft.setTextSize(scaleFont(1));
-    tft.drawString("v" PROJECT_VERSION, mWidth / 2, mHeight / 2 + scale(10));
-    if (msg) {
-        tft.drawString(msg, mWidth / 2, mHeight / 2 + scale(30));
-    }
+
+    int cx = mWidth / 2;
+    int cy = mHeight / 2;
+
+    // ── 外框（double border） ──
+    tft.drawRect(scale(8),  scale(8),
+                 mWidth - scale(16), mHeight - scale(16), HudColor::PRIMARY);
+    tft.drawRect(scale(12), scale(12),
+                 mWidth - scale(24), mHeight - scale(24), HudColor::DIM);
+
+    // ── 中心导航箭头（HUD 风格） ──
+    int arrowSize = scale(28);
+    int arrowY = cy - scale(15);
+
+    // 箭头头（大三角形）
+    int tipX = cx;
+    int tipY = arrowY - arrowSize;
+    int leftX  = cx - arrowSize;
+    int leftY  = arrowY + arrowSize / 2;
+    int rightX = cx + arrowSize;
+    int rightY = arrowY + arrowSize / 2;
+    tft.fillTriangle(tipX, tipY, leftX, leftY, rightX, rightY, HudColor::PRIMARY);
+
+    // 箭头杆
+    int shaftW = scale(8);
+    int shaftH = scale(18);
+    int shaftBaseY = arrowY + arrowSize / 2;
+    tft.fillRect(cx - shaftW / 2, shaftBaseY, shaftW, shaftH, HudColor::PRIMARY);
+
+    // ── 底部进度条（表示启动中） ──
+    int barY = mHeight - scale(28);
+    int barW = mWidth - scale(36);
+    int barX = scale(18);
+    int barH = scale(4);
+    tft.drawRect(barX, barY, barW, barH, HudColor::DIM);
+
+    // 分三段填充（视觉效果：启动进度）
+    int segW = barW / 3;
+    tft.fillRect(barX + 2, barY + 1, segW - 2, barH - 2, HudColor::ACCENT);
+    tft.fillRect(barX + segW + 2, barY + 1, segW - 2, barH - 2, HudColor::PRIMARY);
+    tft.fillRect(barX + segW * 2 + 2, barY + 1, segW - 4, barH - 2, HudColor::DIM);
+
+    // ── 版本标记（右下角小圆点） ──
+    tft.fillCircle(mWidth - scale(14), mHeight - scale(14), scale(3), HudColor::DIM);
 }
