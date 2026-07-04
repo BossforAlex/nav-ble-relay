@@ -37,8 +37,11 @@ namespace BleUUID {
 }
 
 // ===================== 屏幕配置 =====================
+// 默认使用串口虚拟屏幕（安全模式，无 TFT 时不会崩溃）
+// 连接 ST7789 TFT 屏幕后，将此处改为 0 或在 platformio.ini 的 S3 环境
+// build_flags 中添加 -D SCREEN_SERIAL_ONLY=0
 #ifndef SCREEN_SERIAL_ONLY
-#define SCREEN_SERIAL_ONLY 0
+#define SCREEN_SERIAL_ONLY 1
 #endif
 
 // TFT 屏幕默认分辨率，运行时会自适应
