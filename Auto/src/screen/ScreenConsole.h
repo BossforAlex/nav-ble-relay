@@ -2,10 +2,10 @@
 
 /**
  * @file ScreenConsole.h
- * @brief 串口虚拟屏幕实现
+ * @brief 串口直通显示模式
  *
- * 无真实屏幕时，通过串口以“帧”的形式输出当前导航 UI 状态，
- * 便于验证协议解析、渲染逻辑和动画状态。
+ * 不模拟虚拟屏幕（无 ASCII 框图），仅在数据更新时打印结构化数据。
+ * 用户需求：串口只显示真实交互数据，TFT 显示交由 ScreenTFT 负责。
  */
 
 #include "Screen.h"
@@ -21,9 +21,10 @@ public:
 private:
     Nav::NavState mState;
     bool mBleConnected = false;
-    unsigned long mLastRenderMs = 0;
+    bool mInitialized = false;
+    unsigned long mLastPrintedMs = 0;
+    unsigned long mLastUpdateMs = 0;
     unsigned long mFrameCounter = 0;
 
-    void renderFrame();
-    void renderAnimation();
+    void printNavStateLine();
 };

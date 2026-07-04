@@ -32,12 +32,11 @@ public:
             return;
         }
 
-        bool match = hasSvc && advertisedDevice.isAdvertisingService(BLEUUID(BleUUID::SERVICE));
-        if (!match) {
-            if (Debug::LOG_SYSTEM) {
-                Serial.printf("[BLE] 设备 %s 未广播目标服务 UUID\n", name.c_str());
-            }
-            return;
+        // 注意：服务端（Android GATT Server）不一定 advertise service UUID，
+        // 仅靠 name 匹配即可，避免因 hasSvc=false 而漏掉合法目标设备。
+        if (Debug::LOG_SYSTEM) {
+            Serial.printf("[BLE] 匹配目标设备: %s (RSSI=%d, hasSvc=%d)\n",
+                          addr.c_str(), rssi, hasSvc ? 1 : 0);
         }
 
         if (mClient->targetMac.empty() || addr == mClient->targetMac) {
@@ -45,11 +44,6 @@ public:
             mClient->targetAddrType = advertisedDevice.getAddressType();
             mClient->doConnect = true;
             mClient->stopScan();
-            if (Debug::LOG_SYSTEM) {
-                Serial.printf("[BLE] 匹配目标设备: %s (type=%d)\n",
-                              mClient->targetMac.c_str(),
-                              static_cast<int>(mClient->targetAddrType));
-            }
         }
     }
 
@@ -154,6 +148,21 @@ bool BleClient::connectToServer() {
         client = nullptr;
         connected = false;
         return false;
+    }
+
+    if (Debug::LOG_SYSTEM) Serial.println("[BLE] 连接成功，开始 MTU 协商...");
+
+    // 请求 MTU 协商：BLE 默认 MTU=23，可用 20 字节。
+    // 高德/导航 JSON 单包通常 100-300 字节，必须扩到最大 247 才能一次发完。
+    int mtu = client->requestMTU(BLE_MTU_MAX);
+    if (Debug::LOG_SYSTEM) {
+        Serial.printf("[BLE] MTU 协商结果: %d 字节（请求 %d）\n",
+                      mtu, BLE_MTU_MAX);
+    }
+    if (mtu < 100) {
+        if (Debug::LOG_SYSTEM) {
+            Serial.println("[BLE] 警告：MTU 较小，JSON 大包可能被截断");
+        }
     }
 
     BLERemoteService* service = client->getService(BLEUUID(BleUUID::SERVICE));
