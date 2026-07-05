@@ -1,9 +1,5 @@
 #include "BleServer.h"
 
-// 直接引用 NimBLE 头文件以获取低层类型
-// （用于 onSubscribe 回调中的 ble_gap_conn_desc 参数）
-#include "host/ble_gap.h"
-
 /**
  * @file BleServer.cpp
  * @brief ESP32 BLE GATT Server 实现（基于 NimBLE-Arduino 库）
@@ -54,17 +50,6 @@ public:
 
     void onWrite(NimBLECharacteristic* pChar) override {
         mParent->onWrite(pChar);
-    }
-
-    // 追踪 subscribe 事件（用户反馈 "subscribe event; attr_handle=8"）
-    // 即使特征值没有 NOTIFY 属性，调试此回调可知道发生了什么
-    void onSubscribe(NimBLECharacteristic* pChar,
-                     ble_gap_conn_desc* desc,
-                     uint16_t subValue) override {
-        Serial.printf("[BLE] 收到 subscribe 事件 | attr_handle=%u subValue=0x%04X"
-                      " (特征值没有 NOTIFY 属性，订阅被拒)\n",
-                      (unsigned)pChar->getHandle(), (unsigned)subValue);
-        (void)desc;
     }
 
 private:
