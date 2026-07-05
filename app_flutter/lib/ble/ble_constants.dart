@@ -1,8 +1,8 @@
 /// BLE 协议常量定义
 ///
-/// 必须与 ESP32 端保持一致。Flutter 端作为 GATT Server（外设），
-/// 广播 ICA 设备名，等待 ESP32（中心设备）连接。
-/// ESP32 会向以下特征值写入 JSON 数据，由本端 notify 推送。
+/// 必须与 ESP32 端保持一致。
+/// Flutter 端作为 GATT Client（中心设备），主动扫描并连接
+/// 名为 "AutoNavDisplay" 的 ESP32 设备，向 5 个特征值写入 JSON 数据。
 class BleConstants {
   BleConstants._();
 
@@ -34,12 +34,9 @@ class BleConstants {
   static const String cccdUuid =
       '00002902-0000-1000-8000-00805f9b34fb';
 
-  /// 设备名前缀：本端广播名与 ESP32 本地名均使用此前缀
-  static const String deviceNamePrefix = 'ICA';
+  /// ESP32 设备名（ESP32 端广播名）
+  static const String deviceName = 'AutoNavDisplay';
 
-  /// 完整广播设备名
-  static const String deviceName = 'ICA';
-
-  /// 单包最大字节数（ESP32-C3 默认 MTU 下建议上限）
+  /// 单包最大字节数（默认 MTU 下建议上限）
   static const int maxPacketBytes = 500;
 }

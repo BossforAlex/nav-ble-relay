@@ -173,10 +173,9 @@ class _DiscoveredDevicesCard extends StatelessWidget {
         final isScanning = ble.status == BleStatus.scanning;
         final isConnecting = ble.status == BleStatus.connecting;
         final isConnected = ble.isConnected;
-        // 仅在扫描/连接/有发现时显示
-        if (!isScanning && targets.isEmpty && !isConnecting && !isConnected) {
-          return const SizedBox.shrink();
-        }
+        final isStopped = ble.status == BleStatus.stopped;
+        // 始终显示卡片（用户反馈：之前看不到这一卡片）
+        // 仅在完全停止且未启动过时显示"未启动"提示
         return Card(
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -202,7 +201,9 @@ class _DiscoveredDevicesCard extends StatelessWidget {
                               ? '连接中...'
                               : isConnected
                                   ? '已连接'
-                                  : '扫描结束',
+                                  : isStopped
+                                      ? '未启动'
+                                      : '扫描结束',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: colorScheme.onSurfaceVariant,
                       ),
@@ -222,9 +223,11 @@ class _DiscoveredDevicesCard extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     child: Text(
-                      isScanning
-                          ? '正在搜索 ESP32 (AutoNavDisplay)…'
-                          : '未发现目标设备',
+                      isStopped
+                          ? '点击下方"启动服务"开始扫描 ESP32'
+                          : isScanning
+                              ? '正在搜索 ESP32 (AutoNavDisplay)…'
+                              : '未发现目标设备，点击右上角刷新重试',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: colorScheme.onSurfaceVariant,
                       ),

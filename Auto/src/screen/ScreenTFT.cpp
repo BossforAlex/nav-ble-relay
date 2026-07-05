@@ -155,7 +155,7 @@ void ScreenTFT::drawTopBar() {
     sprite.setTextColor(HudColor::WHITE, HudColor::DIM);
     sprite.setTextDatum(ML_DATUM);
     sprite.setTextSize(scaleFont(1));
-    sprite.drawString(DEVICE_NAME_PREFIX, dotX + dotR + scale(4), dotY);
+    sprite.drawString(PROJECT_NAME, dotX + dotR + scale(4), dotY);
 
     // 帧计数
     sprite.setTextDatum(MR_DATUM);

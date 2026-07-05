@@ -87,6 +87,7 @@ class BleService extends ChangeNotifier {
   BluetoothCharacteristic? _chrLocation;
 
   // 当前是否允许 writeWithoutResponse（部分外设不支持）
+  // 注：已改为逐特征值判断，不再使用全局变量
   bool _supportWriteNoResp = true;
 
   /// 监听适配器状态变化
@@ -269,7 +270,6 @@ class BleService extends ChangeNotifier {
     if (name.isEmpty) return false;
     return name.startsWith('AutoNavDisplay') ||
         name.startsWith('NavDisplay') ||
-        name.startsWith('ICA') ||
         name.startsWith('ESP32') ||
         name.startsWith('espressif');
   }
@@ -355,11 +355,8 @@ class BleService extends ChangeNotifier {
         _chrLocation = c;
         found++;
       }
-      if (!c.properties.writeWithoutResponse) {
-        _supportWriteNoResp = false;
-      }
     }
-    debugPrint('[BLE] ✓ 映射 $found/5 个特征值 (writeNoResp支持=$_supportWriteNoResp)');
+    debugPrint('[BLE] ✓ 映射 $found/5 个特征值');
 
     if (found != 5) {
       debugPrint('[BLE] ⚠ 警告：未找到全部 5 个特征值，BLE 写入可能失败');
@@ -487,6 +484,11 @@ class BleService extends ChangeNotifier {
 
   /// 向指定特征值写入 JSON 数据
   /// 返回 true 表示写入成功，false 表示失败
+  ///
+  /// 写入策略（修复"只有特定情况下才有数据"问题）：
+  ///   - 优先 writeWithResponse（可靠，有 ACK 确认）
+  ///   - 其次 writeWithoutResponse（快但不可靠）
+  ///   - 逐特征值判断属性，不再用全局变量
   Future<bool> _write(BluetoothCharacteristic? chr, Map<String, dynamic> packet, {String label = 'DATA'}) async {
     if (!isConnected) {
       debugPrint('[BLE] ✗ $label: 未连接，跳过写入');
@@ -498,18 +500,35 @@ class BleService extends ChangeNotifier {
     }
     final json = jsonEncode(packet);
     final bytes = utf8.encode(json);
+    final p = chr.properties;
+    final canWriteResp = p.write;
+    final canWriteNoResp = p.writeWithoutResponse;
+    if (!canWriteResp && !canWriteNoResp) {
+      debugPrint('[BLE] ✗ $label: 特征值 ${chr.uuid.str} 不支持 write');
+      return false;
+    }
+    // 优先 writeWithResponse（可靠），其次 writeWithoutResponse
+    final useWriteResp = canWriteResp;
     debugPrint('[BLE] → $label 写 ${bytes.length}字节'
-        ' [${_supportWriteNoResp && chr.properties.writeWithoutResponse ? "writeNoResp" : "writeWithResp"}]');
+        ' [${useWriteResp ? "writeWithResp" : "writeNoResp"}]'
+        ' uuid=${chr.uuid.str}');
     try {
-      if (_supportWriteNoResp && chr.properties.writeWithoutResponse) {
-        await chr.write(bytes, withoutResponse: true);
-      } else {
-        await chr.write(bytes, withoutResponse: false);
-      }
+      await chr.write(bytes, withoutResponse: !useWriteResp);
       debugPrint('[BLE] ✓ $label 写入成功');
       return true;
     } catch (e) {
       debugPrint('[BLE] ✗ $label 写入失败: $e');
+      // 如果 writeWithResponse 失败，尝试 writeWithoutResponse
+      if (useWriteResp && canWriteNoResp) {
+        debugPrint('[BLE] → $label 重试: writeNoResp');
+        try {
+          await chr.write(bytes, withoutResponse: true);
+          debugPrint('[BLE] ✓ $label 重试写入成功');
+          return true;
+        } catch (e2) {
+          debugPrint('[BLE] ✗ $label 重试写入失败: $e2');
+        }
+      }
       return false;
     }
   }

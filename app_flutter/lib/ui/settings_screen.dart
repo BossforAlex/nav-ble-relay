@@ -76,14 +76,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   value: BleConstants.charLocationUuid.toUpperCase(),
                 ),
                 _KVTile(
-                  label: '设备名前缀（白名单已移除）',
-                  value: BleConstants.deviceNamePrefix,
+                  label: 'ESP32 设备名',
+                  value: BleConstants.deviceName,
                 ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
                   child: Text(
                     '说明：主界面"发现的设备"卡片会自动连接第一个名字匹配的 ESP32，'
-                    '可手动点击切换到其它设备。MAC 白名单已移除（无法判断是否生效）。',
+                    '可手动点击切换到其它设备。白名单已移除。',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
