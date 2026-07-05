@@ -1,5 +1,13 @@
 #include "BleServer.h"
 
+// 直接修改 NimBLE host 的安全配置。
+// 原因：ESP32 Arduino BLE 2.0.0 库不暴露 setSecurityAuth / setSecurityInitKey 等
+// 公共 API，但底层基于 NimBLE，ble_hs_cfg 是公开的 host 全局结构。
+extern "C" {
+#include "host/ble_hs.h"
+#include "host/ble_sm.h"
+}
+
 /**
  * @file BleServer.cpp
  * @brief ESP32 BLE GATT Server 实现
@@ -60,27 +68,34 @@ static BleServer* sInstance = nullptr;
 void BleServer::begin(const char* deviceName) {
     sInstance = this;
 
-    // 初始化 BLE 协议栈
+    // 在 BLEDevice::init() 之前预先配置 NimBLE 安全策略
+    // 关键：BLEDevice::init() 内部会调用 nimble_port_init() -> ble_hs_init()，
+    // ble_hs_init() 会立刻把 ble_hs_cfg 复制到 host 内部状态。
+    // 因此必须在 init() 之前修改 ble_hs_cfg 才有效。
+    ble_hs_cfg.sm_bonding = 0;          // 不持久化绑定
+    ble_hs_cfg.sm_mitm = 0;             // 不要求 MITM 保护
+    ble_hs_cfg.sm_sc = 0;               // 不要求 LESC（Secure Connection）
+    ble_hs_cfg.sm_io_cap = 5;           // BLE_SM_IO_NO_INPUT_NO_OUTPUT
+    ble_hs_cfg.sm_our_key_dist = 0;     // 我们不请求对方分发任何密钥
+    ble_hs_cfg.sm_their_key_dist = 0;   // 我们也不分发任何密钥
+    if (Debug::LOG_SYSTEM) {
+        Serial.println("[BLE] 预配置 NimBLE: sm_bonding=0 sm_mitm=0 sm_sc=0");
+    }
+
+    // 初始化 BLE 协议栈（内部会调用 ble_hs_init() 复制上面配置）
     BLEDevice::init(deviceName);
 
     // 发射功率适当调整，确保与各种手机兼容
     BLEDevice::setPower(ESP_PWR_LVL_P6, ESP_BLE_PWR_TYPE_DEFAULT);
 
-    // 关闭 BLE 安全 / 配对 / 加密要求
-    // 关键：ESP32 Arduino BLE 默认要求 Secure Connection (LESC) 配对，
-    // 很多手机 / Android 版本会触发 SEC_REQ_EVT 协商但不接受 LESC，
-    // 导致 smp_calculate_link_key_from_long_term_key 失败，写入被拒。
-    // 关闭后可无加密通信，简化连接（用户场景：本地局域网近距离）。
-    BLEDevice::setSecurityAuth(false, false, false);
-    // 不分发任何密钥（init=0 表示不请求对方分发任何加密密钥）
-    BLEDevice::setSecurityInitKey(0);
-    BLEDevice::setSecurityRespKey(0);
-    // IO 能力设为 0x05 = BLE_SM_IO_NO_INPUT_NO_OUTPUT，避免配对时弹出配对码
-    // 注：使用数值常量以兼容不同 NimBLE 版本的命名差异
-    BLEDevice::setSecurityIOCap(0x05);
-
     // 请求较大 MTU，减少分包
     BLEDevice::setMTU(517);
+
+    // 双重保险：init 之后再次通过 setter 强制设置
+    // 这些 setter 会修改 host 内部活动状态（不仅是 ble_hs_cfg）
+    ble_sm_set_bonding(0);
+    ble_sm_set_mitm(0);
+    ble_sm_set_sc(0);
 
     // 短暂延时让协议栈就绪
     delay(200);
@@ -93,9 +108,6 @@ void BleServer::begin(const char* deviceName) {
     }
     ServerCallbacks* serverCb = new ServerCallbacks(this);
     server->setCallbacks(serverCb);
-
-    // 双重保险：在 server 上也设置一次（部分库版本对 setSecurityAuth 的响应时序不同）
-    server->setSecurityAuth(false, false, false);
 
     // 创建主服务
     service = server->createService(BLEUUID(BleUUID::SERVICE));
