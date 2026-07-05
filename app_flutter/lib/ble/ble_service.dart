@@ -1,28 +1,28 @@
-/// BLE GATT Server 管理
+/// BLE GATT Client 管理
 ///
-/// Flutter 端作为 GATT Server（外设）：
-///   - 通过 [FlutterBluePlus] 监听蓝牙适配器状态
-///   - 通过平台通道 `com.navblerelay/ble` 调用原生 Android GATT Server，
-///     完成 BLE 广播启动 / 服务注册 / 特征值 notify 推送
+/// Flutter 端作为 GATT Client（中心设备）：
+///   - 主动扫描名为 "AutoNavDisplay" 的 ESP32 设备
+///   - 在用户配置的 MAC 白名单匹配后，连接该 ESP32
+///   - 通过 writeCharacteristic / writeCharacteristicWithoutResponse
+///     主动向 5 个特征值推送 JSON 数据
 ///
-/// ESP32（中心设备）连接后会订阅以下特征值：
-///   - FFE1 引导信息
-///   - FFE2 车道信息
-///   - FFE3 路况光柱
-///   - FFE4 导航状态
-///   - FFE5 定位信息
+/// ESP32（外设）连接后被动接收数据即可。
+///
+/// 用户需求：
+///   - 手机连接数较多，软件中要做 MAC 限制
+///   - ESP32 端不做限制（被动接收）
 library;
 
 import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
 import '../ble/ble_constants.dart';
 import '../models/nav_data.dart';
 import '../protocol/amap_protocol.dart';
+import '../main.dart' show prefs;
 
 /// BLE 连接状态
 enum BleStatus {
@@ -30,22 +30,19 @@ enum BleStatus {
   stopped,
   /// 蓝牙未开启
   bluetoothOff,
-  /// 已启动，等待 ESP32 连接
-  advertising,
-  /// ESP32 已连接
+  /// 正在扫描
+  scanning,
+  /// 正在连接
+  connecting,
+  /// 已连接 ESP32
   connected,
   /// 启动出错
   error,
 }
 
 class BleService extends ChangeNotifier {
-  /// 平台通道：与原生 Android GATT Server 通信
-  static const MethodChannel _channel = MethodChannel('com.navblerelay/ble');
-
   BleService() {
     _adapterSub = FlutterBluePlus.adapterState.listen(_onAdapterChanged);
-    // 监听原生层事件：设备连接 / 断开 / 错误
-    _channel.setMethodCallHandler(_handleNativeCall);
   }
 
   // ── 状态字段 ──────────────────────────────────────────
@@ -62,18 +59,31 @@ class BleService extends ChangeNotifier {
   String get lastError => _lastError;
 
   bool get isRunning =>
-      _status == BleStatus.advertising || _status == BleStatus.connected;
+      _status == BleStatus.scanning ||
+      _status == BleStatus.connecting ||
+      _status == BleStatus.connected;
 
   bool get isConnected => _status == BleStatus.connected;
 
   // ── 内部 ──────────────────────────────────────────────
   StreamSubscription<BluetoothAdapterState>? _adapterSub;
+  StreamSubscription<ScanResult>? _scanSub;
+  StreamSubscription<BluetoothConnectionState>? _connSub;
   bool _disposed = false;
+
+  BluetoothDevice? _device;
+  BluetoothCharacteristic? _chrGuide;
+  BluetoothCharacteristic? _chrDriveWay;
+  BluetoothCharacteristic? _chrTmc;
+  BluetoothCharacteristic? _chrState;
+  BluetoothCharacteristic? _chrLocation;
+
+  // 当前是否允许 writeWithoutResponse（部分外设不支持）
+  bool _supportWriteNoResp = true;
 
   /// 监听适配器状态变化
   void _onAdapterChanged(BluetoothAdapterState state) {
     if (state == BluetoothAdapterState.on) {
-      // 蓝牙打开后，如果之前在运行则重新启动
       if (_status == BleStatus.bluetoothOff) {
         _status = BleStatus.stopped;
       }
@@ -82,74 +92,186 @@ class BleService extends ChangeNotifier {
       _deviceAddress = '';
       _deviceName = '';
     }
-    notifyListeners();
+    _safeNotify();
   }
 
-  /// 启动 GATT Server：注册服务、开始广播
+  /// 启动 GATT Client：扫描 + 连接 + 发现服务
   Future<void> start() async {
     if (isRunning) return;
 
-    // 检查蓝牙是否可用
     final adapterState = FlutterBluePlus.adapterStateNow;
     if (adapterState != BluetoothAdapterState.on) {
       _status = BleStatus.bluetoothOff;
       _lastError = '蓝牙未开启';
-      notifyListeners();
+      _safeNotify();
       return;
     }
 
+    _status = BleStatus.scanning;
+    _lastError = '';
+    _safeNotify();
+
     try {
-      await _channel.invokeMethod<bool>('start');
-      _status = BleStatus.advertising;
-      _lastError = '';
-    } on PlatformException catch (e) {
+      // 1. 启动扫描
+      _scanSub?.cancel();
+      _scanSub = FlutterBluePlus.scanResults.listen(_onScanResult);
+      await FlutterBluePlus.startScan(
+        timeout: const Duration(seconds: 15),
+        androidScanMode: AndroidScanMode.lowLatency,
+      );
+    } catch (e) {
       _status = BleStatus.error;
-      _lastError = e.message ?? e.code;
+      _lastError = '扫描启动失败: $e';
+      _safeNotify();
     }
-    notifyListeners();
   }
 
-  /// 停止 GATT Server
+  /// 停止 GATT Client
   Future<void> stop() async {
     try {
-      await _channel.invokeMethod<bool>('stop');
-    } on PlatformException {
-      // 忽略停止异常
-    }
+      _scanSub?.cancel();
+      _scanSub = null;
+      await FlutterBluePlus.stopScan();
+    } catch (_) {}
+
+    try {
+      await _connSub?.cancel();
+      _connSub = null;
+      await _device?.disconnect();
+    } catch (_) {}
+
+    _device = null;
+    _chrGuide = null;
+    _chrDriveWay = null;
+    _chrTmc = null;
+    _chrState = null;
+    _chrLocation = null;
+
     _status = BleStatus.stopped;
     _deviceAddress = '';
     _deviceName = '';
-    notifyListeners();
+    _safeNotify();
   }
 
-  /// 原生层事件回调：设备连接 / 断开 / 错误
-  Future<dynamic> _handleNativeCall(MethodCall call) async {
-    switch (call.method) {
-      case 'onDeviceConnected':
-        final args = (call.arguments ?? {}) as Map;
-        _deviceAddress = args['address']?.toString() ?? '';
-        _deviceName = args['name']?.toString() ?? BleConstants.deviceName;
-        _status = BleStatus.connected;
-        notifyListeners();
-        break;
-      case 'onDeviceDisconnected':
+  /// 处理扫描结果
+  Future<void> _onScanResult(ScanResult r) async {
+    if (_status != BleStatus.scanning) return;
+    if (!isTargetName(r.advertisementData.advName)) return;
+    if (!isAllowedAddress(r.device.remoteId.str)) return;
+
+    // 找到目标设备，停止扫描并发起连接
+    try {
+      await FlutterBluePlus.stopScan();
+    } catch (_) {}
+    _scanSub?.cancel();
+    _scanSub = null;
+
+    _device = r.device;
+    _deviceAddress = r.device.remoteId.str;
+    _deviceName = r.advertisementData.advName.isNotEmpty
+        ? r.advertisementData.advName
+        : BleConstants.deviceNamePrefix;
+
+    _status = BleStatus.connecting;
+    _safeNotify();
+
+    try {
+      await _connectAndDiscover();
+    } catch (e) {
+      _status = BleStatus.error;
+      _lastError = '连接失败: $e';
+      _device = null;
+      _safeNotify();
+    }
+  }
+
+  /// 判断设备名是否匹配目标（AutoNavDisplay 前缀或以 ICA 开头的别名）
+  bool isTargetName(String name) {
+    if (name.isEmpty) return false;
+    return name.startsWith('AutoNavDisplay') ||
+        name.startsWith('NavDisplay') ||
+        name == 'AutoNavDisplay' ||
+        name.startsWith(BleConstants.deviceNamePrefix) ||
+        name.startsWith('ESP32') ||
+        name.startsWith('espressif');
+  }
+
+  /// 判断 MAC 是否在白名单（用户需求：手机端做限制）
+  bool isAllowedAddress(String address) {
+    final target = prefs.getString('target_device_mac')?.trim() ?? '';
+    if (target.isEmpty) return true; // 未配置白名单时不限
+    return address.toLowerCase() == target.toLowerCase();
+  }
+
+  /// 连接并发现服务/特征值
+  Future<void> _connectAndDiscover() async {
+    final device = _device;
+    if (device == null) return;
+
+    // 监听连接状态
+    _connSub?.cancel();
+    _connSub = device.connectionState.listen((state) {
+      if (state == BluetoothConnectionState.disconnected) {
+        _status = BleStatus.scanning;
         _deviceAddress = '';
         _deviceName = '';
-        _status = BleStatus.advertising;
-        notifyListeners();
+        _chrGuide = null;
+        _chrDriveWay = null;
+        _chrTmc = null;
+        _chrState = null;
+        _chrLocation = null;
+        _safeNotify();
+        // 自动重连：重新启动扫描
+        if (!_disposed) start();
+      }
+    });
+
+    await device.connect(timeout: const Duration(seconds: 10));
+
+    // 请求更大 MTU
+    try {
+      await device.requestMtu(512);
+    } catch (_) {}
+
+    // 发现服务
+    List<BluetoothService> services = await device.discoverServices();
+
+    BluetoothService? targetService;
+    for (var s in services) {
+      if (s.uuid.str.toLowerCase() == BleConstants.serviceUuid.toLowerCase()) {
+        targetService = s;
         break;
-      case 'onError':
-        _lastError = call.arguments?.toString() ?? '未知错误';
-        _status = BleStatus.error;
-        notifyListeners();
-        break;
+      }
     }
-    return null;
+    if (targetService == null) {
+      throw '未找到目标服务 ${BleConstants.serviceUuid}';
+    }
+
+    for (var c in targetService.characteristics) {
+      final u = c.uuid.str.toLowerCase();
+      if (u == BleConstants.charGuideUuid.toLowerCase()) {
+        _chrGuide = c;
+      } else if (u == BleConstants.charDriveWayUuid.toLowerCase()) {
+        _chrDriveWay = c;
+      } else if (u == BleConstants.charTmcUuid.toLowerCase()) {
+        _chrTmc = c;
+      } else if (u == BleConstants.charStateUuid.toLowerCase()) {
+        _chrState = c;
+      } else if (u == BleConstants.charLocationUuid.toLowerCase()) {
+        _chrLocation = c;
+      }
+      // 检查是否支持 writeWithoutResponse
+      if (!c.properties.writeWithoutResponse) {
+        _supportWriteNoResp = false;
+      }
+    }
+
+    _status = BleStatus.connected;
+    _safeNotify();
   }
 
   // ── 数据发送 ──────────────────────────────────────────
 
-  /// 发送引导信息（FFE1）
   Future<void> sendGuideInfo(GuideInfo info, {bool compact = false}) async {
     final now = DateTime.now().millisecondsSinceEpoch;
     final data = <String, dynamic>{
@@ -160,7 +282,6 @@ class BleService extends ChangeNotifier {
         'CUR_ROAD_NAME': info.curRoadName,
         'NEXT_ROAD_NAME': info.nextRoadName,
         'SEG_REMAIN_DIS': info.segRemainDis,
-        // 预格式化显示字段，方便 ESP32-C3 等小内存设备直接显示
         'turn_label': AmapProtocol.iconShortLabel(info.icon),
         'distance_text': _formatDistance(info.segRemainDis),
         'intersection': _formatIntersection(info.curRoadName, info.nextRoadName),
@@ -176,10 +297,9 @@ class BleService extends ChangeNotifier {
         },
       },
     };
-    await _notify(BleConstants.charGuideUuid, data);
+    await _write(_chrGuide, data);
   }
 
-  /// 发送车道信息（FFE2）
   Future<void> sendDriveWay(DriveWayInfo info) async {
     final data = <String, dynamic>{
       'type': AmapProtocol.keyDriveWay,
@@ -195,10 +315,9 @@ class BleService extends ChangeNotifier {
             .toList(),
       },
     };
-    await _notify(BleConstants.charDriveWayUuid, data);
+    await _write(_chrDriveWay, data);
   }
 
-  /// 发送路况光柱（FFE3）
   Future<void> sendTmcSegment(TmcSegmentInfo info) async {
     final data = <String, dynamic>{
       'type': AmapProtocol.keyTmcSegment,
@@ -215,10 +334,9 @@ class BleService extends ChangeNotifier {
             .toList(),
       },
     };
-    await _notify(BleConstants.charTmcUuid, data);
+    await _write(_chrTmc, data);
   }
 
-  /// 发送导航状态（FFE4）
   Future<void> sendMapState(int state, String? crossMap) async {
     final data = <String, dynamic>{
       'type': AmapProtocol.keyMapState,
@@ -228,10 +346,9 @@ class BleService extends ChangeNotifier {
         if (crossMap != null) 'EXTRA_CROSS_MAP': crossMap,
       },
     };
-    await _notify(BleConstants.charStateUuid, data);
+    await _write(_chrState, data);
   }
 
-  /// 发送定位信息（FFE5）
   Future<void> sendLocation(LocationInfo info) async {
     final data = <String, dynamic>{
       'type': AmapProtocol.keyLocation,
@@ -243,24 +360,23 @@ class BleService extends ChangeNotifier {
         'provider': info.provider,
       },
     };
-    await _notify(BleConstants.charLocationUuid, data);
+    await _write(_chrLocation, data);
   }
 
-  /// 调用原生层向指定特征值 notify 推送 JSON
-  Future<void> _notify(String charUuid, Map<String, dynamic> packet) async {
+  /// 向指定特征值写入 JSON 数据
+  Future<void> _write(BluetoothCharacteristic? chr, Map<String, dynamic> packet) async {
     if (!isConnected) return;
+    if (chr == null) return;
     final json = jsonEncode(packet);
     final bytes = utf8.encode(json);
-    if (bytes.length > BleConstants.maxPacketBytes) {
-      // 数据过大时仅截断提示，仍尝试发送
-    }
     try {
-      await _channel.invokeMethod<bool>('notify', {
-        'char_uuid': charUuid,
-        'value': json,
-      });
-    } on PlatformException {
-      // 通知失败忽略，避免阻塞主流程
+      if (_supportWriteNoResp && chr.properties.writeWithoutResponse) {
+        await chr.write(bytes, withoutResponse: true);
+      } else {
+        await chr.write(bytes, withoutResponse: false);
+      }
+    } catch (e) {
+      // 写入失败忽略，避免阻塞主流程
     }
   }
 
@@ -276,11 +392,18 @@ class BleService extends ChangeNotifier {
     return '$c → $n';
   }
 
+  void _safeNotify() {
+    if (_disposed) return;
+    notifyListeners();
+  }
+
   @override
   void dispose() {
     _disposed = true;
     _adapterSub?.cancel();
-    _channel.setMethodCallHandler(null);
+    _scanSub?.cancel();
+    _connSub?.cancel();
+    _device?.disconnect();
     super.dispose();
   }
 }

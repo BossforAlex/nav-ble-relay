@@ -29,9 +29,9 @@ class StatusCard extends StatelessWidget {
                 : const Color(0xFFBA1A1A);
 
         final statusText = connected
-            ? '已连接'
+            ? '已连接 ESP32'
             : running
-                ? '运行中'
+                ? '正在扫描'
                 : '已停止';
 
         final statusTextColor = connected
@@ -78,8 +78,8 @@ class StatusCard extends StatelessWidget {
                   value: connected
                       ? '已连接 ${ble.deviceAddress}'
                       : running
-                          ? '等待 ESP32 连接...'
-                          : '未连接',
+                          ? '正在扫描 ESP32...'
+                          : '未启动',
                   valueColor: connected
                       ? const Color(0xFF008375)
                       : running

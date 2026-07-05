@@ -2,19 +2,21 @@
  * @file main.cpp
  * @brief ESP32-S3 Super Mini 导航 BLE 接收器主程序
  *
- * 架构：
+ * 架构（用户最新需求）：
  *   main.cpp (组合器)
- *   ├─ ble::BleClient   ESP32 作为 GATT Client，扫描名为 ICA 的 Android 设备
- *   │                    订阅其 GATT Server 推送的 5 个特征值通知
+ *   ├─ ble::BleServer   ESP32 作为 GATT Server（外设）
+ *   │                    广播 AutoNavDisplay 名称，等待手机（Flutter GATT Client）连接
+ *   │                    接收手机通过 WRITE/WRITE_NO_RESPONSE 写入的 JSON 数据
  *   ├─ nav::NavParser   负责 JSON -> 结构化数据
- *   ├─ Screen (抽象)    负责显示输出
+ *   └─ Screen (抽象)    负责显示输出
  *      ├─ ScreenTFT     ESP32-S3: ST7789 TFT HUD 显示（需外接屏幕）
  *      └─ ScreenConsole 默认：串口直通显示真实数据（无模拟）
  *
  * BLE 方向（关键）：
- *   - Android Flutter APP: GATT Server，广播名为 "ICA"，向 5 个特征值 notify 推送 JSON
- *   - ESP32 (本端):       GATT Client，扫描 "ICA" 设备名，连接后订阅通知
- *   - 双方设备名：ESP32 用 "AutoNavDisplay"（自身），手机用 "ICA"（被搜索）
+ *   - Android Flutter APP: GATT Client，扫描名为 "AutoNavDisplay" 的 ESP32 设备
+ *     并在 MAC 白名单匹配后连接，写入 5 个特征值
+ *   - ESP32 (本端):        GATT Server，自身名 "AutoNavDisplay"，被手机连接
+ *   - 手机端做 MAC 白名单限制（用户需求：手机蓝牙连接数较多，只对授权 ESP32 推数据）
  */
 
 #include <Arduino.h>
@@ -23,7 +25,7 @@
 #include <esp_task_wdt.h>
 
 #include "config/Config.h"
-#include "ble/BleClient.h"
+#include "ble/BleServer.h"
 #include "nav/NavParser.h"
 
 #if SCREEN_SERIAL_ONLY
@@ -34,7 +36,7 @@
   static ScreenTFT sScreen;
 #endif
 
-static BleClient sBleClient;
+static BleServer sBleServer;
 static Nav::NavState sNavState;
 
 // BLE 数据接收缓冲区（静态，避免堆碎片）
@@ -48,8 +50,8 @@ static void onBleData(const char* uuid, const uint8_t* data, size_t len) {
     memcpy(sJsonBuffer, data, copyLen);
     sJsonBuffer[copyLen] = '\0';
 
-    // 默认总是打印原始 bytes（用户要求"串口显示真实交互数据"）
-    Serial.printf("[BLE] 收到 %u 字节 | UUID=%s | data=%s\n",
+    // 串口直接显示手机发来的真实交互数据（用户需求：不模拟虚拟屏幕）
+    Serial.printf("[BLE] 手机写入 %u 字节 | UUID=%s | data=%s\n",
                   (unsigned)len, uuid, sJsonBuffer);
 
     if (Debug::LOG_BLE_RAW) {
@@ -100,7 +102,8 @@ void setup() {
     #ifdef BOARD_NAME
     Serial.printf("║  Board: %s\n", BOARD_NAME);
     #endif
-    Serial.printf("║  Role:  BLE Client (扫描 '%s')  \n", DEVICE_NAME_PREFIX);
+    Serial.printf("║  Role:  BLE GATT Server (等待手机连接)\n");
+    Serial.printf("║  Name:  %s\n", PROJECT_NAME);
     Serial.printf("║  Mode:  %s\n",
 #if SCREEN_SERIAL_ONLY
                   "串口直通显示"
@@ -119,17 +122,16 @@ void setup() {
     if (!screenOk) {
         Serial.println("[Screen] 屏幕初始化失败，回退到串口直通");
     }
-    sScreen.log("系统启动，准备扫描蓝牙设备...");
+    sScreen.log("系统启动，等待手机 BLE 连接...");
 
-    // 初始化 BLE 客户端（注意：ESP32 自身用 AutoNavDisplay 名，
-    // 扫描名为 "ICA" 的 Android 设备并连接）
-    sBleClient.begin(PROJECT_NAME);  // ESP32 本地名为 AutoNavDisplay
-    sBleClient.setDataCallback(onBleData);
+    // 初始化 BLE GATT Server
+    sBleServer.begin(PROJECT_NAME);  // ESP32 广播名为 AutoNavDisplay
+    sBleServer.setDataCallback(onBleData);
 }
 
 void loop() {
-    sBleClient.loop();
-    sScreen.setBleConnected(sBleClient.isConnected());
+    sBleServer.loop();
+    sScreen.setBleConnected(sBleServer.isConnected());
     sScreen.update();
 
     if (Feature::LOW_POWER_WHEN_IDLE &&
