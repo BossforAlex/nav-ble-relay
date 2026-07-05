@@ -67,7 +67,7 @@ class BleService extends ChangeNotifier {
 
   // ── 内部 ──────────────────────────────────────────────
   StreamSubscription<BluetoothAdapterState>? _adapterSub;
-  StreamSubscription<ScanResult>? _scanSub;
+  StreamSubscription<List<ScanResult>>? _scanSub;
   StreamSubscription<BluetoothConnectionState>? _connSub;
   bool _disposed = false;
 
@@ -154,34 +154,37 @@ class BleService extends ChangeNotifier {
   }
 
   /// 处理扫描结果
-  Future<void> _onScanResult(ScanResult r) async {
-    if (_status != BleStatus.scanning) return;
-    if (!isTargetName(r.advertisementData.advName)) return;
-    if (!isAllowedAddress(r.device.remoteId.str)) return;
+  Future<void> _onScanResult(List<ScanResult> results) async {
+    for (final r in results) {
+      if (_status != BleStatus.scanning) return;
+      if (!isTargetName(r.advertisementData.advName)) continue;
+      if (!isAllowedAddress(r.device.remoteId.str)) continue;
 
-    // 找到目标设备，停止扫描并发起连接
-    try {
-      await FlutterBluePlus.stopScan();
-    } catch (_) {}
-    _scanSub?.cancel();
-    _scanSub = null;
+      // 找到目标设备，停止扫描并发起连接
+      try {
+        await FlutterBluePlus.stopScan();
+      } catch (_) {}
+      _scanSub?.cancel();
+      _scanSub = null;
 
-    _device = r.device;
-    _deviceAddress = r.device.remoteId.str;
-    _deviceName = r.advertisementData.advName.isNotEmpty
-        ? r.advertisementData.advName
-        : BleConstants.deviceNamePrefix;
+      _device = r.device;
+      _deviceAddress = r.device.remoteId.str;
+      _deviceName = r.advertisementData.advName.isNotEmpty
+          ? r.advertisementData.advName
+          : BleConstants.deviceNamePrefix;
 
-    _status = BleStatus.connecting;
-    _safeNotify();
-
-    try {
-      await _connectAndDiscover();
-    } catch (e) {
-      _status = BleStatus.error;
-      _lastError = '连接失败: $e';
-      _device = null;
+      _status = BleStatus.connecting;
       _safeNotify();
+
+      try {
+        await _connectAndDiscover();
+      } catch (e) {
+        _status = BleStatus.error;
+        _lastError = '连接失败: $e';
+        _device = null;
+        _safeNotify();
+      }
+      return; // 只处理第一个匹配
     }
   }
 

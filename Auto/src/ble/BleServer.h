@@ -59,7 +59,8 @@ private:
     bool started = false;
     int connectedDeviceCount = 0;
 
-    // 内部回调方法（在 .cpp 中以 friend 方式连接）
+public:
+    // 内部回调方法（供内部回调类 ServerCallbacks / CharWriteCallbacks 访问）
     void onConnect(BLEServer* pServer);
     void onDisconnect(BLEServer* pServer);
     void onWrite(BLECharacteristic* pChar);
