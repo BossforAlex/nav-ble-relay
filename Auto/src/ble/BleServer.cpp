@@ -141,10 +141,23 @@ void BleServer::begin(const char* deviceName) {
     adv->start();
 
     started = true;
-    if (Debug::LOG_SYSTEM) {
-        Serial.printf("[BLE] GATT Server 已启动，设备名=%s，关闭加密，等待手机连接...\n",
-                      deviceName);
+
+    // 打印详细的启动验证信息（用户要求：防止初始化出问题）
+    Serial.println();
+    Serial.println("═══════════════ BLE GATT Server 启动验证 ═══════════════");
+    Serial.printf("  设备名:    %s\n", deviceName);
+    Serial.printf("  设备地址:  %s\n",
+                  NimBLEDevice::getAddress().toString().c_str());
+    Serial.printf("  MTU:       %d 字节\n", NimBLEDevice::getMTU());
+    Serial.printf("  加密/配对: 已禁用 (sm_bonding=0 sm_mitm=0 sm_sc=0)\n");
+    Serial.printf("  服务 UUID: %s\n", BleUUID::SERVICE);
+    Serial.printf("  特征值:    WRITE | WRITE_NO_RESPONSE（5 个）\n");
+    for (const auto& desc : chars) {
+        Serial.printf("             - %-9s  %s\n", desc.name, desc.uuid);
     }
+    Serial.printf("  广播状态:  已启动\n");
+    Serial.println("══════════════════════════════════════════════════════");
+    Serial.printf("[BLE] ✓ 等待手机连接...\n");
 }
 
 void BleServer::loop() {
@@ -152,11 +165,15 @@ void BleServer::loop() {
     // 连接状态由回调更新；数据由 onWrite 回调上报
 }
 
-void BleServer::onConnect(NimBLEServer* /*pServer*/) {
+void BleServer::onConnect(NimBLEServer* pServer) {
     connectedDeviceCount++;
-    if (Debug::LOG_SYSTEM) {
-        Serial.printf("[BLE] 手机已连接（当前连接数: %d）\n", connectedDeviceCount);
-    }
+    Serial.println();
+    Serial.println("─────────────── 手机连接事件 ───────────────");
+    Serial.printf("  连接数:    %d\n", connectedDeviceCount);
+    Serial.printf("  MTU:       %d 字节\n", NimBLEDevice::getMTU());
+    Serial.println("──────────────────────────────────────────");
+    Serial.printf("[BLE] ✓ 手机已连接，准备接收数据\n");
+    (void)pServer;  // 避免未使用警告
 }
 
 void BleServer::onDisconnect(NimBLEServer* /*pServer*/) {

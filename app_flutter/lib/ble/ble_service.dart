@@ -211,9 +211,12 @@ class BleService extends ChangeNotifier {
     final device = _device;
     if (device == null) return;
 
+    debugPrint('[BLE] 开始连接 ${device.remoteId.str}...');
+
     // 监听连接状态
     _connSub?.cancel();
     _connSub = device.connectionState.listen((state) {
+      debugPrint('[BLE] 连接状态: $state');
       if (state == BluetoothConnectionState.disconnected) {
         _status = BleStatus.scanning;
         _deviceAddress = '';
@@ -230,14 +233,22 @@ class BleService extends ChangeNotifier {
     });
 
     await device.connect(timeout: const Duration(seconds: 10));
+    debugPrint('[BLE] ✓ 连接成功 ${device.remoteId.str}');
 
     // 请求更大 MTU
     try {
-      await device.requestMtu(512);
-    } catch (_) {}
+      final mtu = await device.requestMtu(512);
+      debugPrint('[BLE] MTU 协商: $mtu 字节');
+    } catch (e) {
+      debugPrint('[BLE] MTU 协商失败: $e');
+    }
 
     // 发现服务
     List<BluetoothService> services = await device.discoverServices();
+    debugPrint('[BLE] 发现 ${services.length} 个服务:');
+    for (var s in services) {
+      debugPrint('  - Service: ${s.uuid.str}');
+    }
 
     BluetoothService? targetService;
     for (var s in services) {
@@ -249,28 +260,70 @@ class BleService extends ChangeNotifier {
     if (targetService == null) {
       throw '未找到目标服务 ${BleConstants.serviceUuid}';
     }
+    debugPrint('[BLE] ✓ 找到目标服务: ${targetService.uuid.str}');
 
+    int found = 0;
     for (var c in targetService.characteristics) {
       final u = c.uuid.str.toLowerCase();
+      debugPrint('[BLE] 特征值: ${c.uuid.str}'
+          ' props=[read:${c.properties.read}'
+          ' write:${c.properties.write}'
+          ' writeNoResp:${c.properties.writeWithoutResponse}'
+          ' notify:${c.properties.notify}'
+          ' indicate:${c.properties.indicate}]');
       if (u == BleConstants.charGuideUuid.toLowerCase()) {
         _chrGuide = c;
+        found++;
       } else if (u == BleConstants.charDriveWayUuid.toLowerCase()) {
         _chrDriveWay = c;
+        found++;
       } else if (u == BleConstants.charTmcUuid.toLowerCase()) {
         _chrTmc = c;
+        found++;
       } else if (u == BleConstants.charStateUuid.toLowerCase()) {
         _chrState = c;
+        found++;
       } else if (u == BleConstants.charLocationUuid.toLowerCase()) {
         _chrLocation = c;
+        found++;
       }
       // 检查是否支持 writeWithoutResponse
       if (!c.properties.writeWithoutResponse) {
         _supportWriteNoResp = false;
       }
     }
+    debugPrint('[BLE] ✓ 已映射 $found/5 个特征值 (writeNoResp=$_supportWriteNoResp)');
+
+    if (found != 5) {
+      debugPrint('[BLE] ⚠ 警告：未找到全部 5 个特征值，BLE 写入可能失败');
+    }
 
     _status = BleStatus.connected;
     _safeNotify();
+
+    // 连接成功后立刻发送测试数据，验证双向通信正常
+    // 不依赖高德广播源（用户场景：可能未开启高德导航）
+    await _sendTestPackets();
+  }
+
+  /// 发送测试数据包，验证 BLE 写入通信
+  Future<void> _sendTestPackets() async {
+    debugPrint('[BLE] >>> 开始发送测试数据包 <<<');
+    final ts = DateTime.now().millisecondsSinceEpoch;
+    final test = <String, dynamic>{
+      'type': 'test',
+      'ts': ts,
+      'msg': 'BLE communication test from Flutter GATT Client',
+      'data': {
+        'CUR_ROAD_NAME': 'TestRoad',
+        'NEXT_ROAD_NAME': 'NextRoad',
+        'SEG_REMAIN_DIS': 1234,
+        'CUR_SPEED': 60,
+        'LIMITED_SPEED': 80,
+      },
+    };
+    final ok = await _write(_chrState, test, label: 'TEST');
+    debugPrint('[BLE] 测试包发送结果: ${ok ? "OK" : "FAILED"}');
   }
 
   // ── 数据发送 ──────────────────────────────────────────
@@ -367,19 +420,31 @@ class BleService extends ChangeNotifier {
   }
 
   /// 向指定特征值写入 JSON 数据
-  Future<void> _write(BluetoothCharacteristic? chr, Map<String, dynamic> packet) async {
-    if (!isConnected) return;
-    if (chr == null) return;
+  /// 返回 true 表示写入成功，false 表示失败
+  Future<bool> _write(BluetoothCharacteristic? chr, Map<String, dynamic> packet, {String label = 'DATA'}) async {
+    if (!isConnected) {
+      debugPrint('[BLE] ✗ $label: 未连接，跳过写入');
+      return false;
+    }
+    if (chr == null) {
+      debugPrint('[BLE] ✗ $label: 特征值为空，跳过写入');
+      return false;
+    }
     final json = jsonEncode(packet);
     final bytes = utf8.encode(json);
+    debugPrint('[BLE] → $label: 写入 ${bytes.length} 字节'
+        ' (${_supportWriteNoResp && chr.properties.writeWithoutResponse ? "writeNoResp" : "writeWithResp"})');
     try {
       if (_supportWriteNoResp && chr.properties.writeWithoutResponse) {
         await chr.write(bytes, withoutResponse: true);
       } else {
         await chr.write(bytes, withoutResponse: false);
       }
+      debugPrint('[BLE] ✓ $label: 写入成功');
+      return true;
     } catch (e) {
-      // 写入失败忽略，避免阻塞主流程
+      debugPrint('[BLE] ✗ $label: 写入失败: $e');
+      return false;
     }
   }
 
