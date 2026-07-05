@@ -2,7 +2,7 @@
 
 /**
  * @file BleServer.h
- * @brief ESP32 BLE GATT Server 封装
+ * @brief ESP32 BLE GATT Server 封装（基于 NimBLE-Arduino 库）
  *
  * 架构（用户最新需求）：
  *   - 手机（Flutter）作为 GATT Client，主动连接特定 MAC 的 ESP32
@@ -17,15 +17,17 @@
  *   - FFE4  导航状态
  *   - FFE5  定位信息
  *
- * 注意：手机端做 MAC 白名单过滤（用户需求：手机蓝牙连接数较多，只推送给
- * 特定授权的 ESP32 MAC），ESP32 端不做限制，被动接收即可。
+ * 关键：使用 NimBLE-Arduino 库替代 ESP32 Arduino 内置 BLE 库，
+ * 因为内置库不暴露安全配置 setter，无法关闭默认 LESC 配对要求，
+ * 导致手机写入被加密协商阻塞。
+ *
+ * 用户需求：
+ *   - 手机端做 MAC 白名单过滤（用户需求：手机蓝牙连接数较多，只推送给
+ *     特定授权的 ESP32 MAC），ESP32 端不做限制，被动接收即可。
  */
 
 #include <Arduino.h>
-#include <BLEDevice.h>
-#include <BLEServer.h>
-#include <BLEUtils.h>
-#include <BLE2902.h>
+#include <NimBLEDevice.h>
 #include <functional>
 #include "config/Config.h"
 
@@ -54,14 +56,14 @@ public:
 
 private:
     DataCallback dataCallback;
-    BLEServer* server = nullptr;
-    BLEService* service = nullptr;
+    NimBLEServer* server = nullptr;
+    NimBLEService* service = nullptr;
     bool started = false;
     int connectedDeviceCount = 0;
 
 public:
     // 内部回调方法（供内部回调类 ServerCallbacks / CharWriteCallbacks 访问）
-    void onConnect(BLEServer* pServer);
-    void onDisconnect(BLEServer* pServer);
-    void onWrite(BLECharacteristic* pChar);
+    void onConnect(NimBLEServer* pServer);
+    void onDisconnect(NimBLEServer* pServer);
+    void onWrite(NimBLECharacteristic* pChar);
 };

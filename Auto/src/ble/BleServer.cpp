@@ -1,16 +1,8 @@
 #include "BleServer.h"
 
-// 直接修改 NimBLE host 的安全配置。
-// 原因：ESP32 Arduino BLE 2.0.0 库不暴露 setSecurityAuth / setSecurityInitKey 等
-// 公共 API，但底层基于 NimBLE，ble_hs_cfg 是公开的 host 全局结构。
-extern "C" {
-#include "host/ble_hs.h"
-#include "host/ble_sm.h"
-}
-
 /**
  * @file BleServer.cpp
- * @brief ESP32 BLE GATT Server 实现
+ * @brief ESP32 BLE GATT Server 实现（基于 NimBLE-Arduino 库）
  *
  * ESP32 作为 GATT Server（外设），广播 AutoNavDisplay 名称，
  * 等待手机（Flutter GATT Client）连接并写入 JSON 数据。
@@ -19,21 +11,29 @@ extern "C" {
  *   - 手机连接后通过 writeCharacteristic 推送数据
  *   - ESP32 端在 onWrite 中接收并通过 dataCallback 上报
  *
+ * 关键：禁用 BLE 配对/加密（用户场景：本地近距离无加密传输）
+ *   - sm_bonding = 0
+ *   - sm_mitm = 0
+ *   - sm_sc = 0
+ *   - sm_our_key_dist = 0
+ *   - sm_their_key_dist = 0
+ *   - sm_io_cap = NO_INPUT_NO_OUTPUT
+ *
  * 用户需求：手机端做 MAC 白名单过滤，ESP32 端不做限制。
  */
 
 // ============================================================
 // 内部辅助：连接状态回调类
 // ============================================================
-class ServerCallbacks : public BLEServerCallbacks {
+class ServerCallbacks : public NimBLEServerCallbacks {
 public:
     explicit ServerCallbacks(BleServer* parent) : mParent(parent) {}
 
-    void onConnect(BLEServer* pServer) override {
+    void onConnect(NimBLEServer* pServer) override {
         mParent->onConnect(pServer);
     }
 
-    void onDisconnect(BLEServer* pServer) override {
+    void onDisconnect(NimBLEServer* pServer) override {
         mParent->onDisconnect(pServer);
     }
 
@@ -44,11 +44,11 @@ private:
 // ============================================================
 // 内部辅助：特征值写入回调类
 // ============================================================
-class CharWriteCallbacks : public BLECharacteristicCallbacks {
+class CharWriteCallbacks : public NimBLECharacteristicCallbacks {
 public:
     explicit CharWriteCallbacks(BleServer* parent) : mParent(parent) {}
 
-    void onWrite(BLECharacteristic* pChar) override {
+    void onWrite(NimBLECharacteristic* pChar) override {
         mParent->onWrite(pChar);
     }
 
@@ -68,40 +68,30 @@ static BleServer* sInstance = nullptr;
 void BleServer::begin(const char* deviceName) {
     sInstance = this;
 
-    // 在 BLEDevice::init() 之前预先配置 NimBLE 安全策略
-    // 关键：BLEDevice::init() 内部会调用 nimble_port_init() -> ble_hs_init()，
-    // ble_hs_init() 会立刻把 ble_hs_cfg 复制到 host 内部状态。
-    // 因此必须在 init() 之前修改 ble_hs_cfg 才有效。
-    ble_hs_cfg.sm_bonding = 0;          // 不持久化绑定
-    ble_hs_cfg.sm_mitm = 0;             // 不要求 MITM 保护
-    ble_hs_cfg.sm_sc = 0;               // 不要求 LESC（Secure Connection）
-    ble_hs_cfg.sm_io_cap = 5;           // BLE_SM_IO_NO_INPUT_NO_OUTPUT
-    ble_hs_cfg.sm_our_key_dist = 0;     // 我们不请求对方分发任何密钥
-    ble_hs_cfg.sm_their_key_dist = 0;   // 我们也不分发任何密钥
-    if (Debug::LOG_SYSTEM) {
-        Serial.println("[BLE] 预配置 NimBLE: sm_bonding=0 sm_mitm=0 sm_sc=0");
-    }
+    // 关闭 BLE 安全 / 配对 / 加密要求
+    // 关键：NimBLE 默认要求 Secure Connection (LESC) 配对，
+    // 很多手机 / Android 版本会触发 SEC_REQ_EVT 协商但不接受 LESC，
+    // 导致 smp_calculate_link_key_from_long_term_key 失败，写入被拒。
+    // 关闭后可无加密通信，简化连接（用户场景：本地近距离）。
+    NimBLEDevice::setSecurityAuth(false, false, false);
+    NimBLEDevice::setSecurityInitKey(0);
+    NimBLEDevice::setSecurityRespKey(0);
+    NimBLEDevice::setSecurityIOCap(BLE_HS_IO_NO_INPUT_OUTPUT);
 
-    // 初始化 BLE 协议栈（内部会调用 ble_hs_init() 复制上面配置）
-    BLEDevice::init(deviceName);
+    // 初始化 BLE 协议栈
+    NimBLEDevice::init(deviceName);
 
     // 发射功率适当调整，确保与各种手机兼容
-    BLEDevice::setPower(ESP_PWR_LVL_P6, ESP_BLE_PWR_TYPE_DEFAULT);
+    NimBLEDevice::setPower(ESP_PWR_LVL_P6, ESP_BLE_PWR_TYPE_DEFAULT);
 
     // 请求较大 MTU，减少分包
-    BLEDevice::setMTU(517);
-
-    // 双重保险：init 之后再次通过 setter 强制设置
-    // 这些 setter 会修改 host 内部活动状态（不仅是 ble_hs_cfg）
-    ble_sm_set_bonding(0);
-    ble_sm_set_mitm(0);
-    ble_sm_set_sc(0);
+    NimBLEDevice::setMTU(517);
 
     // 短暂延时让协议栈就绪
     delay(200);
 
     // 创建 GATT Server
-    server = BLEDevice::createServer();
+    server = NimBLEDevice::createServer();
     if (server == nullptr) {
         Serial.println("[BLE] 创建 GATT Server 失败");
         return;
@@ -110,7 +100,7 @@ void BleServer::begin(const char* deviceName) {
     server->setCallbacks(serverCb);
 
     // 创建主服务
-    service = server->createService(BLEUUID(BleUUID::SERVICE));
+    service = server->createService(BleUUID::SERVICE);
 
     // 创建 5 个特征值：WRITE | WRITE_NO_RESPONSE
     struct CharDesc {
@@ -127,10 +117,9 @@ void BleServer::begin(const char* deviceName) {
 
     CharWriteCallbacks* writeCb = new CharWriteCallbacks(this);
     for (const auto& desc : chars) {
-        BLECharacteristic* chr = service->createCharacteristic(
-            BLEUUID(desc.uuid),
-            BLECharacteristic::PROPERTY_WRITE |
-            BLECharacteristic::PROPERTY_WRITE_NR
+        NimBLECharacteristic* chr = service->createCharacteristic(
+            desc.uuid,
+            NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR
         );
         // WRITE 方向不需要 CCCD 描述符
         chr->setCallbacks(writeCb);
@@ -144,8 +133,8 @@ void BleServer::begin(const char* deviceName) {
     service->start();
 
     // 启动广播（让手机能扫描并连接）
-    BLEAdvertising* adv = server->getAdvertising();
-    adv->addServiceUUID(BLEUUID(BleUUID::SERVICE));
+    NimBLEAdvertising* adv = NimBLEDevice::getAdvertising();
+    adv->addServiceUUID(BleUUID::SERVICE);
     adv->setScanResponse(true);
     adv->setMinPreferred(0x06);  // iPhone 兼容
     adv->setMaxPreferred(0x12);
@@ -163,28 +152,28 @@ void BleServer::loop() {
     // 连接状态由回调更新；数据由 onWrite 回调上报
 }
 
-void BleServer::onConnect(BLEServer* /*pServer*/) {
+void BleServer::onConnect(NimBLEServer* /*pServer*/) {
     connectedDeviceCount++;
     if (Debug::LOG_SYSTEM) {
         Serial.printf("[BLE] 手机已连接（当前连接数: %d）\n", connectedDeviceCount);
     }
 }
 
-void BleServer::onDisconnect(BLEServer* /*pServer*/) {
+void BleServer::onDisconnect(NimBLEServer* /*pServer*/) {
     if (connectedDeviceCount > 0) connectedDeviceCount--;
     if (Debug::LOG_SYSTEM) {
         Serial.printf("[BLE] 手机已断开（当前连接数: %d）\n", connectedDeviceCount);
     }
     // 断开后继续广播，允许其他手机连接
     if (server != nullptr && started) {
-        BLEAdvertising* adv = server->getAdvertising();
+        NimBLEAdvertising* adv = NimBLEDevice::getAdvertising();
         if (adv != nullptr) {
             adv->start();
         }
     }
 }
 
-void BleServer::onWrite(BLECharacteristic* pChar) {
+void BleServer::onWrite(NimBLECharacteristic* pChar) {
     if (pChar == nullptr) return;
     if (dataCallback == nullptr) return;
 
