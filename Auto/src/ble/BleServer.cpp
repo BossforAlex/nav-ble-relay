@@ -66,6 +66,22 @@ void BleServer::begin(const char* deviceName) {
     // 发射功率适当调整，确保与各种手机兼容
     BLEDevice::setPower(ESP_PWR_LVL_P6, ESP_BLE_PWR_TYPE_DEFAULT);
 
+    // 关闭 BLE 安全 / 配对 / 加密要求
+    // 关键：ESP32 Arduino BLE 默认要求 Secure Connection (LESC) 配对，
+    // 很多手机 / Android 版本会触发 SEC_REQ_EVT 协商但不接受 LESC，
+    // 导致 smp_calculate_link_key_from_long_term_key 失败，写入被拒。
+    // 关闭后可无加密通信，简化连接（用户场景：本地局域网近距离）。
+    BLEDevice::setSecurityAuth(false, false, false);
+    // 不分发任何密钥（init=0 表示不请求对方分发任何加密密钥）
+    BLEDevice::setSecurityInitKey(0);
+    BLEDevice::setSecurityRespKey(0);
+    // IO 能力设为 0x05 = BLE_SM_IO_NO_INPUT_NO_OUTPUT，避免配对时弹出配对码
+    // 注：使用数值常量以兼容不同 NimBLE 版本的命名差异
+    BLEDevice::setSecurityIOCap(0x05);
+
+    // 请求较大 MTU，减少分包
+    BLEDevice::setMTU(517);
+
     // 短暂延时让协议栈就绪
     delay(200);
 
@@ -77,6 +93,9 @@ void BleServer::begin(const char* deviceName) {
     }
     ServerCallbacks* serverCb = new ServerCallbacks(this);
     server->setCallbacks(serverCb);
+
+    // 双重保险：在 server 上也设置一次（部分库版本对 setSecurityAuth 的响应时序不同）
+    server->setSecurityAuth(false, false, false);
 
     // 创建主服务
     service = server->createService(BLEUUID(BleUUID::SERVICE));
@@ -101,10 +120,11 @@ void BleServer::begin(const char* deviceName) {
             BLECharacteristic::PROPERTY_WRITE |
             BLECharacteristic::PROPERTY_WRITE_NR
         );
-        // 注意：WRITE 方向不需要 CCCD 描述符
+        // WRITE 方向不需要 CCCD 描述符
         chr->setCallbacks(writeCb);
         if (Debug::LOG_SYSTEM) {
-            Serial.printf("[BLE] 已注册特征值: %s (%s)\n", desc.name, desc.uuid);
+            Serial.printf("[BLE] 已注册特征值: %s (%s) props=WRITE|WRITE_NR\n",
+                          desc.name, desc.uuid);
         }
     }
 
@@ -121,7 +141,8 @@ void BleServer::begin(const char* deviceName) {
 
     started = true;
     if (Debug::LOG_SYSTEM) {
-        Serial.printf("[BLE] GATT Server 已启动，设备名=%s，等待手机连接...\n", deviceName);
+        Serial.printf("[BLE] GATT Server 已启动，设备名=%s，关闭加密，等待手机连接...\n",
+                      deviceName);
     }
 }
 
