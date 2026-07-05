@@ -103,6 +103,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
+  Future<void> _rescan() async {
+    await context.read<BleService>().rescan();
+  }
+
   @override
   Widget build(BuildContext context) {
     final ble = context.watch<BleService>();
@@ -126,6 +130,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             // 顶部状态卡片
             const StatusCard(),
             const SizedBox(height: 16),
+            // 发现的设备列表（用户可见 + 可选）
+            const _DiscoveredDevicesCard(),
+            const SizedBox(height: 16),
             // 中间导航预览
             const NavPreview(),
             const SizedBox(height: 16),
@@ -142,6 +149,134 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// 发现的 ESP32 设备列表 + 重扫按钮
+///
+/// 扫描过程中如果发现 ≥ 1 个名字匹配的目标设备：
+///   - 显示在卡片里
+///   - 已自动连接第一个
+///   - 用户也可以点击切换到其它设备
+/// 用户需求：去白名单后，提供可视化的设备选择能力（之前没有）
+class _DiscoveredDevicesCard extends StatelessWidget {
+  const _DiscoveredDevicesCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Consumer<BleService>(
+      builder: (context, ble, _) {
+        final targets = ble.discoveredTargets;
+        final isScanning = ble.status == BleStatus.scanning;
+        final isConnecting = ble.status == BleStatus.connecting;
+        final isConnected = ble.isConnected;
+        // 仅在扫描/连接/有发现时显示
+        if (!isScanning && targets.isEmpty && !isConnecting && !isConnected) {
+          return const SizedBox.shrink();
+        }
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.devices_other, size: 18, color: colorScheme.primary),
+                    const SizedBox(width: 8),
+                    Text(
+                      '发现的设备 / Discovered',
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      isScanning
+                          ? '扫描中...'
+                          : isConnecting
+                              ? '连接中...'
+                              : isConnected
+                                  ? '已连接'
+                                  : '扫描结束',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      tooltip: '重新扫描',
+                      icon: const Icon(Icons.refresh),
+                      onPressed: isConnected
+                          ? null
+                          : () => context.read<BleService>().rescan(),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                if (targets.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Text(
+                      isScanning
+                          ? '正在搜索 ESP32 (AutoNavDisplay)…'
+                          : '未发现目标设备',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  )
+                else
+                  ...targets.map((r) {
+                    final isCurrent =
+                        r.device.remoteId.str == ble.deviceAddress;
+                    return ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(
+                        isCurrent ? Icons.check_circle : Icons.bluetooth,
+                        color: isCurrent
+                            ? const Color(0xFF008375)
+                            : colorScheme.primary,
+                      ),
+                      title: Text(
+                        r.advertisementData.advName.isNotEmpty
+                            ? r.advertisementData.advName
+                            : 'Unknown',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: isCurrent
+                              ? FontWeight.w600
+                              : FontWeight.normal,
+                        ),
+                      ),
+                      subtitle: Text(
+                        '${r.device.remoteId.str}  •  RSSI ${r.rssi} dBm',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      trailing: isCurrent
+                          ? const Text('当前')
+                          : TextButton(
+                              onPressed: isConnected || isConnecting
+                                  ? null
+                                  : () => context
+                                      .read<BleService>()
+                                      .connectTo(r),
+                              child: const Text('连接'),
+                            ),
+                    );
+                  }),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

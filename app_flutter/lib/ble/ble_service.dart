@@ -2,15 +2,16 @@
 ///
 /// Flutter 端作为 GATT Client（中心设备）：
 ///   - 主动扫描名为 "AutoNavDisplay" 的 ESP32 设备
-///   - 在用户配置的 MAC 白名单匹配后，连接该 ESP32
+///   - 扫描到第一个名字匹配的 ESP32 后自动连接
 ///   - 通过 writeCharacteristic / writeCharacteristicWithoutResponse
 ///     主动向 5 个特征值推送 JSON 数据
 ///
 /// ESP32（外设）连接后被动接收数据即可。
 ///
-/// 用户需求：
-///   - 手机连接数较多，软件中要做 MAC 限制
-///   - ESP32 端不做限制（被动接收）
+/// 用户最新需求：
+///   - 去除白名单限制（用户反馈：白名单无法判断是否生效，直接去掉）
+///   - 软件没添加"选择设备"功能时，直接选中第一个匹配的设备接受数据
+///   - 后续如需可选设备列表，UI 层扩展即可
 library;
 
 import 'dart:async';
@@ -22,7 +23,6 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import '../ble/ble_constants.dart';
 import '../models/nav_data.dart';
 import '../protocol/amap_protocol.dart';
-import '../main.dart' show prefs;
 
 /// BLE 连接状态
 enum BleStatus {
@@ -58,6 +58,14 @@ class BleService extends ChangeNotifier {
   String _lastError = '';
   String get lastError => _lastError;
 
+  /// 扫描过程中发现的目标设备列表（名字匹配 AutoNavDisplay 等）
+  final List<ScanResult> _discoveredTargets = [];
+  List<ScanResult> get discoveredTargets =>
+      List.unmodifiable(_discoveredTargets);
+
+  /// 是否已经尝试连接过发现的设备（防止重复连接）
+  bool _hasConnectAttempted = false;
+
   bool get isRunning =>
       _status == BleStatus.scanning ||
       _status == BleStatus.connecting ||
@@ -91,6 +99,7 @@ class BleService extends ChangeNotifier {
       _status = BleStatus.bluetoothOff;
       _deviceAddress = '';
       _deviceName = '';
+      _discoveredTargets.clear();
     }
     _safeNotify();
   }
@@ -107,12 +116,13 @@ class BleService extends ChangeNotifier {
       return;
     }
 
+    _discoveredTargets.clear();
+    _hasConnectAttempted = false;
     _status = BleStatus.scanning;
     _lastError = '';
     _safeNotify();
 
     try {
-      // 1. 启动扫描
       _scanSub?.cancel();
       _scanSub = FlutterBluePlus.scanResults.listen(_onScanResult);
       await FlutterBluePlus.startScan(
@@ -122,6 +132,51 @@ class BleService extends ChangeNotifier {
     } catch (e) {
       _status = BleStatus.error;
       _lastError = '扫描启动失败: $e';
+      _safeNotify();
+    }
+  }
+
+  /// 手动重扫（不依赖白名单，每次都重新扫）
+  Future<void> rescan() async {
+    if (isConnected) {
+      debugPrint('[BLE] 已连接，无需重扫');
+      return;
+    }
+    if (_status == BleStatus.scanning) {
+      debugPrint('[BLE] 已在扫描中');
+      return;
+    }
+    debugPrint('[BLE] 手动重扫...');
+    await start();
+  }
+
+  /// 手动连接指定的扫描结果（用于 UI 设备选择功能）
+  Future<void> connectTo(ScanResult r) async {
+    if (isConnected || _status == BleStatus.connecting) {
+      debugPrint('[BLE] 已有连接/正在连接，忽略手动 connectTo');
+      return;
+    }
+    try {
+      await FlutterBluePlus.stopScan();
+    } catch (_) {}
+    _scanSub?.cancel();
+    _scanSub = null;
+
+    _device = r.device;
+    _deviceAddress = r.device.remoteId.str;
+    _deviceName = r.advertisementData.advName.isNotEmpty
+        ? r.advertisementData.advName
+        : 'Unknown';
+
+    _status = BleStatus.connecting;
+    _safeNotify();
+
+    try {
+      await _connectAndDiscover();
+    } catch (e) {
+      _status = BleStatus.error;
+      _lastError = '连接失败: $e';
+      _device = null;
       _safeNotify();
     }
   }
@@ -150,60 +205,73 @@ class BleService extends ChangeNotifier {
     _status = BleStatus.stopped;
     _deviceAddress = '';
     _deviceName = '';
+    _discoveredTargets.clear();
     _safeNotify();
   }
 
   /// 处理扫描结果
   Future<void> _onScanResult(List<ScanResult> results) async {
+    if (_status != BleStatus.scanning) return;
+
+    // 收集所有名字匹配的目标设备
     for (final r in results) {
-      if (_status != BleStatus.scanning) return;
       if (!isTargetName(r.advertisementData.advName)) continue;
-      if (!isAllowedAddress(r.device.remoteId.str)) continue;
-
-      // 找到目标设备，停止扫描并发起连接
-      try {
-        await FlutterBluePlus.stopScan();
-      } catch (_) {}
-      _scanSub?.cancel();
-      _scanSub = null;
-
-      _device = r.device;
-      _deviceAddress = r.device.remoteId.str;
-      _deviceName = r.advertisementData.advName.isNotEmpty
-          ? r.advertisementData.advName
-          : BleConstants.deviceNamePrefix;
-
-      _status = BleStatus.connecting;
-      _safeNotify();
-
-      try {
-        await _connectAndDiscover();
-      } catch (e) {
-        _status = BleStatus.error;
-        _lastError = '连接失败: $e';
-        _device = null;
-        _safeNotify();
+      // 去重：按 MAC 保留
+      final addr = r.device.remoteId.str;
+      final exists = _discoveredTargets
+          .any((e) => e.device.remoteId.str == addr);
+      if (!exists) {
+        _discoveredTargets.add(r);
+        debugPrint('[BLE] 发现目标设备:'
+            ' name=${r.advertisementData.advName} mac=$addr rssi=${r.rssi}');
       }
-      return; // 只处理第一个匹配
+    }
+    _safeNotify();
+
+    // 用户需求：直接选中第一个匹配的设备接受数据（不依赖白名单）
+    if (_hasConnectAttempted) return;
+    if (_discoveredTargets.isEmpty) return;
+
+    _hasConnectAttempted = true;
+    final first = _discoveredTargets.first;
+    debugPrint('[BLE] 自动选中第一个目标:'
+        ' name=${first.advertisementData.advName} mac=${first.device.remoteId.str}');
+
+    try {
+      await FlutterBluePlus.stopScan();
+    } catch (_) {}
+    _scanSub?.cancel();
+    _scanSub = null;
+
+    _device = first.device;
+    _deviceAddress = first.device.remoteId.str;
+    _deviceName = first.advertisementData.advName.isNotEmpty
+        ? first.advertisementData.advName
+        : 'Unknown';
+
+    _status = BleStatus.connecting;
+    _safeNotify();
+
+    try {
+      await _connectAndDiscover();
+    } catch (e) {
+      _status = BleStatus.error;
+      _lastError = '连接失败: $e';
+      _device = null;
+      _hasConnectAttempted = false; // 允许重试
+      _safeNotify();
     }
   }
 
-  /// 判断设备名是否匹配目标（AutoNavDisplay 前缀或以 ICA 开头的别名）
+  /// 判断设备名是否匹配目标
+  /// 用户需求：去白名单后，只匹配名字即可
   bool isTargetName(String name) {
     if (name.isEmpty) return false;
     return name.startsWith('AutoNavDisplay') ||
         name.startsWith('NavDisplay') ||
-        name == 'AutoNavDisplay' ||
-        name.startsWith(BleConstants.deviceNamePrefix) ||
+        name.startsWith('ICA') ||
         name.startsWith('ESP32') ||
         name.startsWith('espressif');
-  }
-
-  /// 判断 MAC 是否在白名单（用户需求：手机端做限制）
-  bool isAllowedAddress(String address) {
-    final target = prefs.getString('target_device_mac')?.trim() ?? '';
-    if (target.isEmpty) return true; // 未配置白名单时不限
-    return address.toLowerCase() == target.toLowerCase();
   }
 
   /// 连接并发现服务/特征值
@@ -211,12 +279,12 @@ class BleService extends ChangeNotifier {
     final device = _device;
     if (device == null) return;
 
-    debugPrint('[BLE] 开始连接 ${device.remoteId.str}...');
+    debugPrint('[BLE] >>> 开始连接 ${device.remoteId.str} <<<');
 
     // 监听连接状态
     _connSub?.cancel();
     _connSub = device.connectionState.listen((state) {
-      debugPrint('[BLE] 连接状态: $state');
+      debugPrint('[BLE] 连接状态变化: $state');
       if (state == BluetoothConnectionState.disconnected) {
         _status = BleStatus.scanning;
         _deviceAddress = '';
@@ -226,6 +294,7 @@ class BleService extends ChangeNotifier {
         _chrTmc = null;
         _chrState = null;
         _chrLocation = null;
+        _hasConnectAttempted = false;
         _safeNotify();
         // 自动重连：重新启动扫描
         if (!_disposed) start();
@@ -233,21 +302,21 @@ class BleService extends ChangeNotifier {
     });
 
     await device.connect(timeout: const Duration(seconds: 10));
-    debugPrint('[BLE] ✓ 连接成功 ${device.remoteId.str}');
+    debugPrint('[BLE] ✓ 物理层已连接 ${device.remoteId.str}');
 
     // 请求更大 MTU
     try {
       final mtu = await device.requestMtu(512);
-      debugPrint('[BLE] MTU 协商: $mtu 字节');
+      debugPrint('[BLE] ✓ MTU 协商: $mtu 字节');
     } catch (e) {
-      debugPrint('[BLE] MTU 协商失败: $e');
+      debugPrint('[BLE] ! MTU 协商失败: $e（继续用默认）');
     }
 
     // 发现服务
     List<BluetoothService> services = await device.discoverServices();
     debugPrint('[BLE] 发现 ${services.length} 个服务:');
     for (var s in services) {
-      debugPrint('  - Service: ${s.uuid.str}');
+      debugPrint('  - ${s.uuid.str}');
     }
 
     BluetoothService? targetService;
@@ -265,12 +334,11 @@ class BleService extends ChangeNotifier {
     int found = 0;
     for (var c in targetService.characteristics) {
       final u = c.uuid.str.toLowerCase();
-      debugPrint('[BLE] 特征值: ${c.uuid.str}'
-          ' props=[read:${c.properties.read}'
-          ' write:${c.properties.write}'
-          ' writeNoResp:${c.properties.writeWithoutResponse}'
-          ' notify:${c.properties.notify}'
-          ' indicate:${c.properties.indicate}]');
+      final p = c.properties;
+      debugPrint('[BLE] 特征值 ${c.uuid.str}'
+          ' [read=${p.read} write=${p.write} '
+          'writeNoResp=${p.writeWithoutResponse} '
+          'notify=${p.notify} indicate=${p.indicate}]');
       if (u == BleConstants.charGuideUuid.toLowerCase()) {
         _chrGuide = c;
         found++;
@@ -287,12 +355,11 @@ class BleService extends ChangeNotifier {
         _chrLocation = c;
         found++;
       }
-      // 检查是否支持 writeWithoutResponse
       if (!c.properties.writeWithoutResponse) {
         _supportWriteNoResp = false;
       }
     }
-    debugPrint('[BLE] ✓ 已映射 $found/5 个特征值 (writeNoResp=$_supportWriteNoResp)');
+    debugPrint('[BLE] ✓ 映射 $found/5 个特征值 (writeNoResp支持=$_supportWriteNoResp)');
 
     if (found != 5) {
       debugPrint('[BLE] ⚠ 警告：未找到全部 5 个特征值，BLE 写入可能失败');
@@ -302,7 +369,6 @@ class BleService extends ChangeNotifier {
     _safeNotify();
 
     // 连接成功后立刻发送测试数据，验证双向通信正常
-    // 不依赖高德广播源（用户场景：可能未开启高德导航）
     await _sendTestPackets();
   }
 
@@ -323,7 +389,7 @@ class BleService extends ChangeNotifier {
       },
     };
     final ok = await _write(_chrState, test, label: 'TEST');
-    debugPrint('[BLE] 测试包发送结果: ${ok ? "OK" : "FAILED"}');
+    debugPrint('[BLE] 测试包发送${ok ? "成功" : "失败"}');
   }
 
   // ── 数据发送 ──────────────────────────────────────────
@@ -353,7 +419,7 @@ class BleService extends ChangeNotifier {
         },
       },
     };
-    await _write(_chrGuide, data);
+    await _write(_chrGuide, data, label: 'GUIDE');
   }
 
   Future<void> sendDriveWay(DriveWayInfo info) async {
@@ -371,7 +437,7 @@ class BleService extends ChangeNotifier {
             .toList(),
       },
     };
-    await _write(_chrDriveWay, data);
+    await _write(_chrDriveWay, data, label: 'DRIVE');
   }
 
   Future<void> sendTmcSegment(TmcSegmentInfo info) async {
@@ -390,7 +456,7 @@ class BleService extends ChangeNotifier {
             .toList(),
       },
     };
-    await _write(_chrTmc, data);
+    await _write(_chrTmc, data, label: 'TMC');
   }
 
   Future<void> sendMapState(int state, String? crossMap) async {
@@ -402,7 +468,7 @@ class BleService extends ChangeNotifier {
         if (crossMap != null) 'EXTRA_CROSS_MAP': crossMap,
       },
     };
-    await _write(_chrState, data);
+    await _write(_chrState, data, label: 'STATE');
   }
 
   Future<void> sendLocation(LocationInfo info) async {
@@ -416,7 +482,7 @@ class BleService extends ChangeNotifier {
         'provider': info.provider,
       },
     };
-    await _write(_chrLocation, data);
+    await _write(_chrLocation, data, label: 'LOC');
   }
 
   /// 向指定特征值写入 JSON 数据
@@ -432,18 +498,18 @@ class BleService extends ChangeNotifier {
     }
     final json = jsonEncode(packet);
     final bytes = utf8.encode(json);
-    debugPrint('[BLE] → $label: 写入 ${bytes.length} 字节'
-        ' (${_supportWriteNoResp && chr.properties.writeWithoutResponse ? "writeNoResp" : "writeWithResp"})');
+    debugPrint('[BLE] → $label 写 ${bytes.length}字节'
+        ' [${_supportWriteNoResp && chr.properties.writeWithoutResponse ? "writeNoResp" : "writeWithResp"}]');
     try {
       if (_supportWriteNoResp && chr.properties.writeWithoutResponse) {
         await chr.write(bytes, withoutResponse: true);
       } else {
         await chr.write(bytes, withoutResponse: false);
       }
-      debugPrint('[BLE] ✓ $label: 写入成功');
+      debugPrint('[BLE] ✓ $label 写入成功');
       return true;
     } catch (e) {
-      debugPrint('[BLE] ✗ $label: 写入失败: $e');
+      debugPrint('[BLE] ✗ $label 写入失败: $e');
       return false;
     }
   }

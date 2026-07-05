@@ -1,4 +1,7 @@
-/// 设置页：蓝牙服务信息、详细日志、ESP32 简化模式、屏幕常亮、自启、目标设备 MAC
+/// 设置页：蓝牙服务信息、详细日志、ESP32 简化模式、屏幕常亮、自启
+///
+/// 用户最新反馈：MAC 白名单无法判断是否生效，已在主界面提供
+/// "发现的设备" 卡片供用户选择。设置页不再保留 MAC 配置项。
 library;
 
 import 'package:flutter/material.dart';
@@ -16,35 +19,14 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  late final TextEditingController _macController;
-
   @override
   void initState() {
     super.initState();
-    _macController =
-        TextEditingController(text: context.read<SettingsService>().targetMac);
   }
 
   @override
   void dispose() {
-    _macController.dispose();
     super.dispose();
-  }
-
-  bool _isValidMac(String mac) {
-    return RegExp(r'^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$').hasMatch(mac);
-  }
-
-  void _saveMac() {
-    final raw = _macController.text.trim();
-    final service = context.read<SettingsService>();
-    if (raw.isNotEmpty && !_isValidMac(raw)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('MAC 格式不正确')),
-      );
-      return;
-    }
-    service.targetMac = raw;
   }
 
   @override
@@ -57,10 +39,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         title: const Text('设置 Settings'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            _saveMac();
-            Navigator.pop(context);
-          },
+          onPressed: () => Navigator.pop(context),
         ),
       ),
       body: SafeArea(
@@ -77,10 +56,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   value: BleConstants.serviceUuid.toUpperCase(),
                 ),
                 _KVTile(
-                  label: '通知特征值',
+                  label: '特征值 FFE1 (Guide)',
                   value: BleConstants.charGuideUuid.toUpperCase(),
                 ),
-                _KVTile(label: '设备名前缀', value: BleConstants.deviceNamePrefix),
+                _KVTile(
+                  label: '特征值 FFE2 (DriveWay)',
+                  value: BleConstants.charDriveWayUuid.toUpperCase(),
+                ),
+                _KVTile(
+                  label: '特征值 FFE3 (TMC)',
+                  value: BleConstants.charTmcUuid.toUpperCase(),
+                ),
+                _KVTile(
+                  label: '特征值 FFE4 (State)',
+                  value: BleConstants.charStateUuid.toUpperCase(),
+                ),
+                _KVTile(
+                  label: '特征值 FFE5 (Location)',
+                  value: BleConstants.charLocationUuid.toUpperCase(),
+                ),
+                _KVTile(
+                  label: '设备名前缀（白名单已移除）',
+                  value: BleConstants.deviceNamePrefix,
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                  child: Text(
+                    '说明：主界面"发现的设备"卡片会自动连接第一个名字匹配的 ESP32，'
+                    '可手动点击切换到其它设备。MAC 白名单已移除（无法判断是否生效）。',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 12),
@@ -115,37 +123,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   subtitle: const Text('系统启动后自动开始转发'),
                   value: settings.autoStart,
                   onChanged: (v) => settings.autoStart = v,
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            // 目标设备
-            _SectionCard(
-              title: '目标设备 / Target Device',
-              icon: Icons.devices,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                  child: Text(
-                    '只允许该 MAC 的 ESP32 连接，留空则不限制',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: TextField(
-                    controller: _macController,
-                    decoration: const InputDecoration(
-                      labelText: '目标设备 MAC',
-                      hintText: '例如 AA:BB:CC:DD:EE:FF',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.device_hub),
-                    ),
-                    textCapitalization: TextCapitalization.characters,
-                    onSubmitted: (_) => _saveMac(),
-                  ),
                 ),
               ],
             ),
@@ -195,7 +172,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   subtitle: const Text('清除所有设置项'),
                   onTap: () {
                     settings.reset();
-                    _macController.clear();
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('设置已恢复默认')),
                     );
