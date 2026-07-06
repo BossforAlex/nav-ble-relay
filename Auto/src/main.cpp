@@ -130,14 +130,14 @@ void setup() {
 }
 
 void loop() {
+    // 喂狗：避免长循环触发 WDT 超时
+    esp_task_wdt_reset();
+
+    // 消费 BLE 事件队列（在主任务上下文中处理串口打印、JSON 解析）
     sBleServer.loop();
     sScreen.setBleConnected(sBleServer.isConnected());
     sScreen.update();
 
-    if (Feature::LOW_POWER_WHEN_IDLE &&
-        sNavState.mapState != Nav::MapState::Navigating) {
-        delay(50);
-    } else {
-        delay(10);
-    }
+    // 短延时，让 BLE 任务有足够 CPU 时间
+    delay(5);
 }

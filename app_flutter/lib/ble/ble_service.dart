@@ -1,17 +1,16 @@
 /// BLE GATT Client 管理
 ///
 /// Flutter 端作为 GATT Client（中心设备）：
-///   - 主动扫描名为 "AutoNavDisplay" 的 ESP32 设备
-///   - 扫描到第一个名字匹配的 ESP32 后自动连接
+///   - 扫描所有 BLE 设备并展示（用户需求：批量开发，不再过滤名字）
+///   - 用户在"发现的设备"页面手动选择设备连接
 ///   - 通过 writeCharacteristic / writeCharacteristicWithoutResponse
 ///     主动向 5 个特征值推送 JSON 数据
 ///
-/// ESP32（外设）连接后被动接收数据即可。
-///
-/// 用户最新需求：
-///   - 去除白名单限制（用户反馈：白名单无法判断是否生效，直接去掉）
-///   - 软件没添加"选择设备"功能时，直接选中第一个匹配的设备接受数据
-///   - 后续如需可选设备列表，UI 层扩展即可
+/// 用户最新需求（重构）：
+///   - 移除 isTargetName 过滤，扫描到所有设备都展示
+///   - 移除"自动连接第一个匹配设备"逻辑，必须用户手动选择
+///   - 通过 MAC/名称推断设备类型展示对应图标
+///   - 选中设备连接成功后才能进行数据传输交互
 library;
 
 import 'dart:async';
@@ -40,6 +39,22 @@ enum BleStatus {
   error,
 }
 
+/// 设备类型（用于图标展示）
+enum DeviceCategory {
+  /// 本项目 ESP32 HUD（AutoNavDisplay / NavDisplay）
+  hud,
+  /// 其他 ESP32 / espressif 设备
+  esp32,
+  /// 蓝牙耳机/音箱
+  audio,
+  /// 电脑/手机/平板
+  computer,
+  /// 可穿戴设备
+  wearable,
+  /// 其他未知设备
+  unknown,
+}
+
 class BleService extends ChangeNotifier {
   BleService() {
     _adapterSub = FlutterBluePlus.adapterState.listen(_onAdapterChanged);
@@ -58,13 +73,13 @@ class BleService extends ChangeNotifier {
   String _lastError = '';
   String get lastError => _lastError;
 
-  /// 扫描过程中发现的目标设备列表（名字匹配 AutoNavDisplay 等）
-  final List<ScanResult> _discoveredTargets = [];
-  List<ScanResult> get discoveredTargets =>
-      List.unmodifiable(_discoveredTargets);
+  /// 扫描过程中发现的所有设备（用户需求：不再过滤名字）
+  final List<ScanResult> _allDevices = [];
+  List<ScanResult> get allDevices => List.unmodifiable(_allDevices);
 
-  /// 是否已经尝试连接过发现的设备（防止重复连接）
-  bool _hasConnectAttempted = false;
+  /// 当前连接的设备是否是本项目 ESP32（找到 5 个特征值）
+  bool _isOurDevice = false;
+  bool get isOurDevice => _isOurDevice;
 
   bool get isRunning =>
       _status == BleStatus.scanning ||
@@ -72,6 +87,8 @@ class BleService extends ChangeNotifier {
       _status == BleStatus.connected;
 
   bool get isConnected => _status == BleStatus.connected;
+
+  bool get isScanning => _status == BleStatus.scanning;
 
   // ── 内部 ──────────────────────────────────────────────
   StreamSubscription<BluetoothAdapterState>? _adapterSub;
@@ -86,10 +103,6 @@ class BleService extends ChangeNotifier {
   BluetoothCharacteristic? _chrState;
   BluetoothCharacteristic? _chrLocation;
 
-  // 当前是否允许 writeWithoutResponse（部分外设不支持）
-  // 注：已改为逐特征值判断，不再使用全局变量
-  bool _supportWriteNoResp = true;
-
   /// 监听适配器状态变化
   void _onAdapterChanged(BluetoothAdapterState state) {
     if (state == BluetoothAdapterState.on) {
@@ -100,14 +113,14 @@ class BleService extends ChangeNotifier {
       _status = BleStatus.bluetoothOff;
       _deviceAddress = '';
       _deviceName = '';
-      _discoveredTargets.clear();
+      _allDevices.clear();
     }
     _safeNotify();
   }
 
-  /// 启动 GATT Client：扫描 + 连接 + 发现服务
-  Future<void> start() async {
-    if (isRunning) return;
+  /// 启动扫描（用户需求：扫描所有设备，不再过滤）
+  Future<void> startScan() async {
+    if (isScanning) return;
 
     final adapterState = FlutterBluePlus.adapterStateNow;
     if (adapterState != BluetoothAdapterState.on) {
@@ -117,8 +130,7 @@ class BleService extends ChangeNotifier {
       return;
     }
 
-    _discoveredTargets.clear();
-    _hasConnectAttempted = false;
+    _allDevices.clear();
     _status = BleStatus.scanning;
     _lastError = '';
     _safeNotify();
@@ -137,24 +149,40 @@ class BleService extends ChangeNotifier {
     }
   }
 
-  /// 手动重扫（不依赖白名单，每次都重新扫）
+  /// 启动（兼容旧 API：startScan 等价）
+  Future<void> start() => startScan();
+
+  /// 手动重扫
   Future<void> rescan() async {
     if (isConnected) {
-      debugPrint('[BLE] 已连接，无需重扫');
+      debugPrint('[BLE] 已连接，忽略重扫请求');
       return;
     }
-    if (_status == BleStatus.scanning) {
+    if (isScanning) {
       debugPrint('[BLE] 已在扫描中');
       return;
     }
     debugPrint('[BLE] 手动重扫...');
-    await start();
+    await startScan();
   }
 
-  /// 手动连接指定的扫描结果（用于 UI 设备选择功能）
+  /// 停止扫描
+  Future<void> stopScan() async {
+    try {
+      _scanSub?.cancel();
+      _scanSub = null;
+      await FlutterBluePlus.stopScan();
+    } catch (_) {}
+    if (_status == BleStatus.scanning) {
+      _status = BleStatus.stopped;
+    }
+    _safeNotify();
+  }
+
+  /// 手动连接指定的扫描结果（用户在设备列表中点击连接）
   Future<void> connectTo(ScanResult r) async {
     if (isConnected || _status == BleStatus.connecting) {
-      debugPrint('[BLE] 已有连接/正在连接，忽略手动 connectTo');
+      debugPrint('[BLE] 已有连接/正在连接，忽略 connectTo');
       return;
     }
     try {
@@ -168,8 +196,10 @@ class BleService extends ChangeNotifier {
     _deviceName = r.advertisementData.advName.isNotEmpty
         ? r.advertisementData.advName
         : 'Unknown';
+    _isOurDevice = false;
 
     _status = BleStatus.connecting;
+    _lastError = '';
     _safeNotify();
 
     try {
@@ -182,96 +212,54 @@ class BleService extends ChangeNotifier {
     }
   }
 
-  /// 停止 GATT Client
-  Future<void> stop() async {
+  /// 断开连接
+  Future<void> disconnect() async {
     try {
-      _scanSub?.cancel();
-      _scanSub = null;
-      await FlutterBluePlus.stopScan();
-    } catch (_) {}
-
-    try {
-      await _connSub?.cancel();
+      _connSub?.cancel();
       _connSub = null;
       await _device?.disconnect();
     } catch (_) {}
-
     _device = null;
     _chrGuide = null;
     _chrDriveWay = null;
     _chrTmc = null;
     _chrState = null;
     _chrLocation = null;
-
+    _isOurDevice = false;
     _status = BleStatus.stopped;
     _deviceAddress = '';
     _deviceName = '';
-    _discoveredTargets.clear();
     _safeNotify();
   }
 
-  /// 处理扫描结果
-  Future<void> _onScanResult(List<ScanResult> results) async {
+  /// 停止 GATT Client（兼容旧 API）
+  Future<void> stop() => disconnect();
+
+  /// 处理扫描结果（用户需求：展示所有设备，不再过滤）
+  void _onScanResult(List<ScanResult> results) {
     if (_status != BleStatus.scanning) return;
 
-    // 收集所有名字匹配的目标设备
+    // 收集所有设备
+    bool changed = false;
     for (final r in results) {
-      if (!isTargetName(r.advertisementData.advName)) continue;
-      // 去重：按 MAC 保留
       final addr = r.device.remoteId.str;
-      final exists = _discoveredTargets
-          .any((e) => e.device.remoteId.str == addr);
-      if (!exists) {
-        _discoveredTargets.add(r);
-        debugPrint('[BLE] 发现目标设备:'
-            ' name=${r.advertisementData.advName} mac=$addr rssi=${r.rssi}');
+      final idx = _allDevices
+          .indexWhere((e) => e.device.remoteId.str == addr);
+      if (idx < 0) {
+        _allDevices.add(r);
+        changed = true;
+      } else {
+        // 更新 RSSI（设备信号会变化）
+        final old = _allDevices[idx];
+        if (old.rssi != r.rssi) {
+          _allDevices[idx] = r;
+          changed = true;
+        }
       }
     }
-    _safeNotify();
-
-    // 用户需求：直接选中第一个匹配的设备接受数据（不依赖白名单）
-    if (_hasConnectAttempted) return;
-    if (_discoveredTargets.isEmpty) return;
-
-    _hasConnectAttempted = true;
-    final first = _discoveredTargets.first;
-    debugPrint('[BLE] 自动选中第一个目标:'
-        ' name=${first.advertisementData.advName} mac=${first.device.remoteId.str}');
-
-    try {
-      await FlutterBluePlus.stopScan();
-    } catch (_) {}
-    _scanSub?.cancel();
-    _scanSub = null;
-
-    _device = first.device;
-    _deviceAddress = first.device.remoteId.str;
-    _deviceName = first.advertisementData.advName.isNotEmpty
-        ? first.advertisementData.advName
-        : 'Unknown';
-
-    _status = BleStatus.connecting;
-    _safeNotify();
-
-    try {
-      await _connectAndDiscover();
-    } catch (e) {
-      _status = BleStatus.error;
-      _lastError = '连接失败: $e';
-      _device = null;
-      _hasConnectAttempted = false; // 允许重试
+    if (changed) {
       _safeNotify();
     }
-  }
-
-  /// 判断设备名是否匹配目标
-  /// 用户需求：去白名单后，只匹配名字即可
-  bool isTargetName(String name) {
-    if (name.isEmpty) return false;
-    return name.startsWith('AutoNavDisplay') ||
-        name.startsWith('NavDisplay') ||
-        name.startsWith('ESP32') ||
-        name.startsWith('espressif');
   }
 
   /// 连接并发现服务/特征值
@@ -281,12 +269,11 @@ class BleService extends ChangeNotifier {
 
     debugPrint('[BLE] >>> 开始连接 ${device.remoteId.str} <<<');
 
-    // 监听连接状态
     _connSub?.cancel();
     _connSub = device.connectionState.listen((state) {
       debugPrint('[BLE] 连接状态变化: $state');
-      if (state == BluetoothConnectionState.disconnected) {
-        _status = BleStatus.scanning;
+      if (state == BluetoothConnectionState.disconnected && !_disposed) {
+        _status = BleStatus.stopped;
         _deviceAddress = '';
         _deviceName = '';
         _chrGuide = null;
@@ -294,10 +281,8 @@ class BleService extends ChangeNotifier {
         _chrTmc = null;
         _chrState = null;
         _chrLocation = null;
-        _hasConnectAttempted = false;
+        _isOurDevice = false;
         _safeNotify();
-        // 自动重连：重新启动扫描
-        if (!_disposed) start();
       }
     });
 
@@ -314,10 +299,7 @@ class BleService extends ChangeNotifier {
 
     // 发现服务
     List<BluetoothService> services = await device.discoverServices();
-    debugPrint('[BLE] 发现 ${services.length} 个服务:');
-    for (var s in services) {
-      debugPrint('  - ${s.uuid.str}');
-    }
+    debugPrint('[BLE] 发现 ${services.length} 个服务');
 
     BluetoothService? targetService;
     for (var s in services) {
@@ -326,9 +308,17 @@ class BleService extends ChangeNotifier {
         break;
       }
     }
+
     if (targetService == null) {
-      throw '未找到目标服务 ${BleConstants.serviceUuid}';
+      // 非本项目设备：连接成功但不进行数据传输
+      debugPrint('[BLE] ⚠ 未找到目标服务 ${BleConstants.serviceUuid}'
+          '（非 AutoNavDisplay 设备）');
+      _status = BleStatus.connected;
+      _isOurDevice = false;
+      _safeNotify();
+      return;
     }
+
     debugPrint('[BLE] ✓ 找到目标服务: ${targetService.uuid.str}');
 
     int found = 0;
@@ -358,15 +348,14 @@ class BleService extends ChangeNotifier {
     }
     debugPrint('[BLE] ✓ 映射 $found/5 个特征值');
 
-    if (found != 5) {
-      debugPrint('[BLE] ⚠ 警告：未找到全部 5 个特征值，BLE 写入可能失败');
-    }
-
+    _isOurDevice = (found == 5);
     _status = BleStatus.connected;
     _safeNotify();
 
-    // 连接成功后立刻发送测试数据，验证双向通信正常
-    await _sendTestPackets();
+    if (_isOurDevice) {
+      // 连接成功后立刻发送测试数据，验证双向通信正常
+      await _sendTestPackets();
+    }
   }
 
   /// 发送测试数据包，验证 BLE 写入通信
@@ -392,6 +381,7 @@ class BleService extends ChangeNotifier {
   // ── 数据发送 ──────────────────────────────────────────
 
   Future<void> sendGuideInfo(GuideInfo info, {bool compact = false}) async {
+    if (!_isOurDevice) return;
     final now = DateTime.now().millisecondsSinceEpoch;
     final data = <String, dynamic>{
       'type': AmapProtocol.keyGuideInfo,
@@ -420,6 +410,7 @@ class BleService extends ChangeNotifier {
   }
 
   Future<void> sendDriveWay(DriveWayInfo info) async {
+    if (!_isOurDevice) return;
     final data = <String, dynamic>{
       'type': AmapProtocol.keyDriveWay,
       'ts': DateTime.now().millisecondsSinceEpoch,
@@ -438,6 +429,7 @@ class BleService extends ChangeNotifier {
   }
 
   Future<void> sendTmcSegment(TmcSegmentInfo info) async {
+    if (!_isOurDevice) return;
     final data = <String, dynamic>{
       'type': AmapProtocol.keyTmcSegment,
       'ts': DateTime.now().millisecondsSinceEpoch,
@@ -457,6 +449,7 @@ class BleService extends ChangeNotifier {
   }
 
   Future<void> sendMapState(int state, String? crossMap) async {
+    if (!_isOurDevice) return;
     final data = <String, dynamic>{
       'type': AmapProtocol.keyMapState,
       'ts': DateTime.now().millisecondsSinceEpoch,
@@ -469,6 +462,7 @@ class BleService extends ChangeNotifier {
   }
 
   Future<void> sendLocation(LocationInfo info) async {
+    if (!_isOurDevice) return;
     final data = <String, dynamic>{
       'type': AmapProtocol.keyLocation,
       'ts': DateTime.now().millisecondsSinceEpoch,
@@ -509,12 +503,8 @@ class BleService extends ChangeNotifier {
     }
     // 优先 writeWithResponse（可靠），其次 writeWithoutResponse
     final useWriteResp = canWriteResp;
-    debugPrint('[BLE] → $label 写 ${bytes.length}字节'
-        ' [${useWriteResp ? "writeWithResp" : "writeNoResp"}]'
-        ' uuid=${chr.uuid.str}');
     try {
       await chr.write(bytes, withoutResponse: !useWriteResp);
-      debugPrint('[BLE] ✓ $label 写入成功');
       return true;
     } catch (e) {
       debugPrint('[BLE] ✗ $label 写入失败: $e');
@@ -530,6 +520,102 @@ class BleService extends ChangeNotifier {
         }
       }
       return false;
+    }
+  }
+
+  // ── 设备分类（用于图标展示）──────────────────────────
+
+  /// 根据 MAC 地址 + 设备名推断设备类型
+  /// 用户需求：批量开发，扫描到哪些设备展示哪些设备，通过 MAC 区别类型
+  static DeviceCategory classifyDevice(ScanResult r) {
+    final name = r.advertisementData.advName;
+    final mac = r.device.remoteId.str.toLowerCase();
+
+    // 1. 本项目 ESP32 HUD（AutoNavDisplay / NavDisplay）
+    if (name.startsWith('AutoNavDisplay') ||
+        name.startsWith('NavDisplay')) {
+      return DeviceCategory.hud;
+    }
+
+    // 2. 其他 ESP32 / espressif
+    // - 名字包含 ESP32 / espressif
+    // - MAC 厂商前缀（Espressif OUI 列表）
+    if (name.startsWith('ESP32') ||
+        name.toLowerCase().startsWith('espressif')) {
+      return DeviceCategory.esp32;
+    }
+    // Espressif 常见 OUI 前缀（部分列表）
+    const espOuiPrefixes = [
+      '24:0a:c4', '24:6f:28', '30:ae:a4', '3c:71:37', '40:f5:20',
+      '4c:11:bf', '54:5a:a6', '5c:cf:7f', '60:01:94', '68:c6:3f',
+      '84:0d:8e', '84:cc:a8', '8c:4b:14', '90:97:d5', '94:b5:34',
+      'a4:cf:12', 'ac:0b:fb', 'b0:a7:32', 'bc:dd:c2', 'c4:4f:33',
+      'd4:f9:8d', 'd8:a0:1d', 'e0:98:06', 'ec:fa:bc', 'f0:08:d1',
+      'e8:db:84',
+    ];
+    final macNorm = mac.replaceAll(':', '');
+    for (final oui in espOuiPrefixes) {
+      final ouiNorm = oui.replaceAll(':', '');
+      if (macNorm.startsWith(ouiNorm)) {
+        return DeviceCategory.esp32;
+      }
+    }
+
+    // 3. 蓝牙耳机/音箱（常见命名）
+    final nameLower = name.toLowerCase();
+    if (nameLower.contains('headphone') ||
+        nameLower.contains('headset') ||
+        nameLower.contains('earphone') ||
+        nameLower.contains('earbuds') ||
+        nameLower.contains('airpods') ||
+        nameLower.contains('speaker') ||
+        nameLower.contains('soundbar') ||
+        nameLower.contains('soundbar')) {
+      return DeviceCategory.audio;
+    }
+
+    // 4. 电脑/手机/平板
+    if (nameLower.contains('macbook') ||
+        nameLower.contains('iphone') ||
+        nameLower.contains('ipad') ||
+        nameLower.contains('android') ||
+        nameLower.contains('samsung') ||
+        nameLower.contains('pixel') ||
+        nameLower.contains('huawei') ||
+        nameLower.contains('xiaomi') ||
+        nameLower.contains('oppo') ||
+        nameLower.contains('vivo') ||
+        nameLower.contains('laptop') ||
+        nameLower.contains('desktop')) {
+      return DeviceCategory.computer;
+    }
+
+    // 5. 可穿戴设备
+    if (nameLower.contains('watch') ||
+        nameLower.contains('band') ||
+        nameLower.contains('fit') ||
+        nameLower.contains('tracker')) {
+      return DeviceCategory.wearable;
+    }
+
+    return DeviceCategory.unknown;
+  }
+
+  /// 设备分类的可读名称
+  static String categoryLabel(DeviceCategory cat) {
+    switch (cat) {
+      case DeviceCategory.hud:
+        return 'AutoNav HUD';
+      case DeviceCategory.esp32:
+        return 'ESP32';
+      case DeviceCategory.audio:
+        return '音频设备';
+      case DeviceCategory.computer:
+        return '电脑/手机';
+      case DeviceCategory.wearable:
+        return '可穿戴';
+      case DeviceCategory.unknown:
+        return '其他设备';
     }
   }
 

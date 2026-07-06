@@ -14,8 +14,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'ble/ble_service.dart';
 import 'services/broadcast_service.dart';
-import 'ui/home_screen.dart';
-import 'ui/settings_screen.dart';
+import 'ui/main_navigation.dart';
 
 /// 主题模式键
 const String kPrefThemeMode = 'theme_mode';
@@ -62,11 +61,7 @@ class NavBleRelayApp extends StatelessWidget {
                 theme: _buildTheme(lightDynamic, Brightness.light),
                 darkTheme: _buildTheme(darkDynamic, Brightness.dark),
                 themeMode: settings.themeMode,
-                initialRoute: '/',
-                routes: {
-                  '/': (context) => const HomeScreen(),
-                  '/settings': (context) => const SettingsScreen(),
-                },
+                home: const MainNavigation(),
               );
             },
           );

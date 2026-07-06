@@ -19,7 +19,11 @@
  *   - sm_their_key_dist = 0
  *   - sm_io_cap = NO_INPUT_NO_OUTPUT
  *
- * 用户需求：手机端做 MAC 白名单过滤，ESP32 端不做限制。
+ * 用户需求：批量开发场景，ESP32 端不做任何 MAC 限制。
+ *
+ * 关键设计（修复 Interrupt wdt 超时）：
+ *   回调中只设置标志位 + 拷贝数据到环形缓冲区，
+ *   所有重活（Serial 打印、JSON 解析、回调上层）由 loop() 处理。
  */
 
 // ============================================================
@@ -57,17 +61,10 @@ private:
 };
 
 // ============================================================
-// 静态实例指针（用于静态回调中访问实例）
-// ============================================================
-static BleServer* sInstance = nullptr;
-
-// ============================================================
 // BleServer 实现
 // ============================================================
 
 void BleServer::begin(const char* deviceName) {
-    sInstance = this;
-
     // 关闭 BLE 安全 / 配对 / 加密要求
     // 关键：NimBLE 默认要求 Secure Connection (LESC) 配对，
     // 很多手机 / Android 版本会触发 SEC_REQ_EVT 协商但不接受 LESC，
@@ -162,36 +159,78 @@ void BleServer::begin(const char* deviceName) {
 }
 
 void BleServer::loop() {
-    // 当前无需在 loop 中做特殊处理
-    // 连接状态由回调更新；数据由 onWrite 回调上报
+    // 处理连接事件（避免在 BLE 回调中打印导致 WDT）
+    if (_connectPending) {
+        _connectPending = false;
+        Serial.println();
+        Serial.println("─────────────── 手机连接事件 ───────────────");
+        Serial.printf("  连接数:    %d\n", _pendingConnCount);
+        Serial.printf("  MTU:       %d 字节\n", NimBLEDevice::getMTU());
+        Serial.println("──────────────────────────────────────────");
+        Serial.printf("[BLE] ✓ 手机已连接，准备接收数据\n");
+    }
+    if (_disconnectPending) {
+        _disconnectPending = false;
+        Serial.printf("[BLE] 手机已断开（当前连接数: %d）\n", _pendingConnCount);
+        // 断开后继续广播，允许其他手机连接
+        if (server != nullptr && started) {
+            NimBLEAdvertising* adv = NimBLEDevice::getAdvertising();
+            if (adv != nullptr) {
+                adv->start();
+            }
+        }
+    }
+
+    // 消费写入事件队列
+    while (_writeTail != _writeHead) {
+        const WriteEvent& ev = _writeBuf[_writeTail];
+        if (dataCallback) {
+            dataCallback(ev.uuid, ev.data, ev.len);
+        }
+        _writeTail = (_writeTail + 1) % kMaxWriteEvents;
+    }
+}
+
+void BleServer::enqueueWrite(const char* uuid, const uint8_t* data, size_t len) {
+    // 计算下一个写入位置
+    int nextHead = (_writeHead + 1) % kMaxWriteEvents;
+    if (nextHead == _writeTail) {
+        // 队列满：丢弃最旧的事件（覆盖 tail）
+        _writeTail = (_writeTail + 1) % kMaxWriteEvents;
+    }
+    WriteEvent& ev = _writeBuf[_writeHead];
+    // 拷贝 UUID（含结尾 \0）
+    strncpy(ev.uuid, uuid ? uuid : "?", sizeof(ev.uuid) - 1);
+    ev.uuid[sizeof(ev.uuid) - 1] = '\0';
+    // 拷贝数据（超长截断）
+    size_t copyLen = len;
+    if (copyLen > sizeof(ev.data)) copyLen = sizeof(ev.data);
+    memcpy(ev.data, data, copyLen);
+    ev.len = (uint16_t)copyLen;
+    _writeHead = nextHead;
 }
 
 void BleServer::onConnect(NimBLEServer* pServer) {
+    // ⚠️ 此函数在 BLE 协议栈任务上下文中执行
+    // 不能调用 NimBLEDevice::getMTU() / Serial.printf / 任何阻塞操作
+    // 仅设置标志位 + 计数器，由 loop() 在主任务上下文中处理
     connectedDeviceCount++;
-    Serial.println();
-    Serial.println("─────────────── 手机连接事件 ───────────────");
-    Serial.printf("  连接数:    %d\n", connectedDeviceCount);
-    Serial.printf("  MTU:       %d 字节\n", NimBLEDevice::getMTU());
-    Serial.println("──────────────────────────────────────────");
-    Serial.printf("[BLE] ✓ 手机已连接，准备接收数据\n");
-    (void)pServer;  // 避免未使用警告
+    _pendingConnCount = connectedDeviceCount;
+    _connectPending = true;
+    (void)pServer;
 }
 
 void BleServer::onDisconnect(NimBLEServer* /*pServer*/) {
+    // ⚠️ 同 onConnect，不能做阻塞操作
     if (connectedDeviceCount > 0) connectedDeviceCount--;
-    if (Debug::LOG_SYSTEM) {
-        Serial.printf("[BLE] 手机已断开（当前连接数: %d）\n", connectedDeviceCount);
-    }
-    // 断开后继续广播，允许其他手机连接
-    if (server != nullptr && started) {
-        NimBLEAdvertising* adv = NimBLEDevice::getAdvertising();
-        if (adv != nullptr) {
-            adv->start();
-        }
-    }
+    _pendingConnCount = connectedDeviceCount;
+    _disconnectPending = true;
 }
 
 void BleServer::onWrite(NimBLECharacteristic* pChar) {
+    // ⚠️ 此函数在 BLE 协议栈任务上下文中执行
+    // 不能调用 Serial.printf / 任何阻塞操作
+    // 仅获取值 + 入队，由 loop() 在主任务上下文中处理
     if (pChar == nullptr) return;
     if (dataCallback == nullptr) return;
 
@@ -200,11 +239,9 @@ void BleServer::onWrite(NimBLECharacteristic* pChar) {
 
     const uint8_t* data = reinterpret_cast<const uint8_t*>(value.data());
     size_t len = value.size();
+    // UUID toString() 返回 std::string，但注意不能在此上下文中调用复杂操作
+    // NimBLE 中 toString() 是简单字符串拼接，相对安全
     const char* uuid = pChar->getUUID().toString().c_str();
 
-    if (Debug::LOG_SYSTEM) {
-        Serial.printf("[BLE] 收到手机写入 %u 字节 | UUID=%s\n", (unsigned)len, uuid);
-    }
-
-    dataCallback(uuid, data, len);
+    enqueueWrite(uuid, data, len);
 }

@@ -1,6 +1,9 @@
-/// 主界面
+/// 主界面（导航转发页）
 ///
-/// 布局：顶部状态卡片 → 中间导航预览 → 详细数据卡片 → 底部控制按钮
+/// 布局：顶部状态卡片 → 中间导航预览 → 详细数据卡片
+/// 启停服务通过右下角 FAB 控制
+///
+/// 设备列表已迁移到独立的"发现设备"页面（DevicesScreen）
 library;
 
 import 'package:flutter/material.dart';
@@ -27,7 +30,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // 推迟绑定中继，确保 Provider 就绪
     WidgetsBinding.instance.addPostFrameCallback((_) => _wireRelay());
   }
 
@@ -39,7 +41,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // 应用回到前台时刷新广播接收状态显示
     if (state == AppLifecycleState.resumed) {
       context.read<BroadcastService>().notifyListeners();
     }
@@ -103,10 +104,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  Future<void> _rescan() async {
-    await context.read<BleService>().rescan();
-  }
-
   @override
   Widget build(BuildContext context) {
     final ble = context.watch<BleService>();
@@ -114,231 +111,57 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('导航BLE转发'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings_outlined),
-            tooltip: '设置',
-            onPressed: () => Navigator.pushNamed(context, '/settings'),
-          ),
-        ],
+        title: const Text('导航转发'),
       ),
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),
           children: [
             // 顶部状态卡片
             const StatusCard(),
-            const SizedBox(height: 16),
-            // 发现的设备列表（用户可见 + 可选）
-            const _DiscoveredDevicesCard(),
             const SizedBox(height: 16),
             // 中间导航预览
             const NavPreview(),
             const SizedBox(height: 16),
             // 详细数据卡片
             const _DetailCards(),
-            const SizedBox(height: 24),
-            // 控制按钮
-            _ControlButtons(
-              running: running,
-              onStart: _start,
-              onStop: _stop,
-              onTest: _selfTest,
-            ),
+            if (running) ...[
+              const SizedBox(height: 16),
+              OutlinedButton.icon(
+                onPressed: _selfTest,
+                icon: const Icon(Icons.bug_report_outlined),
+                label: const Text('测试广播 / TEST BROADCAST'),
+              ),
+            ],
           ],
         ),
       ),
-    );
-  }
-}
-
-/// 发现的 ESP32 设备列表 + 重扫按钮
-///
-/// 扫描过程中如果发现 ≥ 1 个名字匹配的目标设备：
-///   - 显示在卡片里
-///   - 已自动连接第一个
-///   - 用户也可以点击切换到其它设备
-/// 用户需求：去白名单后，提供可视化的设备选择能力（之前没有）
-class _DiscoveredDevicesCard extends StatelessWidget {
-  const _DiscoveredDevicesCard();
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    return Consumer<BleService>(
-      builder: (context, ble, _) {
-        final targets = ble.discoveredTargets;
-        final isScanning = ble.status == BleStatus.scanning;
-        final isConnecting = ble.status == BleStatus.connecting;
-        final isConnected = ble.isConnected;
-        final isStopped = ble.status == BleStatus.stopped;
-        // 始终显示卡片（用户反馈：之前看不到这一卡片）
-        // 仅在完全停止且未启动过时显示"未启动"提示
-        return Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.devices_other, size: 18, color: colorScheme.primary),
-                    const SizedBox(width: 8),
-                    Text(
-                      '发现的设备 / Discovered',
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const Spacer(),
-                    Text(
-                      isScanning
-                          ? '扫描中...'
-                          : isConnecting
-                              ? '连接中...'
-                              : isConnected
-                                  ? '已连接'
-                                  : isStopped
-                                      ? '未启动'
-                                      : '扫描结束',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    IconButton(
-                      tooltip: '重新扫描',
-                      icon: const Icon(Icons.refresh),
-                      onPressed: isConnected
-                          ? null
-                          : () => context.read<BleService>().rescan(),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                if (targets.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    child: Text(
-                      isStopped
-                          ? '点击下方"启动服务"开始扫描 ESP32'
-                          : isScanning
-                              ? '正在搜索 ESP32 (AutoNavDisplay)…'
-                              : '未发现目标设备，点击右上角刷新重试',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  )
-                else
-                  ...targets.map((r) {
-                    final isCurrent =
-                        r.device.remoteId.str == ble.deviceAddress;
-                    return ListTile(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      leading: Icon(
-                        isCurrent ? Icons.check_circle : Icons.bluetooth,
-                        color: isCurrent
-                            ? const Color(0xFF008375)
-                            : colorScheme.primary,
-                      ),
-                      title: Text(
-                        r.advertisementData.advName.isNotEmpty
-                            ? r.advertisementData.advName
-                            : 'Unknown',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontWeight: isCurrent
-                              ? FontWeight.w600
-                              : FontWeight.normal,
-                        ),
-                      ),
-                      subtitle: Text(
-                        '${r.device.remoteId.str}  •  RSSI ${r.rssi} dBm',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                      trailing: isCurrent
-                          ? const Text('当前')
-                          : TextButton(
-                              onPressed: isConnected || isConnecting
-                                  ? null
-                                  : () => context
-                                      .read<BleService>()
-                                      .connectTo(r),
-                              child: const Text('连接'),
-                            ),
-                    );
-                  }),
-              ],
+      // 启停服务移到右下角悬浮按钮
+      floatingActionButton: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          if (running) ...[
+            FloatingActionButton.extended(
+              heroTag: 'stop_btn',
+              onPressed: _stop,
+              icon: const Icon(Icons.stop_rounded),
+              label: const Text('停止'),
+              backgroundColor: Theme.of(context).colorScheme.errorContainer,
+              foregroundColor: Theme.of(context).colorScheme.onErrorContainer,
             ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-/// 控制按钮组
-class _ControlButtons extends StatelessWidget {
-  const _ControlButtons({
-    required this.running,
-    required this.onStart,
-    required this.onStop,
-    required this.onTest,
-  });
-
-  final bool running;
-  final VoidCallback onStart;
-  final VoidCallback onStop;
-  final VoidCallback onTest;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: FilledButton.icon(
-                onPressed: running ? null : onStart,
-                icon: const Icon(Icons.play_arrow_rounded),
-                label: const Text('启动服务 / START'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF008375),
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: FilledButton.icon(
-                onPressed: running ? onStop : null,
-                icon: const Icon(Icons.stop_rounded),
-                label: const Text('停止服务 / STOP'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: theme.colorScheme.errorContainer,
-                  foregroundColor: theme.colorScheme.onErrorContainer,
-                ),
-              ),
+          ] else ...[
+            FloatingActionButton.extended(
+              heroTag: 'start_btn',
+              onPressed: _start,
+              icon: const Icon(Icons.play_arrow_rounded),
+              label: const Text('启动服务'),
+              backgroundColor: const Color(0xFF008375),
+              foregroundColor: Colors.white,
             ),
           ],
-        ),
-        if (running) ...[
-          const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: onTest,
-            icon: const Icon(Icons.bug_report_outlined),
-            label: const Text('测试广播 / TEST BROADCAST'),
-          ),
         ],
-      ],
+      ),
     );
   }
 }

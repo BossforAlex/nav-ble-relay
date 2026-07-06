@@ -1,7 +1,6 @@
-/// 设置页：蓝牙服务信息、详细日志、ESP32 简化模式、屏幕常亮、自启
+/// 设置页：蓝牙服务信息、通用设置、主题、关于
 ///
-/// 用户最新反馈：MAC 白名单无法判断是否生效，已在主界面提供
-/// "发现的设备" 卡片供用户选择。设置页不再保留 MAC 配置项。
+/// 设备选择功能已迁移到"发现设备"页面（DevicesScreen）
 library;
 
 import 'package:flutter/material.dart';
@@ -82,8 +81,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
                   child: Text(
-                    '说明：主界面"发现的设备"卡片会自动连接第一个名字匹配的 ESP32，'
-                    '可手动点击切换到其它设备。白名单已移除。',
+                    '说明：在"发现设备"页面扫描并选择 ESP32 设备连接，'
+                    '连接成功后才会转发数据。批量开发场景下不再做 MAC 限制。',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
