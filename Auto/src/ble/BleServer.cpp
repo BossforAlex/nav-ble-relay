@@ -86,6 +86,12 @@ void BleServer::begin(const char* deviceName) {
     NimBLEDevice::setSecurityRespKey(0);
     NimBLEDevice::setSecurityIOCap(BLE_HS_IO_NO_INPUT_OUTPUT);
 
+    // 增大 NimBLE 协议栈任务栈大小（默认 4096 不够）
+    // 5 个特征值 × 回调链（onWrite + onSubscribe）会消耗大量栈空间
+    // 栈溢出 → 踩坏 IDLE 任务栈 → Stack canary watchpoint → 崩溃
+    // 8192 字节足够容纳所有回调的栈帧
+    NimBLEDevice::setTaskStackSize(8192);
+
     // 初始化 BLE 协议栈
     NimBLEDevice::init(deviceName);
 
@@ -256,9 +262,11 @@ void BleServer::onWrite(NimBLECharacteristic* pChar) {
 
     const uint8_t* data = reinterpret_cast<const uint8_t*>(value.data());
     size_t len = value.size();
-    // UUID toString() 返回 std::string，但注意不能在此上下文中调用复杂操作
-    // NimBLE 中 toString() 是简单字符串拼接，相对安全
-    const char* uuid = pChar->getUUID().toString().c_str();
+
+    // 关键：toString() 返回临时 std::string，必须用局部变量持有
+    // 否则 c_str() 在临时对象析构后变成悬垂指针，strncpy 读取垃圾
+    std::string uuidStr = pChar->getUUID().toString();
+    const char* uuid = uuidStr.c_str();
 
     enqueueWrite(uuid, data, len);
 }

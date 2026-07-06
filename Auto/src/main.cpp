@@ -101,7 +101,7 @@ void setup() {
     Serial.println();
     Serial.println("██████████████████████████████████████████████");
     Serial.printf("██  %s v%s\n", PROJECT_NAME, PROJECT_VERSION);
-    Serial.printf("██  FW: v0.5.2  (%s %s)\n", __DATE__, __TIME__);
+    Serial.printf("██  FW: v0.5.3  (%s %s)\n", __DATE__, __TIME__);
     Serial.println("██████████████████████████████████████████████");
     Serial.flush();
     delay(50);
