@@ -86,12 +86,6 @@ void BleServer::begin(const char* deviceName) {
     NimBLEDevice::setSecurityRespKey(0);
     NimBLEDevice::setSecurityIOCap(BLE_HS_IO_NO_INPUT_OUTPUT);
 
-    // 增大 NimBLE 协议栈任务栈大小（默认 4096 不够）
-    // 5 个特征值 × 回调链（onWrite + onSubscribe）会消耗大量栈空间
-    // 栈溢出 → 踩坏 IDLE 任务栈 → Stack canary watchpoint → 崩溃
-    // 8192 字节足够容纳所有回调的栈帧
-    NimBLEDevice::setTaskStackSize(8192);
-
     // 初始化 BLE 协议栈
     NimBLEDevice::init(deviceName);
 
