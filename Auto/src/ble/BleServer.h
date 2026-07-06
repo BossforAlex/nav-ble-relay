@@ -94,9 +94,10 @@ private:
     void enqueueWrite(const char* uuid, const uint8_t* data, size_t len);
 
 public:
-    // 内部回调方法（供内部回调类 ServerCallbacks / CharWriteCallbacks 访问）
+    // 内部回调方法（供内部回调类 ServerCallbacks / CharWriteCallbacks / CharSubscribeCallbacks 访问）
     // 注意：这些函数在 BLE 协议栈任务上下文中执行，不能做阻塞操作
     void onConnect(NimBLEServer* pServer);
     void onDisconnect(NimBLEServer* pServer);
     void onWrite(NimBLECharacteristic* pChar);
+    void onSubscribe(NimBLECharacteristic* pChar, ble_gap_conn_desc* desc, uint16_t subValue);
 };

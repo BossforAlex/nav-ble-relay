@@ -61,6 +61,27 @@ private:
 };
 
 // ============================================================
+// 内部辅助：特征值订阅回调类（NOTIFY 用）
+// 关键：Android BLE 协议栈连接后会自动写入 CCCD 尝试订阅通知。
+// 如果特征值没有 NOTIFY 属性，CCCD 写入失败 → Android 立即断开连接。
+// 因此必须添加 NOTIFY 属性 + 订阅回调（即使不发送任何通知），
+// 让 Android 的 CCCD 写入成功，连接才能稳定保持。
+// ============================================================
+class CharSubscribeCallbacks : public NimBLECharacteristicCallbacks {
+public:
+    explicit CharSubscribeCallbacks(BleServer* parent) : mParent(parent) {}
+
+    void onSubscribe(NimBLECharacteristic* pChar,
+                     ble_gap_conn_desc* desc,
+                     uint16_t subValue) override {
+        mParent->onSubscribe(pChar, desc, subValue);
+    }
+
+private:
+    BleServer* mParent;
+};
+
+// ============================================================
 // BleServer 实现
 // ============================================================
 
@@ -113,19 +134,23 @@ void BleServer::begin(const char* deviceName) {
     };
 
     CharWriteCallbacks* writeCb = new CharWriteCallbacks(this);
+    CharSubscribeCallbacks* subCb = new CharSubscribeCallbacks(this);
     for (const auto& desc : chars) {
-        // 仅使用 WRITE（writeWithResponse），更可靠：
-        //   - 有 ACK 确认，避免丢包
-        //   - 触发 onWrite 回调明确
-        //   - 不触发 NimBLE 的 subscribe 事件误判
-        // （不再使用 WRITE_NR，因为它会被部分协议栈误判为 subscribe）
+        // 关键修复：WRITE | WRITE_NR | NOTIFY
+        //   - WRITE + WRITE_NR：接受手机写入（writeWithResponse + writeWithoutResponse）
+        //   - NOTIFY：Android BLE 协议栈连接后会自动写入 CCCD 尝试订阅通知。
+        //     如果没有 NOTIFY，CCCD 写入失败 → Android 立即断开连接。
+        //     添加 NOTIFY 让 CCCD 写入成功，连接才能稳定保持。
         NimBLECharacteristic* chr = service->createCharacteristic(
             desc.uuid,
-            NIMBLE_PROPERTY::WRITE
+            NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR | NIMBLE_PROPERTY::NOTIFY
         );
+        // 写入回调：手机写入数据时触发
         chr->setCallbacks(writeCb);
+        // 订阅回调：Android 自动写入 CCCD 时触发（空实现，仅满足协议）
+        chr->setSubscribeCallbacks(subCb);
         if (Debug::LOG_SYSTEM) {
-            Serial.printf("[BLE] 已注册特征值: %s (%s) props=WRITE\n",
+            Serial.printf("[BLE] 已注册特征值: %s (%s) props=WRITE|WRITE_NR|NOTIFY\n",
                           desc.name, desc.uuid);
         }
     }
@@ -152,7 +177,7 @@ void BleServer::begin(const char* deviceName) {
     Serial.printf("  MTU:       %d 字节\n", NimBLEDevice::getMTU());
     Serial.printf("  加密/配对: 已禁用 (sm_bonding=0 sm_mitm=0 sm_sc=0)\n");
     Serial.printf("  服务 UUID: %s\n", BleUUID::SERVICE);
-    Serial.printf("  特征值:    WRITE (5 个，强制 writeWithResponse)\n");
+    Serial.printf("  特征值:    WRITE | WRITE_NR | NOTIFY (5 个)\n");
     for (const auto& desc : chars) {
         Serial.printf("             - %-9s  %s\n", desc.name, desc.uuid);
     }
@@ -249,4 +274,17 @@ void BleServer::onWrite(NimBLECharacteristic* pChar) {
     const char* uuid = pChar->getUUID().toString().c_str();
 
     enqueueWrite(uuid, data, len);
+}
+
+void BleServer::onSubscribe(NimBLECharacteristic* pChar,
+                            ble_gap_conn_desc* /*desc*/,
+                            uint16_t subValue) {
+    // ⚠️ 此函数在 BLE 协议栈任务上下文中执行
+    // 关键：Android BLE 协议栈连接后会自动写入 CCCD 尝试订阅通知。
+    // 此回调接收 CCCD 写入结果（subValue = 0 表示取消订阅，1 表示订阅通知）。
+    // 空实现：我们不发送通知，但必须接受订阅请求以保持连接稳定。
+    // 不做任何操作（不打印、不阻塞），仅让 NimBLE 处理 CCCD 响应。
+    // 如果在此回调中做任何阻塞操作，会触发 CPU1 WDT 超时。
+    (void)pChar;
+    (void)subValue;
 }

@@ -94,10 +94,20 @@ void setup() {
 
     // 等待串口就绪，但最多 1.5 秒
     while (!Serial && millis() < 1500) { delay(10); }
-    delay(300);
+    delay(500);  // 确保串口芯片完全就绪
+
+    // 打印醒目的版本标识（用户需求：确保上电即看到完整输出，防止串口丢数据）
+    Serial.println();
+    Serial.println();
+    Serial.println("██████████████████████████████████████████████");
+    Serial.printf("██  %s v%s\n", PROJECT_NAME, PROJECT_VERSION);
+    Serial.printf("██  FW: v0.5.2  (%s %s)\n", __DATE__, __TIME__);
+    Serial.println("██████████████████████████████████████████████");
+    Serial.flush();
+    delay(50);
 
     Serial.println();
-    Serial.println("╔══════════════════════════════════════════╗");
+    Serial.println("╔══════════════════════════════════════════════╗");
     Serial.printf("║  %s v%s\n", PROJECT_NAME, PROJECT_VERSION);
     #ifdef BOARD_NAME
     Serial.printf("║  Board: %s\n", BOARD_NAME);
@@ -111,8 +121,9 @@ void setup() {
                   "ST7789 TFT HUD"
 #endif
     );
-    Serial.println("╚══════════════════════════════════════════╝");
+    Serial.println("╚══════════════════════════════════════════════╝");
     Serial.flush();
+    delay(50);
 
     // 启动阶段主动喂狗
     esp_task_wdt_reset();
@@ -123,10 +134,13 @@ void setup() {
         Serial.println("[Screen] 屏幕初始化失败，回退到串口直通");
     }
     sScreen.log("系统启动，等待手机 BLE 连接...");
+    Serial.flush();
+    delay(50);
 
     // 初始化 BLE GATT Server
     sBleServer.begin(PROJECT_NAME);  // ESP32 广播名为 AutoNavDisplay
     sBleServer.setDataCallback(onBleData);
+    Serial.flush();
 }
 
 void loop() {

@@ -481,11 +481,10 @@ class BleService extends ChangeNotifier {
   /// 向指定特征值写入 JSON 数据
   /// 返回 true 表示写入成功，false 表示失败
   ///
-  /// 写入策略（修复"只有特定情况下才有数据"+"subscribe 事件误判"问题）：
-  ///   - 强制使用 writeWithResponse（withoutResponse: false）
-  ///   - 不再使用 writeWithoutResponse，避免被 ESP32 NimBLE 协议栈
-  ///     误判为 subscribe 事件（导致 onWrite 不触发）
-  ///   - ESP32 端特征值已改为仅 WRITE 属性（移除 WRITE_NR）
+  /// 写入策略：
+  ///   - 优先 writeWithResponse（可靠，有 ACK 确认）
+  ///   - 其次 writeWithoutResponse（快但不可靠）
+  ///   - 逐特征值判断属性，不再用全局变量
   Future<bool> _write(BluetoothCharacteristic? chr, Map<String, dynamic> packet, {String label = 'DATA'}) async {
     if (!isConnected) {
       debugPrint('[BLE] ✗ $label: 未连接，跳过写入');
@@ -498,22 +497,47 @@ class BleService extends ChangeNotifier {
     final json = jsonEncode(packet);
     final bytes = utf8.encode(json);
     final p = chr.properties;
-    if (!p.write) {
+    final canWriteResp = p.write;
+    final canWriteNoResp = p.writeWithoutResponse;
+    if (!canWriteResp && !canWriteNoResp) {
       debugPrint('[BLE] ✗ $label: 特征值 ${chr.uuid.str} 不支持 write'
           '（props: read=${p.read} write=${p.write} '
           'writeNoResp=${p.writeWithoutResponse} notify=${p.notify}）');
       return false;
     }
     debugPrint('[BLE] → $label 写 ${bytes.length}字节'
-        ' [writeWithResponse] uuid=${chr.uuid.str}');
-    try {
-      // 强制 writeWithResponse（withoutResponse: false）
-      await chr.write(bytes, withoutResponse: false);
-      debugPrint('[BLE] ✓ $label 写入成功');
-      return true;
-    } catch (e) {
-      debugPrint('[BLE] ✗ $label 写入失败: $e');
-      return false;
+        ' [${canWriteResp ? "writeWithResponse" : "writeNoResp"}]'
+        ' uuid=${chr.uuid.str}');
+    // 优先 writeWithResponse（可靠）
+    if (canWriteResp) {
+      try {
+        await chr.write(bytes, withoutResponse: false);
+        debugPrint('[BLE] ✓ $label 写入成功');
+        return true;
+      } catch (e) {
+        debugPrint('[BLE] ✗ $label writeWithResponse 失败: $e');
+        // 回退到 writeWithoutResponse
+        if (canWriteNoResp) {
+          try {
+            await chr.write(bytes, withoutResponse: true);
+            debugPrint('[BLE] ✓ $label writeNoResp 回退成功');
+            return true;
+          } catch (e2) {
+            debugPrint('[BLE] ✗ $label writeNoResp 回退失败: $e2');
+          }
+        }
+        return false;
+      }
+    } else {
+      // 只有 writeWithoutResponse
+      try {
+        await chr.write(bytes, withoutResponse: true);
+        debugPrint('[BLE] ✓ $label writeNoResp 写入完成');
+        return true;
+      } catch (e) {
+        debugPrint('[BLE] ✗ $label writeNoResp 失败: $e');
+        return false;
+      }
     }
   }
 
