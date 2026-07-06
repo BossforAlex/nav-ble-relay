@@ -47,6 +47,11 @@ private:
 
 // ============================================================
 // 内部辅助：特征值写入回调类
+//
+// 关键：Android BLE 协议栈连接后会自动写入 CCCD 尝试订阅通知。
+// 如果特征值没有 NOTIFY 属性，CCCD 写入失败 → Android 立即断开连接。
+// 因此必须添加 NOTIFY 属性 + onSubscribe 回调（即使不发送任何通知），
+// 让 Android 的 CCCD 写入成功，连接才能稳定保持。
 // ============================================================
 class CharWriteCallbacks : public NimBLECharacteristicCallbacks {
 public:
@@ -55,21 +60,6 @@ public:
     void onWrite(NimBLECharacteristic* pChar) override {
         mParent->onWrite(pChar);
     }
-
-private:
-    BleServer* mParent;
-};
-
-// ============================================================
-// 内部辅助：特征值订阅回调类（NOTIFY 用）
-// 关键：Android BLE 协议栈连接后会自动写入 CCCD 尝试订阅通知。
-// 如果特征值没有 NOTIFY 属性，CCCD 写入失败 → Android 立即断开连接。
-// 因此必须添加 NOTIFY 属性 + 订阅回调（即使不发送任何通知），
-// 让 Android 的 CCCD 写入成功，连接才能稳定保持。
-// ============================================================
-class CharSubscribeCallbacks : public NimBLECharacteristicCallbacks {
-public:
-    explicit CharSubscribeCallbacks(BleServer* parent) : mParent(parent) {}
 
     void onSubscribe(NimBLECharacteristic* pChar,
                      ble_gap_conn_desc* desc,
@@ -134,7 +124,6 @@ void BleServer::begin(const char* deviceName) {
     };
 
     CharWriteCallbacks* writeCb = new CharWriteCallbacks(this);
-    CharSubscribeCallbacks* subCb = new CharSubscribeCallbacks(this);
     for (const auto& desc : chars) {
         // 关键修复：WRITE | WRITE_NR | NOTIFY
         //   - WRITE + WRITE_NR：接受手机写入（writeWithResponse + writeWithoutResponse）
@@ -145,10 +134,8 @@ void BleServer::begin(const char* deviceName) {
             desc.uuid,
             NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR | NIMBLE_PROPERTY::NOTIFY
         );
-        // 写入回调：手机写入数据时触发
+        // 写入回调 + 订阅回调（同一个 setCallbacks 同时处理 onWrite 和 onSubscribe）
         chr->setCallbacks(writeCb);
-        // 订阅回调：Android 自动写入 CCCD 时触发（空实现，仅满足协议）
-        chr->setSubscribeCallbacks(subCb);
         if (Debug::LOG_SYSTEM) {
             Serial.printf("[BLE] 已注册特征值: %s (%s) props=WRITE|WRITE_NR|NOTIFY\n",
                           desc.name, desc.uuid);
