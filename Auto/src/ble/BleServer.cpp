@@ -114,14 +114,18 @@ void BleServer::begin(const char* deviceName) {
 
     CharWriteCallbacks* writeCb = new CharWriteCallbacks(this);
     for (const auto& desc : chars) {
+        // 仅使用 WRITE（writeWithResponse），更可靠：
+        //   - 有 ACK 确认，避免丢包
+        //   - 触发 onWrite 回调明确
+        //   - 不触发 NimBLE 的 subscribe 事件误判
+        // （不再使用 WRITE_NR，因为它会被部分协议栈误判为 subscribe）
         NimBLECharacteristic* chr = service->createCharacteristic(
             desc.uuid,
-            NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR
+            NIMBLE_PROPERTY::WRITE
         );
-        // WRITE 方向不需要 CCCD 描述符
         chr->setCallbacks(writeCb);
         if (Debug::LOG_SYSTEM) {
-            Serial.printf("[BLE] 已注册特征值: %s (%s) props=WRITE|WRITE_NR\n",
+            Serial.printf("[BLE] 已注册特征值: %s (%s) props=WRITE\n",
                           desc.name, desc.uuid);
         }
     }
@@ -148,7 +152,7 @@ void BleServer::begin(const char* deviceName) {
     Serial.printf("  MTU:       %d 字节\n", NimBLEDevice::getMTU());
     Serial.printf("  加密/配对: 已禁用 (sm_bonding=0 sm_mitm=0 sm_sc=0)\n");
     Serial.printf("  服务 UUID: %s\n", BleUUID::SERVICE);
-    Serial.printf("  特征值:    WRITE | WRITE_NO_RESPONSE（5 个）\n");
+    Serial.printf("  特征值:    WRITE (5 个，强制 writeWithResponse)\n");
     for (const auto& desc : chars) {
         Serial.printf("             - %-9s  %s\n", desc.name, desc.uuid);
     }
@@ -173,9 +177,10 @@ void BleServer::loop() {
         _disconnectPending = false;
         Serial.printf("[BLE] 手机已断开（当前连接数: %d）\n", _pendingConnCount);
         // 断开后继续广播，允许其他手机连接
+        // 仅在广播已停止时才重启，避免 "Advertising already active" 警告 spam
         if (server != nullptr && started) {
             NimBLEAdvertising* adv = NimBLEDevice::getAdvertising();
-            if (adv != nullptr) {
+            if (adv != nullptr && !adv->isAdvertising()) {
                 adv->start();
             }
         }
