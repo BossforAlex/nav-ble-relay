@@ -1,7 +1,7 @@
 /// 主界面（导航转发页）
 ///
 /// 布局：顶部状态卡片 → 中间导航预览 → 详细数据卡片
-/// 启停服务通过右下角 FAB 控制
+/// 启停服务通过右下角 FAB 控制，启动后自动跳转到"发现设备"页
 ///
 /// 设备列表已迁移到独立的"发现设备"页面（DevicesScreen）
 library;
@@ -13,6 +13,7 @@ import '../ble/ble_service.dart';
 import '../main.dart';
 import '../protocol/amap_protocol.dart';
 import '../services/broadcast_service.dart';
+import 'main_navigation.dart';
 import 'widgets/nav_preview.dart';
 import 'widgets/status_card.dart';
 
@@ -83,6 +84,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final broadcast = context.read<BroadcastService>();
     await broadcast.start();
     await ble.start();
+    // 启动后自动跳转到"发现设备"页，让用户能立即看到扫描到的 ESP32
+    // 并点击连接（用户反馈：启动时蓝牙与广播读取的 bug 修复）
+    if (!mounted) return;
+    final navState = context.findAncestorStateOfType<MainNavigationState>();
+    navState?.switchToTab(1);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('服务已启动，请在"发现设备"页选择 ESP32 连接'),
+        duration: Duration(seconds: 3),
+      ),
+    );
   }
 
   Future<void> _stop() async {

@@ -10,17 +10,24 @@
  *     写入 JSON 数据
  *   - ESP32 收到数据后回调给上层（解析、显示）
  *
- * 关键设计（修复 Interrupt wdt 超时 + IDLE stack canary）：
+ * 关键设计（修复 Interrupt wdt 超时 + IDLE stack canary + CPU0/CPU1 竞态）：
  *   NimBLE 的 onConnect/onDisconnect/onWrite 回调运行在 BLE 协议栈
  *   任务上下文（通常为 CPU1 高优先级任务）。在回调中执行任何阻塞
  *   操作（如 Serial.printf 大量打印、调用 NimBLEDevice::getMTU()、
  *   JSON 解析）都会阻塞协议栈，导致：
  *     - Interrupt wdt timeout on CPU1
- *     - Stack canary / watchpoint triggered (IDLE0)
+ *     - Stack canary / watchpoint triggered (IDLE0/1)
  *
- *   解决方案：回调中只做最小工作（设置标志位 + 拷贝数据到环形缓冲区），
- *   所有重活（Serial 打印、JSON 解析、回调上层）由 loop() 在主任务
- *   上下文中处理。
+ *   另一个致命问题：CPU0 (loop) 和 CPU1 (BLE 任务) 共享 _writeBuf[]
+ *   环形队列时没有同步保护，会产生竞态 → _writeHead 错乱 → 数组越界
+ *   → 后续 BLE 回调访问非法内存 → WDT 超时 / Guru Meditation。
+ *
+ *   解决方案：
+ *     1. 回调中只做最小工作（设置标志位 + 在 portMUX 锁保护下入队）
+ *     2. 所有重活（Serial 打印、JSON 解析、回调上层）由 loop() 在主任务
+ *        上下文中处理
+ *     3. 共享队列用 portMUX_TYPE 自旋锁保护
+ *     4. 标志位用 std::atomic<int> / std::atomic<bool> 替代 volatile
  *
  * 用户需求：
  *   - 批量开发场景，ESP32 端不做任何 MAC 限制
@@ -29,8 +36,11 @@
 
 #include <Arduino.h>
 #include <NimBLEDevice.h>
+#include <atomic>
 #include <functional>
 #include "config/Config.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/portmacro.h"
 
 class BleServer {
 public:
@@ -51,28 +61,21 @@ public:
     void loop();
 
     // 当前是否有手机已连接
-    bool isConnected() const { return connectedDeviceCount > 0; }
+    bool isConnected() const { return connectedDeviceCount.load() > 0; }
 
     // 当前已连接手机数
-    int getConnectedCount() const { return connectedDeviceCount; }
+    int getConnectedCount() const { return connectedDeviceCount.load(); }
 
 private:
     DataCallback dataCallback;
     NimBLEServer* server = nullptr;
     NimBLEService* service = nullptr;
     bool started = false;
-    volatile int connectedDeviceCount = 0;
+    std::atomic<int> connectedDeviceCount{0};
 
     // ── 事件队列（避免在 BLE 回调中调用 Serial / callback） ──
-    // 事件类型
-    enum class EventType : uint8_t {
-        None = 0,
-        Connect = 1,
-        Disconnect = 2,
-        Write = 3,
-    };
-
     // 写入事件数据（环形缓冲区）
+    // 注意：data 缓冲区大小匹配 MTU (517) + 3 字节头
     struct WriteEvent {
         char uuid[40];          // UUID 字符串（含结尾 \0）
         uint16_t len;           // 数据长度
@@ -80,18 +83,26 @@ private:
         uint8_t data[520];
     };
 
-    static constexpr int kMaxWriteEvents = 8;
+    static constexpr int kMaxWriteEvents = 16;
     WriteEvent _writeBuf[kMaxWriteEvents];
-    volatile int _writeHead = 0;   // BLE 回调写入位置
-    volatile int _writeTail = 0;   // loop() 消费位置
+    std::atomic<int> _writeHead{0};   // BLE 回调写入位置
+    std::atomic<int> _writeTail{0};   // loop() 消费位置
 
-    // 连接/断开事件（标志位形式，避免重复处理）
-    volatile bool _connectPending = false;
-    volatile bool _disconnectPending = false;
-    volatile int _pendingConnCount = 0;
+    // 用于保护 _writeBuf[] 的自旋锁
+    portMUX_TYPE _writeMux = portMUX_INITIALIZER_UNLOCKED;
+
+    // 连接/断开事件（标志位形式）
+    std::atomic<bool> _connectPending{false};
+    std::atomic<bool> _disconnectPending{false};
+    std::atomic<int> _pendingConnCount{0};
 
     // 把一个写入事件入队（在 BLE 回调中调用，必须无阻塞）
+    // 已加 portMUX 锁，可安全跨 CPU 访问
     void enqueueWrite(const char* uuid, const uint8_t* data, size_t len);
+
+    // 总写入事件计数器（用于日志诊断）
+    std::atomic<uint32_t> _writeEventCount{0};
+    std::atomic<uint32_t> _droppedEventCount{0};
 
 public:
     // 内部回调方法（供内部回调类 ServerCallbacks / CharWriteCallbacks / CharSubscribeCallbacks 访问）
