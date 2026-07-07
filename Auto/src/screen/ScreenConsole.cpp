@@ -45,9 +45,9 @@ void ScreenConsole::setNavState(const Nav::NavState& state) {
 void ScreenConsole::setBleConnected(bool connected) {
     if (mBleConnected == connected) return;
     mBleConnected = connected;
-    // BLE 状态变化必须立即打印
+    // 不再重复打印连接/断开状态；BleServer.loop() 已输出精简版。
+    // 避免连接瞬间出现 "[BLE] 状态变化: 已连接" 等多余提示。
     mLastPrintedMs = 0;
-    Serial.printf("[BLE] 状态变化: %s\n", connected ? "已连接" : "已断开");
 }
 
 void ScreenConsole::log(const char* msg) {
