@@ -1,5 +1,7 @@
 #include "BleServer.h"
 
+#include "esp_log.h"
+
 /**
  * @file BleServer.cpp
  * @brief ESP32 BLE GATT Server 实现（基于 NimBLE-Arduino 库）
@@ -76,6 +78,23 @@ private:
 // ============================================================
 
 void BleServer::begin(const char* deviceName) {
+    // 关键：关闭 NimBLE 内部日志 spam
+    // 否则每次连接都会打印大量 "subscribe event / mtu update event" 等
+    // 干扰用户对真实数据的观察。我们保留自己的诊断日志。
+    esp_log_level_set("NimBLE", ESP_LOG_NONE);
+    esp_log_level_set("NimBLEServer", ESP_LOG_NONE);
+    esp_log_level_set("NimBLEService", ESP_LOG_NONE);
+    esp_log_level_set("NimBLECharacteristic", ESP_LOG_NONE);
+    esp_log_level_set("NimBLEAdvertising", ESP_LOG_NONE);
+    esp_log_level_set("NimBLEDevice", ESP_LOG_NONE);
+    esp_log_level_set("NimBLEUtils", ESP_LOG_NONE);
+    esp_log_level_set("NimBLERemoteService", ESP_LOG_NONE);
+    esp_log_level_set("NimBLERemoteCharacteristic", ESP_LOG_NONE);
+    esp_log_level_set("NimBLEClient", ESP_LOG_NONE);
+    esp_log_level_set("NimBLEScan", ESP_LOG_NONE);
+    // 兜底：把全局默认日志级别提到 WARN，避免某些组件在运行时被设回 INFO
+    esp_log_level_set("*", ESP_LOG_WARN);
+
     // 关闭 BLE 安全 / 配对 / 加密要求
     // 关键：NimBLE 默认要求 Secure Connection (LESC) 配对，
     // 很多手机 / Android 版本会触发 SEC_REQ_EVT 协商但不接受 LESC，
