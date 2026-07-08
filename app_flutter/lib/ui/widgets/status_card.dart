@@ -115,6 +115,16 @@ class StatusCard extends StatelessWidget {
                     valueColor: const Color(0xFF008375),
                   ),
                 ],
+                // v0.5.8: BLE 写入错误（诊断写入失败原因）
+                if (connected && ble.lastError.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  _InfoRow(
+                    icon: Icons.error_outline,
+                    label: '错误',
+                    value: ble.lastError,
+                    valueColor: Colors.red,
+                  ),
+                ],
               ],
             ),
           ),

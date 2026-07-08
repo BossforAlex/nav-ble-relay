@@ -551,13 +551,15 @@ class BleService extends ChangeNotifier {
   ///   - 检查 chrData 的属性
   Future<bool> _write(Map<String, dynamic> packet, {String label = 'DATA'}) async {
     if (!isConnected) {
-      debugPrint('[BLE] ✗ $label: 未连接，跳过写入');
+      _lastError = '$label: BLE 未连接';
+      debugPrint('[BLE] ✗ $_lastError');
       _txFail++;
       _safeNotify();
       return false;
     }
     if (_chrData == null) {
-      debugPrint('[BLE] ✗ $label: chrData 为空，跳过写入');
+      _lastError = '$label: chrData 为空（特征值未发现）';
+      debugPrint('[BLE] ✗ $_lastError');
       _txFail++;
       _safeNotify();
       return false;
@@ -569,9 +571,9 @@ class BleService extends ChangeNotifier {
     final canWriteResp = p.write;
     final canWriteNoResp = p.writeWithoutResponse;
     if (!canWriteResp && !canWriteNoResp) {
-      debugPrint('[BLE] ✗ $label: chrData 不支持 write'
-          '（props: read=${p.read} write=${p.write} '
-          'writeNoResp=${p.writeWithoutResponse} notify=${p.notify}）');
+      _lastError = '$label: chrData 不支持 write'
+          '（read=${p.read} write=${p.write} writeNoResp=${p.writeWithoutResponse}）';
+      debugPrint('[BLE] ✗ $_lastError');
       _txFail++;
       _safeNotify();
       return false;
@@ -580,20 +582,24 @@ class BleService extends ChangeNotifier {
     if (canWriteResp) {
       try {
         await chr.write(bytes, withoutResponse: false);
+        _lastError = '';
         _txOk++;
         _safeNotify();
         return true;
       } catch (e) {
-        debugPrint('[BLE] ✗ $label writeWithResponse 失败: $e');
+        _lastError = '$label writeWithResponse: $e';
+        debugPrint('[BLE] ✗ $_lastError');
         // 回退到 writeWithoutResponse
         if (canWriteNoResp) {
           try {
             await chr.write(bytes, withoutResponse: true);
+            _lastError = '';
             _txOk++;
             _safeNotify();
             return true;
           } catch (e2) {
-            debugPrint('[BLE] ✗ $label writeNoResp 回退失败: $e2');
+            _lastError = '$label writeNoResp 回退: $e2';
+            debugPrint('[BLE] ✗ $_lastError');
           }
         }
         _txFail++;
@@ -604,11 +610,13 @@ class BleService extends ChangeNotifier {
       // 只有 writeWithoutResponse
       try {
         await chr.write(bytes, withoutResponse: true);
+        _lastError = '';
         _txOk++;
         _safeNotify();
         return true;
       } catch (e) {
-        debugPrint('[BLE] ✗ $label writeNoResp 失败: $e');
+        _lastError = '$label writeNoResp: $e';
+        debugPrint('[BLE] ✗ $_lastError');
         _txFail++;
         _safeNotify();
         return false;
