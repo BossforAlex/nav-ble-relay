@@ -1,8 +1,6 @@
 #include "BleServer.h"
 
 #include "esp_log.h"
-// NimBLE 1.4.x 没有 NimBLE2902.h 便利类，需用 createDescriptor("2902", ...) 创建 CCCD
-// NimBLE 2.x 才有 NimBLE2902.h
 
 /**
  * @file BleServer.cpp
@@ -128,17 +126,17 @@ void BleServer::begin(const char* deviceName) {
     CharWriteCallbacks* writeCb = new CharWriteCallbacks(this);
     chrData->setCallbacks(writeCb);
 
-    // ── 特征值 2：CHAR_POLL（ESP32 → 手机，INDICATE + CCCD） ──
+    // ── 特征值 2：CHAR_POLL（ESP32 → 手机，INDICATE） ──
     // 与开源参考库 alexanderlavrushko/BLE-HUD-navigation-ESP32 完全一致：
     //   - 属性 INDICATE（不是 NOTIFY）—— phone 收到需要回 ACK
-    //   - 必须加 CCCD 描述符 (UUID 0x2902)，phone 通过写 0x0002 订阅
+    //   - CCCD 描述符 (0x2902) 由 NimBLE 自动创建，不可手动创建
+    //     （NimBLE 1.4.x 在 createCharacteristic 时检测到 INDICATE/NOTIFY 属性会
+    //       自动添加 CCCD，手动 createDescriptor("2902") 会触发 assert）
     //   - 每 2 秒发一次空 indicate，手机收到后把最新数据写回 CHAR_DATA
-    // NimBLE 1.4.x 没有 NimBLE2902 便利类，用 createDescriptor("2902", ...) 创建 CCCD
     chrPoll = service->createCharacteristic(
         BleUUID::CHAR_POLL,
         NIMBLE_PROPERTY::INDICATE
     );
-    chrPoll->createDescriptor("2902", NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE);
     chrPoll->setValue("");  // 初始为空字符串，每次 indicate() 发 ""
     // 不需要 setCallbacks（手机只读不写）
 
