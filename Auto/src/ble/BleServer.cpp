@@ -4,12 +4,17 @@
 
 /**
  * @file BleServer.cpp
- * @brief ESP32 BLE GATT Server 实现（v0.5.6 重构：极简 2 特征值）
+ * @brief ESP32 BLE GATT Server 实现
+ *
+ * v0.5.7 重构（完全匹配开源参考库 alexanderlavrushko/BLE-HUD-navigation-ESP32）：
+ *   - CHAR_POLL 从 NOTIFY 改为 INDICATE（属性 + 加 BLE2902 描述符）
+ *   - loop() 中改用 chrPoll->indicate()（无参，发送当前 value 字段）
+ *   - 1.4.1 NimBLE 没有 notifyValue()，必须用 indicate() API
  *
  * 架构：
  *   - 1 Service (UUID 0xFFE0)
  *     - CHAR_DATA (0xFFE1, WRITE | WRITE_NR)：手机写入 JSON 导航数据
- *     - CHAR_POLL (0xFFE2, NOTIFY)：ESP32 每 2 秒发一次空通知 poll
+ *     - CHAR_POLL (0xFFE2, INDICATE + BLE2902)：ESP32 每 2 秒发一次空 indicate poll
  *
  * 关键设计（修复 Interrupt wdt 超时）：
  *   回调中只设置标志位 + 拷贝数据到环形缓冲区，
@@ -121,13 +126,17 @@ void BleServer::begin(const char* deviceName) {
     CharWriteCallbacks* writeCb = new CharWriteCallbacks(this);
     chrData->setCallbacks(writeCb);
 
-    // ── 特征值 2：CHAR_POLL（ESP32 → 手机，NOTIFY） ──
-    // 用于 ESP32 主动 poll：每 2 秒发一次空通知（1 字节 0x00），
-    // 手机收到后立刻把最新导航数据写入 CHAR_DATA。
+    // ── 特征值 2：CHAR_POLL（ESP32 → 手机，INDICATE + BLE2902） ──
+    // 与开源参考库 alexanderlavrushko/BLE-HUD-navigation-ESP32 完全一致：
+    //   - 属性 INDICATE（不是 NOTIFY）—— phone 收到需要回 ACK
+    //   - 必须加 BLE2902 描述符（CCCD），phone 通过写 0x0002 订阅
+    //   - 每 2 秒发一次空 indicate，手机收到后把最新数据写回 CHAR_DATA
     chrPoll = service->createCharacteristic(
         BleUUID::CHAR_POLL,
-        NIMBLE_PROPERTY::NOTIFY
+        NIMBLE_PROPERTY::INDICATE
     );
+    chrPoll->addDescriptor(new NimBLE2902());  // CCCD：indicate 必需
+    chrPoll->setValue("");                     // 初始为空字符串，每次 indicate() 发 ""
     // 不需要 setCallbacks（手机只读不写）
 
     // 启动服务
@@ -149,7 +158,7 @@ void BleServer::begin(const char* deviceName) {
 
     // 打印详细的启动验证信息
     Serial.println();
-    Serial.println("═══════════════ BLE GATT Server 启动验证 v0.5.6 ═══════════════");
+    Serial.println("═══════════════ BLE GATT Server 启动验证 v0.5.7 ═══════════════");
     Serial.printf("  设备名:    %s\n", deviceName);
     Serial.printf("  设备地址:  %s\n",
                   NimBLEDevice::getAddress().toString().c_str());
@@ -158,7 +167,7 @@ void BleServer::begin(const char* deviceName) {
     Serial.printf("  服务 UUID: %s\n", BleUUID::SERVICE);
     Serial.printf("  特征值 1:  %s  (WRITE | WRITE_NR)  ← 手机写 JSON 导航数据\n",
                   BleUUID::CHAR_DATA);
-    Serial.printf("  特征值 2:  %s  (NOTIFY)            → ESP32 每 2s poll 一次\n",
+    Serial.printf("  特征值 2:  %s  (INDICATE + BLE2902) → ESP32 每 2s indicate poll\n",
                   BleUUID::CHAR_POLL);
     Serial.printf("  广播状态:  已启动\n");
     Serial.println("════════════════════════════════════════════════════════════");
@@ -216,8 +225,9 @@ void BleServer::loop() {
         head = _writeHead.load();
     }
 
-    // ── 3. ESP32 → 手机 poll 节流 ──
-    // 检测：距离上次收到数据（或上次 poll）超过 _pollIntervalMs → 发一次空通知
+    // ── 3. ESP32 → 手机 poll 节流（INDICATE） ──
+    // 检测：距离上次收到数据（或上次 poll）超过 _pollIntervalMs → 发一次空 indicate
+    // 与开源参考库一致：用 indicate() 发送当前 value 字段（这里为空字符串）
     if (!isConnected() || chrPoll == nullptr) return;
 
     const uint32_t nowMs = millis();
@@ -232,11 +242,10 @@ void BleServer::loop() {
     const uint32_t lastPoll = _lastPollSentMs.load();
     if (nowMs - lastPoll < interval) return;
 
-    // 发送 1 字节空通知（0x00）作为 poll 请求
-    // notifyValue 内部会调用协议栈发送，比直接在回调中安全
-    // （loop 在主任务上下文，不在 BLE 协议栈任务）
-    const uint8_t pollByte = 0x00;
-    chrPoll->notifyValue(&pollByte, 1, false);  // false = 不需要 response
+    // 发送 indicate（INDICATE 比 NOTIFY 多一次 ACK，但更可靠）
+    // 关键修复：NimBLE 1.4.1 没有 notifyValue()，必须用 indicate() / notify()
+    // 字段 value 保持空字符串（手机只需要"有新数据请发"的信号）
+    chrPoll->indicate();
     _lastPollSentMs.store(nowMs);
     _lastActivityMs.store(nowMs);  // poll 本身也算一次活动
     _pollSentCount.fetch_add(1);

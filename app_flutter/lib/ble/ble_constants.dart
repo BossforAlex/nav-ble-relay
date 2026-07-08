@@ -4,10 +4,10 @@
 /// Flutter 端作为 GATT Client（中心设备），主动扫描并连接
 /// 名为 "AutoNavDisplay" 的 ESP32 设备。
 ///
-/// v0.5.6 重构：参考 alexanderlavrushko/BLE-HUD-navigation-ESP32 极简模式
+/// v0.5.7 重构：完全匹配开源参考库 alexanderlavrushko/BLE-HUD-navigation-ESP32
 /// 1 Service + 2 Characteristics：
 ///   - charDataUuid：手机写（WRITE | WRITE_NR）—— 写 JSON 导航数据
-///   - charPollUuid：手机订阅（NOTIFY）—— 收到 ESP32 的 poll 后立刻写数据
+///   - charPollUuid：手机订阅（INDICATE + BLE2902）—— 收到 ESP32 的 indicate 后立刻写数据
 ///
 /// 所有 5 类导航数据（GUIDE/DRIVE/TMC/STATE/LOCATION）通过 JSON 中的
 /// "type" 字段路由到同一个 char。
@@ -23,7 +23,7 @@ class BleConstants {
   static const String charDataUuid =
       '0000ffe1-0000-1000-8000-00805f9b34fb';
 
-  /// Poll 特征值（手机订阅 NOTIFY）：ESP32 每 2 秒发一次空通知
+  /// Poll 特征值（手机订阅 INDICATE）：ESP32 每 2 秒发一次空 indicate
   /// 收到后立刻把最新的导航数据写一次 charDataUuid
   static const String charPollUuid =
       '0000ffe2-0000-1000-8000-00805f9b34fb';

@@ -5,12 +5,13 @@
 ///   - 用户在"发现的设备"页面手动选择设备连接
 ///   - 通过 writeCharacteristic / writeCharacteristicWithoutResponse
 ///     主动向 1 个特征值（charDataUuid）写入 JSON 数据
-///   - 订阅 charPollUuid 接收 ESP32 的 poll 通知，收到后立刻写最新数据
+///   - 订阅 charPollUuid 接收 ESP32 的 indicate 轮询，收到后立刻写最新数据
 ///
-/// v0.5.6 重构：参考 alexanderlavrushko/BLE-HUD-navigation-ESP32 极简设计
+/// v0.5.7 重构：完全匹配开源参考库 alexanderlavrushko/BLE-HUD-navigation-ESP32
 ///   - 单 write char（所有 5 类数据通过 JSON type 字段路由）
-///   - 单 NOTIFY char（ESP32 主动 poll，2 秒一次）
-///   - 收到 notify → 立刻 flush 一次最新缓存数据
+///   - 单 INDICATE char（ESP32 主动 poll，2 秒一次）+ BLE2902 CCCD 订阅
+///   - 收到 indicate → 立刻 flush 一次最新缓存数据
+///   - flutter_blue_plus 用 setNotifyValue(true) 同时支持 notify + indicate
 ///
 /// 用户需求（批量开发）：
 ///   - 移除 isTargetName 过滤，扫描到所有设备都展示
@@ -368,12 +369,13 @@ class BleService extends ChangeNotifier {
     _safeNotify();
 
     if (_isOurDevice && _chrPoll != null) {
-      // 订阅 CHAR_POLL 的 notify —— 收到 ESP32 的 poll 后立刻 flush 缓存
+      // 订阅 CHAR_POLL 的 indicate —— 收到 ESP32 的 indicate 后立刻 flush 缓存
+      // 注意：flutter_blue_plus 的 setNotifyValue(true) 同时支持 notify + indicate
       try {
         _pollSub?.cancel();
         _pollSub = _chrPoll!.lastValueStream.listen(_onPollReceived);
         await _chrPoll!.setNotifyValue(true);
-        debugPrint('[BLE] ✓ 已订阅 CHAR_POLL notify');
+        debugPrint('[BLE] ✓ 已订阅 CHAR_POLL indicate');
       } catch (e) {
         debugPrint('[BLE] ✗ 订阅 CHAR_POLL 失败: $e');
       }
@@ -383,9 +385,9 @@ class BleService extends ChangeNotifier {
     }
   }
 
-  /// 收到 ESP32 的 poll 通知：立刻把缓存的最新数据 flush 一次
+  /// 收到 ESP32 的 indicate：立刻把缓存的最新数据 flush 一次
   void _onPollReceived(List<int> value) {
-    // ESP32 每 2 秒无活动就发 1 字节 0x00
+    // ESP32 每 2 秒无活动就发空 indicate
     // 收到后立刻把所有 pending 数据写一次
     if (!_isOurDevice || _chrData == null) return;
 

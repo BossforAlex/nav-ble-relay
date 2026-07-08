@@ -4,16 +4,19 @@
  * @file BleServer.h
  * @brief ESP32 BLE GATT Server 封装（基于 NimBLE-Arduino 库）
  *
- * v0.5.6 重构：参考 alexanderlavrushko/BLE-HUD-navigation-ESP32 的极简设计
+ * v0.5.7 重构：参考 alexanderlavrushko/BLE-HUD-navigation-ESP32 的极简设计
+ *   - 把 CHAR_POLL 从 NOTIFY 改为 INDICATE（与开源库完全一致）
+ *   - 增加 BLE2902 描述符（indicate 必需，客户端通过它订阅/确认）
+ *   - 移除 nimBLE 1.4.1 不存在的 notifyValue() 调用，改回 indicate() API
  *
  * 架构：
  *   1 个 Service + 2 个 Characteristic：
  *     - CHAR_DATA (WRITE | WRITE_NR)：手机 → ESP32 写入导航数据 JSON
- *     - CHAR_POLL (NOTIFY)：ESP32 → 手机 poll 请求（每 2 秒发一次空通知）
+ *     - CHAR_POLL (INDICATE + BLE2902)：ESP32 → 手机 poll 请求（每 2 秒发一次空指示）
  *
- * 交互模式（轮询）：
- *   - ESP32 在 loop() 中检测：距离上次收到数据 > 2 秒 → 通过 CHAR_POLL 发空通知
- *   - 手机收到 notify → 立刻把最新的导航数据写一次 CHAR_DATA
+ * 交互模式（轮询，与开源库一致）：
+ *   - ESP32 在 loop() 中检测：距离上次收到数据 > 2 秒 → 通过 CHAR_POLL 发空 indicate
+ *   - 手机收到 indicate → 立刻把最新的导航数据写一次 CHAR_DATA
  *   - 收到数据后 ESP32 重置计时器
  *   - 整个交互纯文本 0 spam：去除了 NimBLE 内部 "subscribe event" 大量日志
  *
@@ -81,7 +84,7 @@ private:
     NimBLEServer* server = nullptr;
     NimBLEService* service = nullptr;
     NimBLECharacteristic* chrData = nullptr;  // 手机 → ESP32 写入
-    NimBLECharacteristic* chrPoll = nullptr;  // ESP32 → 手机 poll
+    NimBLECharacteristic* chrPoll = nullptr;  // ESP32 → 手机 poll (indicate)
     bool started = false;
     std::atomic<int> connectedDeviceCount{0};
 

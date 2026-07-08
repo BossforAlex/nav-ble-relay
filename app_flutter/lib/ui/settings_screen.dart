@@ -55,24 +55,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   value: BleConstants.serviceUuid.toUpperCase(),
                 ),
                 _KVTile(
-                  label: '特征值 FFE1 (Guide)',
-                  value: BleConstants.charGuideUuid.toUpperCase(),
+                  label: '特征值 FFE1 (Data) — 手机→ESP32',
+                  value: BleConstants.charDataUuid.toUpperCase(),
+                  sub: 'WRITE | WRITE_NR — 写入 JSON 导航数据（type 字段路由）',
                 ),
                 _KVTile(
-                  label: '特征值 FFE2 (DriveWay)',
-                  value: BleConstants.charDriveWayUuid.toUpperCase(),
+                  label: '特征值 FFE2 (Poll) — ESP32→手机',
+                  value: BleConstants.charPollUuid.toUpperCase(),
+                  sub: 'INDICATE + BLE2902 — ESP32 每 2 秒发空 indicate 拉新数据',
                 ),
                 _KVTile(
-                  label: '特征值 FFE3 (TMC)',
-                  value: BleConstants.charTmcUuid.toUpperCase(),
-                ),
-                _KVTile(
-                  label: '特征值 FFE4 (State)',
-                  value: BleConstants.charStateUuid.toUpperCase(),
-                ),
-                _KVTile(
-                  label: '特征值 FFE5 (Location)',
-                  value: BleConstants.charLocationUuid.toUpperCase(),
+                  label: 'CCCD (订阅描述符)',
+                  value: BleConstants.cccdUuid.toUpperCase(),
+                  sub: '手机写 0x0002 订阅 FFE2 的 indicate',
                 ),
                 _KVTile(
                   label: 'ESP32 设备名',
@@ -81,8 +76,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
                   child: Text(
-                    '说明：在"发现设备"页面扫描并选择 ESP32 设备连接，'
-                    '连接成功后才会转发数据。批量开发场景下不再做 MAC 限制。',
+                    'v0.5.7 极简架构（参考开源 alexanderlavrushko/BLE-HUD-navigation-ESP32）：\n'
+                    '所有 5 类导航数据（guide/drive/tmc/state/location）合并为 1 个 JSON 通道，\n'
+                    '通过 JSON 中的 "type" 字段路由。ESP32 → 手机仅用 INDICATE 拉数据。',
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
@@ -252,39 +248,58 @@ class _SectionCard extends StatelessWidget {
 
 /// 键值对行
 class _KVTile extends StatelessWidget {
-  const _KVTile({required this.label, required this.value});
+  const _KVTile({
+    required this.label,
+    required this.value,
+    this.sub,
+  });
   final String label;
   final String value;
+  final String? sub;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            flex: 2,
-            child: Text(
-              label,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                flex: 2,
+                child: Text(
+                  label,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+              Expanded(
+                flex: 3,
+                child: SelectableText(
+                  value,
+                  textAlign: TextAlign.right,
+                  style: GoogleFonts.robotoMono(
+                    textStyle: theme.textTheme.bodyMedium,
+                    color: theme.colorScheme.onSurface,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (sub != null) ...[
+            const SizedBox(height: 2),
+            Text(
+              sub!,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.75),
               ),
             ),
-          ),
-          Expanded(
-            flex: 3,
-            child: SelectableText(
-              value,
-              textAlign: TextAlign.right,
-              style: GoogleFonts.robotoMono(
-                textStyle: theme.textTheme.bodyMedium,
-                color: theme.colorScheme.onSurface,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
+          ],
         ],
       ),
     );

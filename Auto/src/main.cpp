@@ -40,11 +40,11 @@ static BleServer sBleServer;
 static Nav::NavState sNavState;
 
 // BLE 数据接收缓冲区（静态，避免堆碎片）
-// v0.5.6：单 char 通道，JSON 带 "type" 字段（guide/drive/tmc/state/location）
+// v0.5.7：单 char 通道，JSON 带 "type" 字段（guide/drive/tmc/state/location）
 static char sJsonBuffer[1024];
 
 // ===================== BLE 数据回调 =====================
-// v0.5.6 重构：单 write char，JSON 用 "type" 字段路由
+// v0.5.7 重构：单 write char + INDICATE poll，JSON 用 "type" 字段路由
 // 期望格式：{"type": "guide"|"drive"|"tmc"|"state"|"location", "ts": ..., "data": {...}}
 static void onBleData(const uint8_t* data, size_t len) {
     if (len == 0 || data == nullptr) return;
