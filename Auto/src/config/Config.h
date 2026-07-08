@@ -12,7 +12,7 @@
 
 // ===================== 项目信息 =====================
 #define PROJECT_NAME    "AutoNavDisplay"
-#define PROJECT_VERSION "0.5.5"
+#define PROJECT_VERSION "0.5.6"
 
 // ===================== 串口配置 =====================
 #ifndef SERIAL_BAUD
@@ -22,14 +22,19 @@
 // ===================== BLE 配置 =====================
 // ESP32 端 BLE GATT 服务与特征值 UUID
 // 必须与 Flutter 端 ble_constants.dart 中定义的 UUID 保持一致
+//
+// v0.5.6 重构（参考 alexanderlavrushko/BLE-HUD-navigation-ESP32 极简模式）：
+//   1 个 Service + 2 个 Characteristic：
+//   - CHAR_DATA：WRITE | WRITE_NR，手机 → ESP32，导航数据（JSON）
+//   - CHAR_POLL：NOTIFY，ESP32 → 手机，poll 请求（2 秒无活动则发空通知）
+//
+// 原 5 个特征值 (GUIDE/DRIVE/TMC/STATE/LOCATION) 合并为 1 个 JSON 通道，
+// 通过 JSON 中的 "type" 字段路由到 NavParser 各个子解析器。
 
 namespace BleUUID {
-    constexpr const char* SERVICE       = "0000FFE0-0000-1000-8000-00805F9B34FB";
-    constexpr const char* CHAR_GUIDE    = "0000FFE1-0000-1000-8000-00805F9B34FB"; // 导航引导信息
-    constexpr const char* CHAR_DRIVE    = "0000FFE2-0000-1000-8000-00805F9B34FB"; // 车道信息
-    constexpr const char* CHAR_TMC      = "0000FFE3-0000-1000-8000-00805F9B34FB"; // 路况光柱
-    constexpr const char* CHAR_STATE    = "0000FFE4-0000-1000-8000-00805F9B34FB"; // 导航状态
-    constexpr const char* CHAR_LOCATION = "0000FFE5-0000-1000-8000-00805F9B34FB"; // 定位信息
+    constexpr const char* SERVICE   = "0000FFE0-0000-1000-8000-00805F9B34FB";
+    constexpr const char* CHAR_DATA = "0000FFE1-0000-1000-8000-00805F9B34FB"; // 双向数据（手机写 / 单向 JSON）
+    constexpr const char* CHAR_POLL = "0000FFE2-0000-1000-8000-00805F9B34FB"; // ESP32→手机 poll（NOTIFY）
 }
 
 // ===================== 屏幕配置 =====================

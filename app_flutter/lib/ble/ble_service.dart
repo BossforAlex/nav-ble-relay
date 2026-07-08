@@ -4,9 +4,15 @@
 ///   - 扫描所有 BLE 设备并展示（用户需求：批量开发，不再过滤名字）
 ///   - 用户在"发现的设备"页面手动选择设备连接
 ///   - 通过 writeCharacteristic / writeCharacteristicWithoutResponse
-///     主动向 5 个特征值推送 JSON 数据
+///     主动向 1 个特征值（charDataUuid）写入 JSON 数据
+///   - 订阅 charPollUuid 接收 ESP32 的 poll 通知，收到后立刻写最新数据
 ///
-/// 用户最新需求（重构）：
+/// v0.5.6 重构：参考 alexanderlavrushko/BLE-HUD-navigation-ESP32 极简设计
+///   - 单 write char（所有 5 类数据通过 JSON type 字段路由）
+///   - 单 NOTIFY char（ESP32 主动 poll，2 秒一次）
+///   - 收到 notify → 立刻 flush 一次最新缓存数据
+///
+/// 用户需求（批量开发）：
 ///   - 移除 isTargetName 过滤，扫描到所有设备都展示
 ///   - 移除"自动连接第一个匹配设备"逻辑，必须用户手动选择
 ///   - 通过 MAC/名称推断设备类型展示对应图标
@@ -77,7 +83,7 @@ class BleService extends ChangeNotifier {
   final List<ScanResult> _allDevices = [];
   List<ScanResult> get allDevices => List.unmodifiable(_allDevices);
 
-  /// 当前连接的设备是否是本项目 ESP32（找到 5 个特征值）
+  /// 当前连接的设备是否是本项目 ESP32（找到 2 个特征值）
   bool _isOurDevice = false;
   bool get isOurDevice => _isOurDevice;
 
@@ -94,14 +100,31 @@ class BleService extends ChangeNotifier {
   StreamSubscription<BluetoothAdapterState>? _adapterSub;
   StreamSubscription<List<ScanResult>>? _scanSub;
   StreamSubscription<BluetoothConnectionState>? _connSub;
+  StreamSubscription<List<int>>? _pollSub;
   bool _disposed = false;
 
   BluetoothDevice? _device;
-  BluetoothCharacteristic? _chrGuide;
-  BluetoothCharacteristic? _chrDriveWay;
-  BluetoothCharacteristic? _chrTmc;
-  BluetoothCharacteristic? _chrState;
-  BluetoothCharacteristic? _chrLocation;
+  BluetoothCharacteristic? _chrData;  // 手机写（WRITE | WRITE_NR）
+  BluetoothCharacteristic? _chrPoll;  // 手机订阅（NOTIFY）
+
+  // ── 发送统计（用户需求：发送统计卡片） ────────────────
+  int _txOk = 0;
+  int _txFail = 0;
+  int _throttled = 0;
+  int get txOkCount => _txOk;
+  int get txFailCount => _txFail;
+  int get throttledCount => _throttled;
+  void resetTxStats() { _txOk = 0; _txFail = 0; _throttled = 0; _safeNotify(); }
+  void resetThrottledCount() { _throttled = 0; _safeNotify(); }
+
+  // ── 待发送的导航数据缓存（收到 poll 后立刻发这些） ────
+  GuideInfo? _pendingGuide;
+  DriveWayInfo? _pendingDrive;
+  TmcSegmentInfo? _pendingTmc;
+  LocationInfo? _pendingLocation;
+  int? _pendingState;
+  String? _pendingCrossMap;
+  DateTime _lastFlushMs = DateTime.fromMillisecondsSinceEpoch(0);
 
   /// 监听适配器状态变化
   void _onAdapterChanged(BluetoothAdapterState state) {
@@ -217,14 +240,13 @@ class BleService extends ChangeNotifier {
     try {
       _connSub?.cancel();
       _connSub = null;
+      _pollSub?.cancel();
+      _pollSub = null;
       await _device?.disconnect();
     } catch (_) {}
     _device = null;
-    _chrGuide = null;
-    _chrDriveWay = null;
-    _chrTmc = null;
-    _chrState = null;
-    _chrLocation = null;
+    _chrData = null;
+    _chrPoll = null;
     _isOurDevice = false;
     _status = BleStatus.stopped;
     _deviceAddress = '';
@@ -271,19 +293,18 @@ class BleService extends ChangeNotifier {
 
     _connSub?.cancel();
     _connSub = device.connectionState.listen((state) {
-      debugPrint('[BLE] 连接状态变化: $state');
       if (state == BluetoothConnectionState.disconnected && !_disposed) {
+        debugPrint('[BLE] 连接已断开');
         // 用户需求：断开后不自动重连，避免抢占手机的连接槽位
         // 用户需手动到"发现设备"页面重新选择设备连接
+        _pollSub?.cancel();
+        _pollSub = null;
+        _chrData = null;
+        _chrPoll = null;
+        _isOurDevice = false;
         _status = BleStatus.stopped;
         _deviceAddress = '';
         _deviceName = '';
-        _chrGuide = null;
-        _chrDriveWay = null;
-        _chrTmc = null;
-        _chrState = null;
-        _chrLocation = null;
-        _isOurDevice = false;
         _safeNotify();
       }
     });
@@ -323,6 +344,7 @@ class BleService extends ChangeNotifier {
 
     debugPrint('[BLE] ✓ 找到目标服务: ${targetService.uuid.str}');
 
+    // 找到 2 个特征值：CHAR_DATA（写）+ CHAR_POLL（订阅）
     int found = 0;
     for (var c in targetService.characteristics) {
       final u = c.uuid.str.toLowerCase();
@@ -331,32 +353,70 @@ class BleService extends ChangeNotifier {
           ' [read=${p.read} write=${p.write} '
           'writeNoResp=${p.writeWithoutResponse} '
           'notify=${p.notify} indicate=${p.indicate}]');
-      if (u == BleConstants.charGuideUuid.toLowerCase()) {
-        _chrGuide = c;
+      if (u == BleConstants.charDataUuid.toLowerCase()) {
+        _chrData = c;
         found++;
-      } else if (u == BleConstants.charDriveWayUuid.toLowerCase()) {
-        _chrDriveWay = c;
-        found++;
-      } else if (u == BleConstants.charTmcUuid.toLowerCase()) {
-        _chrTmc = c;
-        found++;
-      } else if (u == BleConstants.charStateUuid.toLowerCase()) {
-        _chrState = c;
-        found++;
-      } else if (u == BleConstants.charLocationUuid.toLowerCase()) {
-        _chrLocation = c;
+      } else if (u == BleConstants.charPollUuid.toLowerCase()) {
+        _chrPoll = c;
         found++;
       }
     }
-    debugPrint('[BLE] ✓ 映射 $found/5 个特征值');
+    debugPrint('[BLE] ✓ 映射 $found/2 个特征值 (DATA + POLL)');
 
-    _isOurDevice = (found == 5);
+    _isOurDevice = (found == 2 && _chrData != null && _chrPoll != null);
     _status = BleStatus.connected;
     _safeNotify();
 
-    if (_isOurDevice) {
-      // 连接成功后立刻发送测试数据，验证双向通信正常
+    if (_isOurDevice && _chrPoll != null) {
+      // 订阅 CHAR_POLL 的 notify —— 收到 ESP32 的 poll 后立刻 flush 缓存
+      try {
+        _pollSub?.cancel();
+        _pollSub = _chrPoll!.lastValueStream.listen(_onPollReceived);
+        await _chrPoll!.setNotifyValue(true);
+        debugPrint('[BLE] ✓ 已订阅 CHAR_POLL notify');
+      } catch (e) {
+        debugPrint('[BLE] ✗ 订阅 CHAR_POLL 失败: $e');
+      }
+
+      // 连接成功后立刻发送一次测试数据，验证双向通信
       await _sendTestPackets();
+    }
+  }
+
+  /// 收到 ESP32 的 poll 通知：立刻把缓存的最新数据 flush 一次
+  void _onPollReceived(List<int> value) {
+    // ESP32 每 2 秒无活动就发 1 字节 0x00
+    // 收到后立刻把所有 pending 数据写一次
+    if (!_isOurDevice || _chrData == null) return;
+
+    // 节流：避免太频繁（虽然 ESP32 端 2 秒一次，但保险起见 100ms 内只 flush 一次）
+    final now = DateTime.now();
+    if (now.difference(_lastFlushMs).inMilliseconds < 100) {
+      _throttled++;
+      _safeNotify();
+      return;
+    }
+    _lastFlushMs = now;
+
+    // 并行写入所有 pending 数据
+    final futures = <Future<void>>[];
+    if (_pendingGuide != null) {
+      futures.add(sendGuideInfo(_pendingGuide!, compact: false));
+    }
+    if (_pendingDrive != null) {
+      futures.add(sendDriveWay(_pendingDrive!));
+    }
+    if (_pendingTmc != null) {
+      futures.add(sendTmcSegment(_pendingTmc!));
+    }
+    if (_pendingLocation != null) {
+      futures.add(sendLocation(_pendingLocation!));
+    }
+    if (_pendingState != null) {
+      futures.add(sendMapState(_pendingState!, _pendingCrossMap));
+    }
+    if (futures.isNotEmpty) {
+      Future.wait(futures);
     }
   }
 
@@ -365,28 +425,25 @@ class BleService extends ChangeNotifier {
     debugPrint('[BLE] >>> 开始发送测试数据包 <<<');
     final ts = DateTime.now().millisecondsSinceEpoch;
     final test = <String, dynamic>{
-      'type': 'test',
+      'type': 'state',
       'ts': ts,
-      'msg': 'BLE communication test from Flutter GATT Client',
       'data': {
-        'CUR_ROAD_NAME': 'TestRoad',
-        'NEXT_ROAD_NAME': 'NextRoad',
-        'SEG_REMAIN_DIS': 1234,
-        'CUR_SPEED': 60,
-        'LIMITED_SPEED': 80,
+        'EXTRA_STATE': 0,  // 0=导航中
+        'EXTRA_CROSS_MAP': 'BLE OK @ $ts',
       },
     };
-    final ok = await _write(_chrState, test, label: 'TEST');
+    final ok = await _write(test, label: 'TEST');
     debugPrint('[BLE] 测试包发送${ok ? "成功" : "失败"}');
   }
 
-  // ── 数据发送 ──────────────────────────────────────────
+  // ── 数据发送（全部通过单一 chrData） ──────────────────
 
   Future<void> sendGuideInfo(GuideInfo info, {bool compact = false}) async {
     if (!_isOurDevice) return;
+    _pendingGuide = info;
     final now = DateTime.now().millisecondsSinceEpoch;
-    final data = <String, dynamic>{
-      'type': AmapProtocol.keyGuideInfo,
+    final packet = <String, dynamic>{
+      'type': 'guide',
       'ts': now,
       'data': {
         'ICON': info.icon,
@@ -408,13 +465,14 @@ class BleService extends ChangeNotifier {
         },
       },
     };
-    await _write(_chrGuide, data, label: 'GUIDE');
+    await _write(packet, label: 'GUIDE');
   }
 
   Future<void> sendDriveWay(DriveWayInfo info) async {
     if (!_isOurDevice) return;
-    final data = <String, dynamic>{
-      'type': AmapProtocol.keyDriveWay,
+    _pendingDrive = info;
+    final packet = <String, dynamic>{
+      'type': 'drive',
       'ts': DateTime.now().millisecondsSinceEpoch,
       'data': {
         'drive_way_enabled': info.enabled,
@@ -427,13 +485,14 @@ class BleService extends ChangeNotifier {
             .toList(),
       },
     };
-    await _write(_chrDriveWay, data, label: 'DRIVE');
+    await _write(packet, label: 'DRIVE');
   }
 
   Future<void> sendTmcSegment(TmcSegmentInfo info) async {
     if (!_isOurDevice) return;
-    final data = <String, dynamic>{
-      'type': AmapProtocol.keyTmcSegment,
+    _pendingTmc = info;
+    final packet = <String, dynamic>{
+      'type': 'tmc',
       'ts': DateTime.now().millisecondsSinceEpoch,
       'data': {
         'total_distance': info.totalDistance,
@@ -447,26 +506,29 @@ class BleService extends ChangeNotifier {
             .toList(),
       },
     };
-    await _write(_chrTmc, data, label: 'TMC');
+    await _write(packet, label: 'TMC');
   }
 
   Future<void> sendMapState(int state, String? crossMap) async {
     if (!_isOurDevice) return;
-    final data = <String, dynamic>{
-      'type': AmapProtocol.keyMapState,
+    _pendingState = state;
+    _pendingCrossMap = crossMap;
+    final packet = <String, dynamic>{
+      'type': 'state',
       'ts': DateTime.now().millisecondsSinceEpoch,
       'data': {
         'EXTRA_STATE': state,
         if (crossMap != null) 'EXTRA_CROSS_MAP': crossMap,
       },
     };
-    await _write(_chrState, data, label: 'STATE');
+    await _write(packet, label: 'STATE');
   }
 
   Future<void> sendLocation(LocationInfo info) async {
     if (!_isOurDevice) return;
-    final data = <String, dynamic>{
-      'type': AmapProtocol.keyLocation,
+    _pendingLocation = info;
+    final packet = <String, dynamic>{
+      'type': 'location',
       'ts': DateTime.now().millisecondsSinceEpoch,
       'data': {
         'bearing': info.bearing,
@@ -475,44 +537,48 @@ class BleService extends ChangeNotifier {
         'provider': info.provider,
       },
     };
-    await _write(_chrLocation, data, label: 'LOC');
+    await _write(packet, label: 'LOC');
   }
 
-  /// 向指定特征值写入 JSON 数据
-  /// 返回 true 表示写入成功，false 表示失败
+  /// 向 CHAR_DATA 写入 JSON 数据
   ///
   /// 写入策略：
   ///   - 优先 writeWithResponse（可靠，有 ACK 确认）
   ///   - 其次 writeWithoutResponse（快但不可靠）
-  ///   - 逐特征值判断属性，不再用全局变量
-  Future<bool> _write(BluetoothCharacteristic? chr, Map<String, dynamic> packet, {String label = 'DATA'}) async {
+  ///   - 检查 chrData 的属性
+  Future<bool> _write(Map<String, dynamic> packet, {String label = 'DATA'}) async {
     if (!isConnected) {
       debugPrint('[BLE] ✗ $label: 未连接，跳过写入');
+      _txFail++;
+      _safeNotify();
       return false;
     }
-    if (chr == null) {
-      debugPrint('[BLE] ✗ $label: 特征值为空，跳过写入');
+    if (_chrData == null) {
+      debugPrint('[BLE] ✗ $label: chrData 为空，跳过写入');
+      _txFail++;
+      _safeNotify();
       return false;
     }
+    final chr = _chrData!;
     final json = jsonEncode(packet);
     final bytes = utf8.encode(json);
     final p = chr.properties;
     final canWriteResp = p.write;
     final canWriteNoResp = p.writeWithoutResponse;
     if (!canWriteResp && !canWriteNoResp) {
-      debugPrint('[BLE] ✗ $label: 特征值 ${chr.uuid.str} 不支持 write'
+      debugPrint('[BLE] ✗ $label: chrData 不支持 write'
           '（props: read=${p.read} write=${p.write} '
           'writeNoResp=${p.writeWithoutResponse} notify=${p.notify}）');
+      _txFail++;
+      _safeNotify();
       return false;
     }
-    debugPrint('[BLE] → $label 写 ${bytes.length}字节'
-        ' [${canWriteResp ? "writeWithResponse" : "writeNoResp"}]'
-        ' uuid=${chr.uuid.str}');
     // 优先 writeWithResponse（可靠）
     if (canWriteResp) {
       try {
         await chr.write(bytes, withoutResponse: false);
-        debugPrint('[BLE] ✓ $label 写入成功');
+        _txOk++;
+        _safeNotify();
         return true;
       } catch (e) {
         debugPrint('[BLE] ✗ $label writeWithResponse 失败: $e');
@@ -520,22 +586,28 @@ class BleService extends ChangeNotifier {
         if (canWriteNoResp) {
           try {
             await chr.write(bytes, withoutResponse: true);
-            debugPrint('[BLE] ✓ $label writeNoResp 回退成功');
+            _txOk++;
+            _safeNotify();
             return true;
           } catch (e2) {
             debugPrint('[BLE] ✗ $label writeNoResp 回退失败: $e2');
           }
         }
+        _txFail++;
+        _safeNotify();
         return false;
       }
     } else {
       // 只有 writeWithoutResponse
       try {
         await chr.write(bytes, withoutResponse: true);
-        debugPrint('[BLE] ✓ $label writeNoResp 写入完成');
+        _txOk++;
+        _safeNotify();
         return true;
       } catch (e) {
         debugPrint('[BLE] ✗ $label writeNoResp 失败: $e');
+        _txFail++;
+        _safeNotify();
         return false;
       }
     }
@@ -556,13 +628,10 @@ class BleService extends ChangeNotifier {
     }
 
     // 2. 其他 ESP32 / espressif
-    // - 名字包含 ESP32 / espressif
-    // - MAC 厂商前缀（Espressif OUI 列表）
     if (name.startsWith('ESP32') ||
         name.toLowerCase().startsWith('espressif')) {
       return DeviceCategory.esp32;
     }
-    // Espressif 常见 OUI 前缀（部分列表）
     const espOuiPrefixes = [
       '24:0a:c4', '24:6f:28', '30:ae:a4', '3c:71:37', '40:f5:20',
       '4c:11:bf', '54:5a:a6', '5c:cf:7f', '60:01:94', '68:c6:3f',
@@ -579,7 +648,7 @@ class BleService extends ChangeNotifier {
       }
     }
 
-    // 3. 蓝牙耳机/音箱（常见命名）
+    // 3. 蓝牙耳机/音箱
     final nameLower = name.toLowerCase();
     if (nameLower.contains('headphone') ||
         nameLower.contains('headset') ||
@@ -587,7 +656,6 @@ class BleService extends ChangeNotifier {
         nameLower.contains('earbuds') ||
         nameLower.contains('airpods') ||
         nameLower.contains('speaker') ||
-        nameLower.contains('soundbar') ||
         nameLower.contains('soundbar')) {
       return DeviceCategory.audio;
     }
@@ -660,6 +728,7 @@ class BleService extends ChangeNotifier {
     _adapterSub?.cancel();
     _scanSub?.cancel();
     _connSub?.cancel();
+    _pollSub?.cancel();
     _device?.disconnect();
     super.dispose();
   }

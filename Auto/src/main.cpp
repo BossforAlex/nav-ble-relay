@@ -40,51 +40,66 @@ static BleServer sBleServer;
 static Nav::NavState sNavState;
 
 // BLE 数据接收缓冲区（静态，避免堆碎片）
+// v0.5.6：单 char 通道，JSON 带 "type" 字段（guide/drive/tmc/state/location）
 static char sJsonBuffer[1024];
 
 // ===================== BLE 数据回调 =====================
-static void onBleData(const char* uuid, const uint8_t* data, size_t len) {
+// v0.5.6 重构：单 write char，JSON 用 "type" 字段路由
+// 期望格式：{"type": "guide"|"drive"|"tmc"|"state"|"location", "ts": ..., "data": {...}}
+static void onBleData(const uint8_t* data, size_t len) {
     if (len == 0 || data == nullptr) return;
 
     size_t copyLen = len < sizeof(sJsonBuffer) - 1 ? len : sizeof(sJsonBuffer) - 1;
     memcpy(sJsonBuffer, data, copyLen);
     sJsonBuffer[copyLen] = '\0';
 
-    // 串口直接显示手机发来的真实交互数据（用户需求：不模拟虚拟屏幕）
-    Serial.printf("[BLE] 手机写入 %u 字节 | UUID=%s | data=%s\n",
-                  (unsigned)len, uuid, sJsonBuffer);
-
-    if (Debug::LOG_BLE_RAW) {
-        Serial.printf("[BLE][%s] HEX:", uuid);
-        for (size_t i = 0; i < len && i < 32; i++) {
-            Serial.printf(" %02X", data[i]);
+    // 解析 JSON 顶层
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, sJsonBuffer);
+    if (err) {
+        if (Debug::LOG_BLE_RAW) {
+            Serial.printf("[BLE] ✗ JSON 解析失败: %s\n", err.c_str());
         }
-        if (len > 32) Serial.print(" ...");
-        Serial.println();
+        return;
     }
 
+    const char* type = doc["type"] | "";
+    if (type[0] == '\0') {
+        if (Debug::LOG_BLE_RAW) {
+            Serial.printf("[BLE] ✗ 缺少 type 字段: %s\n", sJsonBuffer);
+        }
+        return;
+    }
+
+    // 根据 type 路由到对应 NavParser
     bool ok = false;
-    if (strstr(uuid, BleUUID::CHAR_GUIDE)) {
+    if (strcmp(type, "guide") == 0) {
         ok = Nav::parseGuideInfo(sJsonBuffer, sNavState.guide);
-    } else if (strstr(uuid, BleUUID::CHAR_DRIVE)) {
+    } else if (strcmp(type, "drive") == 0) {
         ok = Nav::parseDriveWayInfo(sJsonBuffer, sNavState.driveWay);
-    } else if (strstr(uuid, BleUUID::CHAR_TMC)) {
+    } else if (strcmp(type, "tmc") == 0) {
         ok = Nav::parseTmcInfo(sJsonBuffer, sNavState.tmc);
-    } else if (strstr(uuid, BleUUID::CHAR_LOCATION)) {
+    } else if (strcmp(type, "location") == 0) {
         ok = Nav::parseLocationInfo(sJsonBuffer, sNavState.location);
-    } else if (strstr(uuid, BleUUID::CHAR_STATE)) {
-        JsonDocument doc;
-        DeserializationError err = deserializeJson(doc, sJsonBuffer);
-        int state = err ? atoi(sJsonBuffer) : doc["state"] | doc["data"]["state"] | -1;
+    } else if (strcmp(type, "state") == 0) {
+        int state = doc["data"]["EXTRA_STATE"] | doc["data"]["state"] | -1;
         sNavState.mapState = Nav::parseMapState(state);
         ok = true;
+    } else {
+        if (Debug::LOG_BLE_RAW) {
+            Serial.printf("[BLE] ✗ 未知 type: %s\n", type);
+        }
+        return;
     }
 
     if (ok) {
         sNavState.lastUpdateMs = millis();
         sScreen.setNavState(sNavState);
+        if (Debug::LOG_BLE_RAW) {
+            Serial.printf("[BLE] ✓ %s (%u 字节)\n", type, (unsigned)len);
+        }
     } else {
-        Serial.printf("[BLE][%s] 解析失败：%s\n", uuid, sJsonBuffer);
+        Serial.printf("[BLE] ✗ %s 解析失败: %s\n", type, sJsonBuffer);
     }
 }
 

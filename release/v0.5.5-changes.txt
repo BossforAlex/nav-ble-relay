@@ -1,6 +1,0 @@
- Auto/platformio.ini               |  6 ++++--
- Auto/src/ble/BleServer.cpp        | 19 +++++++++++++++++++
- Auto/src/config/Config.h          |  2 +-
- Auto/src/main.cpp                 |  2 +-
- Auto/src/screen/ScreenConsole.cpp |  4 ++--
- 5 files changed, 27 insertions(+), 6 deletions(-)
