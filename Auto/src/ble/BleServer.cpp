@@ -1,6 +1,7 @@
 #include "BleServer.h"
 
 #include "esp_log.h"
+#include "esp_task_wdt.h"
 
 /**
  * @file BleServer.cpp
@@ -246,6 +247,11 @@ void BleServer::loop() {
     // 发送 indicate（INDICATE 比 NOTIFY 多一次 ACK，但更可靠）
     // 关键修复：NimBLE 1.4.1 没有 notifyValue()，必须用 indicate() / notify()
     // 字段 value 保持空字符串（手机只需要"有新数据请发"的信号）
+    //
+    // v0.5.11 修复：indicate() 会阻塞等待手机 ACK，若手机响应慢可能阻塞数秒。
+    // 在调用前主动喂狗，防止长时间阻塞触发 Task WDT。
+    // NimBLE 内部 indicate() 有超时机制（约 1 秒），但仍需喂狗保护。
+    esp_task_wdt_reset();
     chrPoll->indicate();
     _lastPollSentMs.store(nowMs);
     _lastActivityMs.store(nowMs);  // poll 本身也算一次活动
@@ -311,10 +317,13 @@ void BleServer::onWrite(NimBLECharacteristic* pChar) {
     // 不能调用 Serial.printf / 任何阻塞操作
     // 仅获取值 + 入队（enqueueWrite 内部已加 portMUX 锁），
     // 由 loop() 在主任务上下文中处理
+    //
+    // v0.5.11 修复：避免 std::string 拷贝（在 BLE 任务栈上分配）
+    // 改用 pChar->getValue() 返回的临时对象直接入队数据指针
     if (pChar == nullptr) return;
     if (dataCallback == nullptr) return;
 
-    // 拷贝数据到栈上，避免 pChar 后续被 NimBLE 复用
+    // 获取特征值（返回 std::string 临时对象，数据在堆上）
     std::string value = pChar->getValue();
     if (value.empty()) return;
 
