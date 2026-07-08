@@ -64,29 +64,29 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final guide = broadcast.guideInfo;
     if (guide != null) {
       ble.sendGuideInfo(guide, compact: settings.compactMode);
-      broadcast._relayCount++;
+      broadcast.relayCount++;
     }
     final driveWay = broadcast.driveWayInfo;
     if (driveWay != null) {
       ble.sendDriveWay(driveWay);
-      broadcast._relayCount++;
+      broadcast.relayCount++;
     }
     final tmc = broadcast.tmcSegmentInfo;
     if (tmc != null) {
       ble.sendTmcSegment(tmc);
-      broadcast._relayCount++;
+      broadcast.relayCount++;
     }
     final loc = broadcast.locationInfo;
     if (loc != null) {
       ble.sendLocation(loc);
-      broadcast._relayCount++;
+      broadcast.relayCount++;
     }
     // v0.5.8 修复：mapState 变化时也发送到 ESP32
     if (broadcast.mapState >= 0) {
       ble.sendMapState(broadcast.mapState, broadcast.crossMap);
-      broadcast._relayCount++;
+      broadcast.relayCount++;
     }
-    broadcast._lastRelayAt = DateTime.now();
+    broadcast.lastRelayAt = DateTime.now();
     broadcast.notifyListeners();
   }
 

@@ -41,12 +41,11 @@ class BroadcastService extends ChangeNotifier {
   String lastBroadcastAction = '';
 
   /// v0.5.8: relay 到 BLE 的计数（UI 可见，用于诊断）
-  int _relayCount = 0;
-  int get relayCount => _relayCount;
-  DateTime? _lastRelayAt;
+  int relayCount = 0;
+  DateTime? lastRelayAt;
   String get lastRelayText {
-    if (_lastRelayAt == null) return '—';
-    final diff = DateTime.now().difference(_lastRelayAt!);
+    if (lastRelayAt == null) return '—';
+    final diff = DateTime.now().difference(lastRelayAt!);
     return '${diff.inSeconds}s 前';
   }
 
