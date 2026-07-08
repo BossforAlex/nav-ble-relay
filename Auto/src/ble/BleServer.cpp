@@ -1,6 +1,7 @@
 #include "BleServer.h"
 
 #include "esp_log.h"
+#include <NimBLE2902.h>
 
 /**
  * @file BleServer.cpp
