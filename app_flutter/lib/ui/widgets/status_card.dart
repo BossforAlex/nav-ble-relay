@@ -105,6 +105,16 @@ class StatusCard extends StatelessWidget {
                     value: ble.deviceName,
                   ),
                 ],
+                // v0.5.8: relay 计数（诊断 broadcast→BLE 是否通畅）
+                if (connected && broadcast.relayCount > 0) ...[
+                  const SizedBox(height: 8),
+                  _InfoRow(
+                    icon: Icons.send,
+                    label: '转发',
+                    value: '${broadcast.relayCount} 次 (${broadcast.lastRelayText})',
+                    valueColor: const Color(0xFF008375),
+                  ),
+                ],
               ],
             ),
           ),

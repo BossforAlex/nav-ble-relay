@@ -64,19 +64,30 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final guide = broadcast.guideInfo;
     if (guide != null) {
       ble.sendGuideInfo(guide, compact: settings.compactMode);
+      broadcast._relayCount++;
     }
     final driveWay = broadcast.driveWayInfo;
     if (driveWay != null) {
       ble.sendDriveWay(driveWay);
+      broadcast._relayCount++;
     }
     final tmc = broadcast.tmcSegmentInfo;
     if (tmc != null) {
       ble.sendTmcSegment(tmc);
+      broadcast._relayCount++;
     }
     final loc = broadcast.locationInfo;
     if (loc != null) {
       ble.sendLocation(loc);
+      broadcast._relayCount++;
     }
+    // v0.5.8 修复：mapState 变化时也发送到 ESP32
+    if (broadcast.mapState >= 0) {
+      ble.sendMapState(broadcast.mapState, broadcast.crossMap);
+      broadcast._relayCount++;
+    }
+    broadcast._lastRelayAt = DateTime.now();
+    broadcast.notifyListeners();
   }
 
   Future<void> _start() async {
@@ -116,6 +127,38 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
+  /// v0.5.8: BLE 直连测试 — 发一条测试 JSON 到 ESP32，验证 BLE 写入通道
+  Future<void> _bleTest() async {
+    final ble = context.read<BleService>();
+    if (!ble.isConnected) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('BLE 未连接，无法测试'), duration: Duration(seconds: 2)),
+      );
+      return;
+    }
+    final ok = await ble.sendTestPacket();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(ok ? 'BLE 测试包已发送，查看 ESP32 串口' : 'BLE 写入失败，查看日志'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  /// v0.5.8: 模拟导航广播 — 绕过 Android 原生层，直接生成 180km/h 导航数据
+  void _simulateNav() {
+    context.read<BroadcastService>().simulateNavigation();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('模拟导航数据已生成（180km/h），查看 ESP32 串口是否收到'),
+        duration: Duration(seconds: 3),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final ble = context.watch<BleService>();
@@ -139,6 +182,27 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             const _DetailCards(),
             if (running) ...[
               const SizedBox(height: 16),
+              // v0.5.8: 诊断按钮组
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _bleTest,
+                      icon: const Icon(Icons.bluetooth_connected, size: 18),
+                      label: const Text('BLE 测试'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _simulateNav,
+                      icon: const Icon(Icons.speed, size: 18),
+                      label: const Text('模拟导航'),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
               OutlinedButton.icon(
                 onPressed: _selfTest,
                 icon: const Icon(Icons.bug_report_outlined),

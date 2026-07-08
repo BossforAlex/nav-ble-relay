@@ -381,7 +381,7 @@ class BleService extends ChangeNotifier {
       }
 
       // 连接成功后立刻发送一次测试数据，验证双向通信
-      await _sendTestPackets();
+      await sendTestPacket();
     }
   }
 
@@ -422,8 +422,8 @@ class BleService extends ChangeNotifier {
     }
   }
 
-  /// 发送测试数据包，验证 BLE 写入通信
-  Future<void> _sendTestPackets() async {
+  /// v0.5.8: 发送测试数据包，验证 BLE 写入通道（公开方法，供 UI 按钮调用）
+  Future<bool> sendTestPacket() async {
     debugPrint('[BLE] >>> 开始发送测试数据包 <<<');
     final ts = DateTime.now().millisecondsSinceEpoch;
     final test = <String, dynamic>{
@@ -431,11 +431,12 @@ class BleService extends ChangeNotifier {
       'ts': ts,
       'data': {
         'EXTRA_STATE': 0,  // 0=导航中
-        'EXTRA_CROSS_MAP': 'BLE OK @ $ts',
+        'EXTRA_CROSS_MAP': 'BLE TEST OK @ $ts',
       },
     };
     final ok = await _write(test, label: 'TEST');
     debugPrint('[BLE] 测试包发送${ok ? "成功" : "失败"}');
+    return ok;
   }
 
   // ── 数据发送（全部通过单一 chrData） ──────────────────

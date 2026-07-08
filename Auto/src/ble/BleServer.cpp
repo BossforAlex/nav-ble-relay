@@ -159,7 +159,7 @@ void BleServer::begin(const char* deviceName) {
 
     // 打印详细的启动验证信息
     Serial.println();
-    Serial.println("═══════════════ BLE GATT Server 启动验证 v0.5.7 ═══════════════");
+    Serial.println("═══════════════ BLE GATT Server 启动验证 v0.5.8 ═══════════════");
     Serial.printf("  设备名:    %s\n", deviceName);
     Serial.printf("  设备地址:  %s\n",
                   NimBLEDevice::getAddress().toString().c_str());

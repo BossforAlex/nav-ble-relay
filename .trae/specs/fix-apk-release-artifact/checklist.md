@@ -1,5 +1,0 @@
-- [x] workflow 添加了 `permissions: contents: write`
-- [x] `softprops/action-gh-release@v2` 步骤存在且仅在 push/main/master 和 workflow_dispatch 时触发
-- [x] Debug APK 作为 Release 资产上传，文件名正确
-- [x] PR 构建不触发 Release 创建
-- [x] 工作流 YAML 语法正确

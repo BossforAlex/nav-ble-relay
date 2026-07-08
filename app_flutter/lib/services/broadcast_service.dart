@@ -40,6 +40,16 @@ class BroadcastService extends ChangeNotifier {
   /// 最近一次收到广播的 Action
   String lastBroadcastAction = '';
 
+  /// v0.5.8: relay 到 BLE 的计数（UI 可见，用于诊断）
+  int _relayCount = 0;
+  int get relayCount => _relayCount;
+  DateTime? _lastRelayAt;
+  String get lastRelayText {
+    if (_lastRelayAt == null) return '—';
+    final diff = DateTime.now().difference(_lastRelayAt!);
+    return '${diff.inSeconds}s 前';
+  }
+
   /// 是否正在监听
   bool _listening = false;
   bool get isListening => _listening;
@@ -75,6 +85,28 @@ class BroadcastService extends ChangeNotifier {
     } on PlatformException {
       // 忽略
     }
+  }
+
+  /// v0.5.8: 模拟导航广播（绕过 Android 原生层，直接生成数据）
+  /// 用于诊断 broadcast→relay→BLE 完整链路是否通畅
+  void simulateNavigation() {
+    guideInfo = GuideInfo(
+      icon: 0, // 直行
+      curRoadName: '模拟测试道路',
+      nextRoadName: '模拟下一条路',
+      segRemainDis: 1200,
+      curSpeed: 180,
+      limitedSpeed: 120,
+      roadType: 1,
+      cameraDist: 800,
+      cameraType: 1,
+      cameraSpeed: 120,
+    );
+    mapState = 0; // 导航中
+    crossMap = null;
+    lastBroadcastAction = 'SIMULATE_NAV';
+    broadcastReceived = DateTime.now().millisecondsSinceEpoch;
+    notifyListeners();
   }
 
   /// 重置所有数据
