@@ -39,27 +39,8 @@
             </intent-filter>
         </activity>
 
-        <!-- 高德导航广播接收器：监听多种 action，兼容车机版与手机版 -->
-        <receiver
-            android:name=".NavBroadcastReceiver"
-            android:exported="true"
-            android:priority="999">
-            <intent-filter android:priority="999">
-                <action android:name="AUTONAVI_STANDARD_BROADCAST_SEND" />
-                <action android:name="AUTONAVI_STANDARD_BROADCAST_RECV" />
-                <action android:name="com.autonavi.amapauto.ACTION_STANDARD_BROADCAST_SEND" />
-                <action android:name="com.autonavi.amapauto.ACTION_STANDARD_BROADCAST_RECV" />
-                <action android:name="com.autonavi.amapauto.action.STANDARD_BROADCAST" />
-                <action android:name="com.autonavi.action.STANDARD_BROADCAST_SEND" />
-                <action android:name="com.autonavi.minimap.ACTION_BROADCAST" />
-                <action android:name="com.autonavi.minimap.action.NAV_INFO" />
-                <action android:name="com.autonavi.action.NAVIGATION_INFO" />
-                <action android:name="AUTONAVI_NAVI_INFO" />
-                <action android:name="AutonaviNaviInfo" />
-                <action android:name="com.autonavi.autonavi.action.BROADCAST_SEND" />
-                <action android:name="com.navblerelay.SELF_TEST" />
-            </intent-filter>
-        </receiver>
+        <!-- 高德导航广播接收器：通过 MainActivity.registerNavReceiver() 动态注册 -->
+        <!-- 不在 Manifest 中静态声明，避免创建无 onParsed 回调的空实例 -->
 
         <!-- flutter_blue_plus 插件需要的元数据 -->
         <meta-data

@@ -26,6 +26,8 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _relayWired = false;
+  /// v0.5.10: 防止 _relayToBle 重入（broadcast.notifyListeners 触发自身回调导致无限递归）
+  bool _relaying = false;
 
   @override
   void initState() {
@@ -56,38 +58,45 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   void _relayToBle(BroadcastService broadcast) {
+    // v0.5.10: 防止重入——broadcast.notifyListeners() 会触发自身回调导致无限递归
+    if (_relaying) return;
     if (!mounted) return;
-    final ble = context.read<BleService>();
-    final settings = context.read<SettingsService>();
-    if (!ble.isConnected) return;
+    _relaying = true;
+    try {
+      final ble = context.read<BleService>();
+      final settings = context.read<SettingsService>();
+      if (!ble.isConnected) return;
 
-    final guide = broadcast.guideInfo;
-    if (guide != null) {
-      ble.sendGuideInfo(guide, compact: settings.compactMode);
-      broadcast.relayCount++;
+      final guide = broadcast.guideInfo;
+      if (guide != null) {
+        ble.sendGuideInfo(guide, compact: settings.compactMode);
+        broadcast.relayCount++;
+      }
+      final driveWay = broadcast.driveWayInfo;
+      if (driveWay != null) {
+        ble.sendDriveWay(driveWay);
+        broadcast.relayCount++;
+      }
+      final tmc = broadcast.tmcSegmentInfo;
+      if (tmc != null) {
+        ble.sendTmcSegment(tmc);
+        broadcast.relayCount++;
+      }
+      final loc = broadcast.locationInfo;
+      if (loc != null) {
+        ble.sendLocation(loc);
+        broadcast.relayCount++;
+      }
+      // v0.5.8 修复：mapState 变化时也发送到 ESP32
+      if (broadcast.mapState >= 0) {
+        ble.sendMapState(broadcast.mapState, broadcast.crossMap);
+        broadcast.relayCount++;
+      }
+      broadcast.lastRelayAt = DateTime.now();
+      broadcast.notifyListeners();
+    } finally {
+      _relaying = false;
     }
-    final driveWay = broadcast.driveWayInfo;
-    if (driveWay != null) {
-      ble.sendDriveWay(driveWay);
-      broadcast.relayCount++;
-    }
-    final tmc = broadcast.tmcSegmentInfo;
-    if (tmc != null) {
-      ble.sendTmcSegment(tmc);
-      broadcast.relayCount++;
-    }
-    final loc = broadcast.locationInfo;
-    if (loc != null) {
-      ble.sendLocation(loc);
-      broadcast.relayCount++;
-    }
-    // v0.5.8 修复：mapState 变化时也发送到 ESP32
-    if (broadcast.mapState >= 0) {
-      ble.sendMapState(broadcast.mapState, broadcast.crossMap);
-      broadcast.relayCount++;
-    }
-    broadcast.lastRelayAt = DateTime.now();
-    broadcast.notifyListeners();
   }
 
   Future<void> _start() async {
