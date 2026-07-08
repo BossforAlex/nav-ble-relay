@@ -80,6 +80,10 @@ class BleService extends ChangeNotifier {
   String _lastError = '';
   String get lastError => _lastError;
 
+  /// v0.5.8: 服务发现摘要（UI 可见，诊断特征值为何未发现）
+  String _discoverySummary = '';
+  String get discoverySummary => _discoverySummary;
+
   /// 扫描过程中发现的所有设备（用户需求：不再过滤名字）
   final List<ScanResult> _allDevices = [];
   List<ScanResult> get allDevices => List.unmodifiable(_allDevices);
@@ -303,6 +307,7 @@ class BleService extends ChangeNotifier {
         _chrData = null;
         _chrPoll = null;
         _isOurDevice = false;
+        _discoverySummary = '';
         _status = BleStatus.stopped;
         _deviceAddress = '';
         _deviceName = '';
@@ -335,8 +340,10 @@ class BleService extends ChangeNotifier {
 
     if (targetService == null) {
       // 非本项目设备：连接成功但不进行数据传输
-      debugPrint('[BLE] ⚠ 未找到目标服务 ${BleConstants.serviceUuid}'
-          '（非 AutoNavDisplay 设备）');
+      _discoverySummary = '未找到目标服务 ${BleConstants.serviceUuid.toUpperCase()}\n'
+          '已发现 ${services.length} 个服务: ${services.map((s) => s.uuid.str).join(", ")}';
+      _lastError = '服务 ${BleConstants.serviceUuid.toUpperCase()} 未发现';
+      debugPrint('[BLE] ⚠ $_discoverySummary');
       _status = BleStatus.connected;
       _isOurDevice = false;
       _safeNotify();
@@ -347,9 +354,11 @@ class BleService extends ChangeNotifier {
 
     // 找到 2 个特征值：CHAR_DATA（写）+ CHAR_POLL（订阅）
     int found = 0;
+    final foundChars = <String>[];
     for (var c in targetService.characteristics) {
       final u = c.uuid.str.toLowerCase();
       final p = c.properties;
+      foundChars.add('${c.uuid.str} [W=${p.write} WNR=${p.writeWithoutResponse} I=${p.indicate}]');
       debugPrint('[BLE] 特征值 ${c.uuid.str}'
           ' [read=${p.read} write=${p.write} '
           'writeNoResp=${p.writeWithoutResponse} '
@@ -362,9 +371,19 @@ class BleService extends ChangeNotifier {
         found++;
       }
     }
-    debugPrint('[BLE] ✓ 映射 $found/2 个特征值 (DATA + POLL)');
 
     _isOurDevice = (found == 2 && _chrData != null && _chrPoll != null);
+    _discoverySummary = '目标服务: ${targetService.uuid.str}\n'
+        '特征值已映射 $found/2:\n${foundChars.join("\n")}'
+        '${_isOurDevice ? "" : "\n⚠ 缺少 CHAR_DATA(${BleConstants.charDataUuid.toUpperCase()}) 或 CHAR_POLL(${BleConstants.charPollUuid.toUpperCase()})"}';
+    debugPrint('[BLE] $_discoverySummary');
+
+    if (!_isOurDevice) {
+      _lastError = '特征值不全: 找到 $found/2 (DATA=${_chrData != null} POLL=${_chrPoll != null})';
+    } else {
+      _lastError = '';
+    }
+
     _status = BleStatus.connected;
     _safeNotify();
 
@@ -424,6 +443,11 @@ class BleService extends ChangeNotifier {
 
   /// v0.5.8: 发送测试数据包，验证 BLE 写入通道（公开方法，供 UI 按钮调用）
   Future<bool> sendTestPacket() async {
+    if (!_isOurDevice) {
+      _lastError = 'TEST: 非本项目设备（_isOurDevice=false）\n$_discoverySummary';
+      debugPrint('[BLE] ✗ $_lastError');
+      return false;
+    }
     debugPrint('[BLE] >>> 开始发送测试数据包 <<<');
     final ts = DateTime.now().millisecondsSinceEpoch;
     final test = <String, dynamic>{

@@ -140,12 +140,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final ok = await ble.sendTestPacket();
     if (!mounted) return;
     final err = ble.lastError;
+    final summary = ble.discoverySummary;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(ok
             ? 'BLE 测试包已发送，查看 ESP32 串口'
-            : 'BLE 写入失败: ${err.isNotEmpty ? err : "未知错误"}'),
-        duration: Duration(seconds: ok ? 2 : 5),
+            : '写入失败: ${err.isNotEmpty ? err : "未知错误"}\n${summary.isNotEmpty ? summary : ""}'),
+        duration: Duration(seconds: ok ? 2 : 6),
       ),
     );
   }

@@ -125,6 +125,16 @@ class StatusCard extends StatelessWidget {
                     valueColor: Colors.red,
                   ),
                 ],
+                // v0.5.8: 服务发现摘要（诊断特征值为何未发现）
+                if (connected && ble.discoverySummary.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  _InfoRow(
+                    icon: Icons.search,
+                    label: '发现',
+                    value: ble.discoverySummary,
+                    valueColor: const Color(0xFF666666),
+                  ),
+                ],
               ],
             ),
           ),
