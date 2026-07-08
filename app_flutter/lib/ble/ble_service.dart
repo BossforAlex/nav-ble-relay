@@ -112,6 +112,27 @@ class BleService extends ChangeNotifier {
   BluetoothCharacteristic? _chrData;  // 手机写（WRITE | WRITE_NR）
   BluetoothCharacteristic? _chrPoll;  // 手机订阅（NOTIFY）
 
+  // ── UUID 归一化比较 ─────────────────────────────────
+  /// 将 UUID 字符串归一化为短格式用于比较。
+  /// 蓝牙 SIG 16-bit UUID（0000XXXX-0000-1000-8000-00805F9B34FB）
+  /// 归一化为 4 位短格式 "XXXX"，其他 UUID 保持完整格式。
+  static String _shortUuid(String uuid) {
+    final n = uuid.replaceAll('-', '').toLowerCase();
+    // 16-bit Bluetooth SIG UUID
+    if (n.length == 32 &&
+        n.startsWith('0000') &&
+        n.endsWith('00001000800000805f9b34fb')) {
+      return n.substring(4, 8);
+    }
+    // 已为短格式（4 或 8 字符）
+    if (n.length <= 8) return n;
+    return n;
+  }
+
+  /// 比较 Guid 对象与字符串 UUID（自动处理 16-bit ↔ 128-bit 格式差异）
+  static bool _uuidMatch(Guid a, String b) =>
+      _shortUuid(a.str) == _shortUuid(b);
+
   // ── 发送统计（用户需求：发送统计卡片） ────────────────
   int _txOk = 0;
   int _txFail = 0;
@@ -330,13 +351,12 @@ class BleService extends ChangeNotifier {
     List<BluetoothService> services = await device.discoverServices();
     debugPrint('[BLE] 发现 ${services.length} 个服务');
 
-    // v0.5.8 修复：用 Guid 对象比较（自动处理 16-bit ↔ 128-bit 归一化）
-    // ESP32 NimBLE 广告 0xFFE0 为 16-bit 短 UUID "ffe0"，
-    // 字符串 "ffe0" != "0000ffe0-0000-1000-8000-00805f9b34fb" 导致误判
-    final targetServiceGuid = Guid(BleConstants.serviceUuid);
+    // v0.5.9 修复：用 _uuidMatch 归一化比较（处理 16-bit ↔ 128-bit 格式差异）
+    // flutter_blue_plus Guid.str 对 16-bit UUID 返回 "ffe0"（短格式），
+    // 而我们常量是完整 128-bit 格式，Guid.== 底层比较 str 值，必不相等
     BluetoothService? targetService;
     for (var s in services) {
-      if (s.uuid == targetServiceGuid) {
+      if (_uuidMatch(s.uuid, BleConstants.serviceUuid)) {
         targetService = s;
         break;
       }
@@ -359,8 +379,6 @@ class BleService extends ChangeNotifier {
     // 找到 2 个特征值：CHAR_DATA（写）+ CHAR_POLL（订阅）
     int found = 0;
     final foundChars = <String>[];
-    final targetDataGuid = Guid(BleConstants.charDataUuid);
-    final targetPollGuid = Guid(BleConstants.charPollUuid);
     for (var c in targetService.characteristics) {
       final p = c.properties;
       foundChars.add('${c.uuid.str} [W=${p.write} WNR=${p.writeWithoutResponse} I=${p.indicate}]');
@@ -368,10 +386,10 @@ class BleService extends ChangeNotifier {
           ' [read=${p.read} write=${p.write} '
           'writeNoResp=${p.writeWithoutResponse} '
           'notify=${p.notify} indicate=${p.indicate}]');
-      if (c.uuid == targetDataGuid) {
+      if (_uuidMatch(c.uuid, BleConstants.charDataUuid)) {
         _chrData = c;
         found++;
-      } else if (c.uuid == targetPollGuid) {
+      } else if (_uuidMatch(c.uuid, BleConstants.charPollUuid)) {
         _chrPoll = c;
         found++;
       }
