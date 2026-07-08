@@ -330,9 +330,13 @@ class BleService extends ChangeNotifier {
     List<BluetoothService> services = await device.discoverServices();
     debugPrint('[BLE] 发现 ${services.length} 个服务');
 
+    // v0.5.8 修复：用 Guid 对象比较（自动处理 16-bit ↔ 128-bit 归一化）
+    // ESP32 NimBLE 广告 0xFFE0 为 16-bit 短 UUID "ffe0"，
+    // 字符串 "ffe0" != "0000ffe0-0000-1000-8000-00805f9b34fb" 导致误判
+    final targetServiceGuid = Guid(BleConstants.serviceUuid);
     BluetoothService? targetService;
     for (var s in services) {
-      if (s.uuid.str.toLowerCase() == BleConstants.serviceUuid.toLowerCase()) {
+      if (s.uuid == targetServiceGuid) {
         targetService = s;
         break;
       }
@@ -355,18 +359,19 @@ class BleService extends ChangeNotifier {
     // 找到 2 个特征值：CHAR_DATA（写）+ CHAR_POLL（订阅）
     int found = 0;
     final foundChars = <String>[];
+    final targetDataGuid = Guid(BleConstants.charDataUuid);
+    final targetPollGuid = Guid(BleConstants.charPollUuid);
     for (var c in targetService.characteristics) {
-      final u = c.uuid.str.toLowerCase();
       final p = c.properties;
       foundChars.add('${c.uuid.str} [W=${p.write} WNR=${p.writeWithoutResponse} I=${p.indicate}]');
       debugPrint('[BLE] 特征值 ${c.uuid.str}'
           ' [read=${p.read} write=${p.write} '
           'writeNoResp=${p.writeWithoutResponse} '
           'notify=${p.notify} indicate=${p.indicate}]');
-      if (u == BleConstants.charDataUuid.toLowerCase()) {
+      if (c.uuid == targetDataGuid) {
         _chrData = c;
         found++;
-      } else if (u == BleConstants.charPollUuid.toLowerCase()) {
+      } else if (c.uuid == targetPollGuid) {
         _chrPoll = c;
         found++;
       }
