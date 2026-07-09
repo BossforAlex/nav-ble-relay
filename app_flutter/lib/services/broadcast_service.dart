@@ -90,7 +90,7 @@ class BroadcastService extends ChangeNotifier {
   /// 用于诊断 broadcast→relay→BLE 完整链路是否通畅
   void simulateNavigation() {
     guideInfo = GuideInfo(
-      icon: 0, // 直行
+      icon: 1, // 直行（ESP32 drawArrowIcon: case 1 = angle 0°）
       curRoadName: '模拟测试道路',
       nextRoadName: '模拟下一条路',
       segRemainDis: 1200,

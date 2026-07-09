@@ -57,7 +57,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _relayWired = true;
   }
 
-  void _relayToBle(BroadcastService broadcast) {
+  /// v0.6.3 修复：改为 async + await，确保 BLE 数据按序到达 ESP32。
+  /// ESP32 端 renderFrame() 需同时满足 mapState==Navigating 和 guide.valid，
+  /// 先发 state（设置导航状态）再发 guide（填充数据），确保最后一帧两者都满足。
+  Future<void> _relayToBle(BroadcastService broadcast) async {
     // v0.5.10: 防止重入——broadcast.notifyListeners() 会触发自身回调导致无限递归
     if (_relaying) return;
     if (!mounted) return;
@@ -67,29 +70,30 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       final settings = context.read<SettingsService>();
       if (!ble.isConnected) return;
 
+      // 先发 mapState（设置导航状态），再发 guide（填充数据）
+      // 确保 ESP32 收到两条消息后，最后一帧 mapState+guide 都满足
+      if (broadcast.mapState >= 0) {
+        await ble.sendMapState(broadcast.mapState, broadcast.crossMap);
+        broadcast.relayCount++;
+      }
       final guide = broadcast.guideInfo;
       if (guide != null) {
-        ble.sendGuideInfo(guide, compact: settings.compactMode);
+        await ble.sendGuideInfo(guide, compact: settings.compactMode);
         broadcast.relayCount++;
       }
       final driveWay = broadcast.driveWayInfo;
       if (driveWay != null) {
-        ble.sendDriveWay(driveWay);
+        await ble.sendDriveWay(driveWay);
         broadcast.relayCount++;
       }
       final tmc = broadcast.tmcSegmentInfo;
       if (tmc != null) {
-        ble.sendTmcSegment(tmc);
+        await ble.sendTmcSegment(tmc);
         broadcast.relayCount++;
       }
       final loc = broadcast.locationInfo;
       if (loc != null) {
-        ble.sendLocation(loc);
-        broadcast.relayCount++;
-      }
-      // v0.5.8 修复：mapState 变化时也发送到 ESP32
-      if (broadcast.mapState >= 0) {
-        ble.sendMapState(broadcast.mapState, broadcast.crossMap);
+        await ble.sendLocation(loc);
         broadcast.relayCount++;
       }
       broadcast.lastRelayAt = DateTime.now();
