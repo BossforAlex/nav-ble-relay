@@ -53,7 +53,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void _wireRelay() {
     if (_relayWired) return;
     final broadcast = context.read<BroadcastService>();
-    broadcast.addListener(() => _relayToBle(broadcast));
+    broadcast.addListener(() { _relayToBle(broadcast); });
     _relayWired = true;
   }
 
