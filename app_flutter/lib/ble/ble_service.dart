@@ -651,10 +651,13 @@ class BleService extends ChangeNotifier {
 
   /// 向 CHAR_DATA 写入 JSON 数据
   ///
+  /// v0.6.4: 自动分片传输。当 JSON 编码后超过 MTU 安全阈值 (400 bytes)，
+  /// 自动拆分为多个 chunk，每个 chunk 带 [0xAA, idx, total, ...data] 二进制头。
+  /// ESP32 端自动重组后解析，对上层透明。
+  ///
   /// 写入策略：
   ///   - 优先 writeWithResponse（可靠，有 ACK 确认）
   ///   - 其次 writeWithoutResponse（快但不可靠）
-  ///   - 检查 chrData 的属性
   Future<bool> _write(Map<String, dynamic> packet, {String label = 'DATA'}) async {
     if (!isConnected) {
       _lastError = '$label: BLE 未连接';
@@ -670,38 +673,64 @@ class BleService extends ChangeNotifier {
       _safeNotify();
       return false;
     }
-    final chr = _chrData!;
     final json = jsonEncode(packet);
     final bytes = utf8.encode(json);
+
+    // v0.6.4: 数据超过 MTU 安全阈值 → 自动分片
+    const int maxPayload = 400;
+    if (bytes.length <= maxPayload) {
+      return await _writeRaw(bytes, label);
+    }
+
+    // 分片传输
+    final total = (bytes.length + maxPayload - 1) ~/ maxPayload;
+    debugPrint('[BLE] $label: ${bytes.length}B 超过 MTU, 分 $total 片发送');
+    for (int i = 0; i < total; i++) {
+      final start = i * maxPayload;
+      final end = (start + maxPayload).clamp(0, bytes.length);
+      final chunk = <int>[
+        0xAA, // magic: chunked message
+        i,    // chunk index
+        total, // total chunks
+        ...bytes.sublist(start, end),
+      ];
+      final ok = await _writeRaw(chunk, '$label#${i + 1}/$total');
+      if (!ok) {
+        debugPrint('[BLE] ✗ $label 分片 ${i + 1}/$total 失败, 中止');
+        return false;
+      }
+    }
+    _txOk++;
+    _safeNotify();
+    return true;
+  }
+
+  /// 向 CHAR_DATA 写入原始字节（不编码 JSON）
+  Future<bool> _writeRaw(List<int> bytes, String label) async {
+    final chr = _chrData!;
     final p = chr.properties;
     final canWriteResp = p.write;
     final canWriteNoResp = p.writeWithoutResponse;
+
     if (!canWriteResp && !canWriteNoResp) {
-      _lastError = '$label: chrData 不支持 write'
-          '（read=${p.read} write=${p.write} writeNoResp=${p.writeWithoutResponse}）';
-      debugPrint('[BLE] ✗ $_lastError');
+      _lastError = '$label: chrData 不支持 write';
       _txFail++;
       _safeNotify();
       return false;
     }
-    // 优先 writeWithResponse（可靠）
+
     if (canWriteResp) {
       try {
         await chr.write(bytes, withoutResponse: false);
         _lastError = '';
-        _txOk++;
-        _safeNotify();
         return true;
       } catch (e) {
         _lastError = '$label writeWithResponse: $e';
         debugPrint('[BLE] ✗ $_lastError');
-        // 回退到 writeWithoutResponse
         if (canWriteNoResp) {
           try {
             await chr.write(bytes, withoutResponse: true);
             _lastError = '';
-            _txOk++;
-            _safeNotify();
             return true;
           } catch (e2) {
             _lastError = '$label writeNoResp 回退: $e2';
@@ -713,12 +742,9 @@ class BleService extends ChangeNotifier {
         return false;
       }
     } else {
-      // 只有 writeWithoutResponse
       try {
         await chr.write(bytes, withoutResponse: true);
         _lastError = '';
-        _txOk++;
-        _safeNotify();
         return true;
       } catch (e) {
         _lastError = '$label writeNoResp: $e';

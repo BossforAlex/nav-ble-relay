@@ -41,17 +41,104 @@ static Nav::NavState sNavState;
 
 // BLE 数据接收缓冲区（静态，避免堆碎片）
 // v0.5.7：单 char 通道，JSON 带 "type" 字段（guide/drive/tmc/state/location）
-static char sJsonBuffer[1024];
+static char sJsonBuffer[2048];
+
+// v0.6.4: 分片重组缓冲区
+// Flutter 端当 JSON > 400B 时，自动拆分为带 [0xAA, idx, total, ...data] 头的 chunk
+// ESP32 端在此重组后解析，对上层 NavParser 透明
+static uint8_t sChunkBuf[2048];
+static size_t  sChunkLen = 0;
+static int     sChunkTotal = 0;
+static int     sChunkReceived = 0;
+static unsigned long sChunkStartMs = 0;
 
 // ===================== BLE 数据回调 =====================
 // v0.5.7 重构：单 write char + INDICATE poll，JSON 用 "type" 字段路由
 // 期望格式：{"type": "guide"|"drive"|"tmc"|"state"|"location", "ts": ..., "data": {...}}
+//
+// v0.6.4: 支持分片重组。检测首字节 0xAA 为分片消息，
+// 按 chunk index 顺序重组，收齐后按完整 JSON 解析。
 static void onBleData(const uint8_t* data, size_t len) {
     if (len == 0 || data == nullptr) return;
 
-    size_t copyLen = len < sizeof(sJsonBuffer) - 1 ? len : sizeof(sJsonBuffer) - 1;
-    memcpy(sJsonBuffer, data, copyLen);
-    sJsonBuffer[copyLen] = '\0';
+    // ── v0.6.4: 分片消息检测 ──
+    if (len >= 3 && data[0] == 0xAA) {
+        int idx   = (int)data[1];
+        int total = (int)data[2];
+        size_t chunkDataLen = len - 3;
+        const uint8_t* chunkData = data + 3;
+
+        // 超时保护：如果 5 秒内没收齐，丢弃旧缓冲
+        if (sChunkTotal > 0 && (millis() - sChunkStartMs > 5000)) {
+            if (Debug::LOG_BLE_RAW) {
+                Serial.printf("[BLE] 分片超时，丢弃 %d/%d\n", sChunkReceived, sChunkTotal);
+            }
+            sChunkTotal = 0;
+            sChunkReceived = 0;
+            sChunkLen = 0;
+        }
+
+        if (idx == 0) {
+            // 第一片：重置缓冲
+            sChunkLen = 0;
+            sChunkTotal = total;
+            sChunkReceived = 0;
+            sChunkStartMs = millis();
+        }
+
+        // 校验分片一致性
+        if (total != sChunkTotal || idx != sChunkReceived) {
+            if (Debug::LOG_BLE_RAW) {
+                Serial.printf("[BLE] 分片错乱 (期望 %d/%d, 收到 %d/%d), 丢弃\n",
+                              sChunkReceived, sChunkTotal, idx, total);
+            }
+            sChunkTotal = 0;
+            sChunkReceived = 0;
+            sChunkLen = 0;
+            return;
+        }
+
+        // 追加到重组缓冲
+        if (sChunkLen + chunkDataLen < sizeof(sChunkBuf)) {
+            memcpy(sChunkBuf + sChunkLen, chunkData, chunkDataLen);
+            sChunkLen += chunkDataLen;
+            sChunkReceived++;
+        } else {
+            Serial.printf("[BLE] 分片缓冲溢出 (%u + %u > %u)\n",
+                          (unsigned)sChunkLen, (unsigned)chunkDataLen, (unsigned)sizeof(sChunkBuf));
+            sChunkTotal = 0;
+            sChunkReceived = 0;
+            sChunkLen = 0;
+            return;
+        }
+
+        // 收齐所有分片 → 复制到 sJsonBuffer 继续解析
+        if (sChunkReceived >= sChunkTotal) {
+            size_t copyLen = sChunkLen < sizeof(sJsonBuffer) - 1
+                             ? sChunkLen : sizeof(sJsonBuffer) - 1;
+            memcpy(sJsonBuffer, sChunkBuf, copyLen);
+            sJsonBuffer[copyLen] = '\0';
+
+            if (Debug::LOG_BLE_RAW) {
+                Serial.printf("[BLE] 分片重组完成 (%d 片, %u 字节)\n",
+                              sChunkTotal, (unsigned)sChunkLen);
+            }
+
+            // 重置分片状态
+            sChunkTotal = 0;
+            sChunkReceived = 0;
+            sChunkLen = 0;
+
+            // 继续向下解析（不 return）
+        } else {
+            return; // 等待更多分片
+        }
+    } else {
+        // 非分片消息：直接拷贝到 sJsonBuffer
+        size_t copyLen = len < sizeof(sJsonBuffer) - 1 ? len : sizeof(sJsonBuffer) - 1;
+        memcpy(sJsonBuffer, data, copyLen);
+        sJsonBuffer[copyLen] = '\0';
+    }
 
     // 解析 JSON 顶层
     JsonDocument doc;

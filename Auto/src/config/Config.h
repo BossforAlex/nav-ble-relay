@@ -12,7 +12,7 @@
 
 // ===================== 项目信息 =====================
 #define PROJECT_NAME    "AutoNavDisplay"
-#define PROJECT_VERSION "0.6.3"
+#define PROJECT_VERSION "0.6.4"
 
 // ===================== 串口配置 =====================
 #ifndef SERIAL_BAUD
@@ -54,16 +54,18 @@ namespace BleUUID {
 #define TFT_HEIGHT 240
 #endif
 
-// HUD 配色（与视频中的 HUD 风格一致：高对比、夜间友好）
+// HUD 配色（iWatch 风格：深黑底 + 高饱和点缀色，夜间友好）
 namespace HudColor {
-    constexpr uint16_t BG       = 0x0000;  // 黑底
-    constexpr uint16_t PRIMARY  = 0x07FF;  // 青色（主信息）
+    constexpr uint16_t BG       = 0x0000;  // 纯黑底
+    constexpr uint16_t PRIMARY  = 0x07FF;  // 青色（转向箭头、主信息）
     constexpr uint16_t ACCENT   = 0x07E0;  // 绿色（车速）
     constexpr uint16_t WARN     = 0xFD20;  // 橙色（警告）
     constexpr uint16_t DANGER   = 0xF800;  // 红色（限速/超速）
-    constexpr uint16_t DIM      = 0x4208;  // 暗灰（次要信息）
+    constexpr uint16_t DIM      = 0x39C7;  // 浅灰（次要文字，比 0x4208 更亮）
+    constexpr uint16_t DARK     = 0x2104;  // 深灰（分割线、背景块）
     constexpr uint16_t WHITE    = 0xFFFF;
     constexpr uint16_t YELLOW   = 0xFFE0;
+    constexpr uint16_t BLUE     = 0x041F;  // 深蓝（限速圆圈背景）
 }
 
 // ===================== 功能开关 =====================
@@ -73,7 +75,7 @@ namespace Feature {
     constexpr bool BLE_AUTO_RECONNECT = true;        // 自动重连 BLE
     constexpr uint32_t BLE_SCAN_TIMEOUT_MS = 5000;   // BLE 扫描超时
     constexpr bool LOW_POWER_WHEN_IDLE = false;      // 空闲降频
-    constexpr uint32_t SCREEN_REFRESH_MS = 100;     // v0.6.0: 10fps，画面流畅
+    constexpr uint32_t SCREEN_REFRESH_MS = 33;     // v0.6.4: 30fps，iWatch 丝滑体验
 }
 
 // ===================== 调试开关 =====================
