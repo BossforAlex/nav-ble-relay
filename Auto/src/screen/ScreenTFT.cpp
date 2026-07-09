@@ -31,10 +31,6 @@ bool ScreenTFT::init() {
         return false;
     }
 
-    // v0.6.2: 降低 SPI 频率（27MHz，ILI9341 推荐 ≤ 40MHz）
-    // 避免在高频下因接线不良导致 SPI 通信失败
-    tft.setSPISpeed(27000000);
-
 #ifdef TFT_BL
     pinMode(TFT_BL, OUTPUT);
     digitalWrite(TFT_BL, TFT_BACKLIGHT_ON);
