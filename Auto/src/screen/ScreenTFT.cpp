@@ -5,28 +5,30 @@
 #include <stdio.h>
 
 // ══════════════════════════════════════════════════════════════
-// v0.6.0: ILI9341 横屏 320x240 HUD 导航显示
+// v0.6.2: ILI9341 横屏 320x240 HUD 导航显示
 // 屏幕：MSP2807 2.8" SPI ILI9341
 // 接线：CS=10 DC=2 RST=4 MOSI=11 SCK=12 BL=6
+//
+// v0.6.2 移除 sprite 帧缓冲，直接绘制到 TFT。
+// 避免 PSRAM 依赖，兼容 ESP32-S3 SuperMini 克隆板。
+// 使用 startWrite()/endWrite() 批量 SPI 事务减少闪烁。
 // ══════════════════════════════════════════════════════════════
 
 ScreenTFT::ScreenTFT()
-    : tft(), sprite(&tft) {
+    : tft() {
 }
 
 // ── 初始化 ────────────────────────────────────────────────
 
 bool ScreenTFT::init() {
-    // v0.6.2: 上电后等待电源稳定（MSP2807 模块需 5V 供电）
-    // 若电压不稳，ILI9341 初始化可能失败或导致 ESP32 掉电
+    // 上电后等待电源稳定
     delay(300);
 
     tft.init();
     tft.setRotation(1);  // 横屏 320x240
-    mW = tft.width();
-    mH = tft.height();
 
-    if (mW == 0 || mH == 0) {
+    // 验证 TFT 是否响应
+    if (tft.width() == 0 || tft.height() == 0) {
         Serial.println("[Screen] TFT 未检测到（检查 5V 供电 + SPI 接线）");
         return false;
     }
@@ -34,30 +36,14 @@ bool ScreenTFT::init() {
 #ifdef TFT_BL
     pinMode(TFT_BL, OUTPUT);
     digitalWrite(TFT_BL, TFT_BACKLIGHT_ON);
-    // 背光软启动，避免瞬间大电流拉低电压
     delay(100);
 #endif
 
-    // v0.6.2: 创建 sprite 帧缓冲（需要 PSRAM）
-    // 若 PSRAM 未配置，malloc 返回 nullptr
-    sprite.setColorDepth(16);
-    sprite.setTextWrap(false);
-    uint16_t* buf = (uint16_t*)sprite.createSprite(mW, mH);
-    if (buf == nullptr) {
-        // 尝试半分辨率（80KB，内部 SRAM 可能够）
-        Serial.println("[Screen] 全分辨率 sprite 分配失败，尝试半分辨率...");
-        mW = 160; mH = 120;
-        buf = (uint16_t*)sprite.createSprite(mW, mH);
-        if (buf == nullptr) {
-            Serial.println("[Screen] sprite 帧缓冲分配失败（PSRAM 未启用？）");
-            return false;
-        }
-        Serial.printf("[Screen] 已降级为 %dx%d 半分辨率模式\n", mW, mH);
-    }
+    // 清屏
+    tft.fillScreen(HudColor::BG);
 
     mInited = true;
-    mSpriteOk = true;
-    Serial.printf("[Screen] ILI9341 TFT 初始化完成 %dx%d 横屏 (PSRAM)\n", mW, mH);
+    Serial.printf("[Screen] ILI9341 TFT 初始化完成 %dx%d 横屏 (直接绘制)\n", W, H);
     return true;
 }
 
@@ -92,11 +78,13 @@ void ScreenTFT::log(const char* msg) {
 // ── 帧渲染 ────────────────────────────────────────────────
 
 void ScreenTFT::renderFrame() {
-    if (!mInited || !mSpriteOk) return;
+    if (!mInited) return;
 
-    if (mFrameCounter == 0) {
+    tft.startWrite();
+
+    if (mFrameCounter == 1) {
         drawBootScreen();
-        sprite.pushSprite(0, 0);
+        tft.endWrite();
         return;
     }
 
@@ -115,78 +103,78 @@ void ScreenTFT::renderFrame() {
         drawBottomBar();
     } else if (mState.mapState == Nav::MapState::Arrived) {
         drawTopBar();
-        sprite.setTextColor(HudColor::ACCENT, HudColor::BG);
-        sprite.setTextDatum(MC_DATUM);
-        sprite.drawString("Arrived", mW / 2, mH / 2, 4);
+        tft.setTextColor(HudColor::ACCENT, HudColor::BG);
+        tft.setTextDatum(MC_DATUM);
+        tft.drawString("Arrived", W / 2, H / 2, 4);
     } else {
         drawIdleScreen();
     }
 
-    sprite.pushSprite(0, 0);
+    tft.endWrite();
 }
 
 // ── 背景 ──────────────────────────────────────────────────
 
 void ScreenTFT::drawBackground() {
-    sprite.fillSprite(HudColor::BG);
+    tft.fillScreen(HudColor::BG);
 }
 
 // ── 启动画面 ──────────────────────────────────────────────
 
 void ScreenTFT::drawBootScreen() {
-    sprite.fillSprite(HudColor::BG);
-    int cx = mW / 2, cy = mH / 2;
+    tft.fillScreen(HudColor::BG);
+    int cx = W / 2, cy = H / 2;
 
     // 外框
-    sprite.drawRect(8, 8, mW - 16, mH - 16, HudColor::PRIMARY);
-    sprite.drawRect(12, 12, mW - 24, mH - 24, HudColor::DIM);
+    tft.drawRect(8, 8, W - 16, H - 16, HudColor::PRIMARY);
+    tft.drawRect(12, 12, W - 24, H - 24, HudColor::DIM);
 
     // 导航箭头
     int sz = 30;
-    sprite.fillTriangle(cx, cy - sz, cx - sz, cy + sz / 2,
-                        cx + sz, cy + sz / 2, HudColor::PRIMARY);
-    sprite.fillRect(cx - 5, cy + sz / 2, 10, 20, HudColor::PRIMARY);
+    tft.fillTriangle(cx, cy - sz, cx - sz, cy + sz / 2,
+                     cx + sz, cy + sz / 2, HudColor::PRIMARY);
+    tft.fillRect(cx - 5, cy + sz / 2, 10, 20, HudColor::PRIMARY);
 
     // 版本文字
-    sprite.setTextColor(HudColor::DIM, HudColor::BG);
-    sprite.setTextDatum(BC_DATUM);
-    sprite.drawString("AutoNavDisplay v" PROJECT_VERSION, cx, mH - 12, 2);
+    tft.setTextColor(HudColor::DIM, HudColor::BG);
+    tft.setTextDatum(BC_DATUM);
+    tft.drawString("AutoNavDisplay v" PROJECT_VERSION, cx, H - 12, 2);
 
     // 进度条
-    int barY = mH - 32;
-    sprite.drawRect(18, barY, mW - 36, 5, HudColor::DIM);
-    sprite.fillRect(20, barY + 1, (mW - 40) / 3, 3, HudColor::ACCENT);
-    sprite.fillRect(20 + (mW - 40) / 3, barY + 1, (mW - 40) / 3, 3, HudColor::PRIMARY);
+    int barY = H - 32;
+    tft.drawRect(18, barY, W - 36, 5, HudColor::DIM);
+    tft.fillRect(20, barY + 1, (W - 40) / 3, 3, HudColor::ACCENT);
+    tft.fillRect(20 + (W - 40) / 3, barY + 1, (W - 40) / 3, 3, HudColor::PRIMARY);
 }
 
 // ── 顶部状态栏 ────────────────────────────────────────────
 
 void ScreenTFT::drawTopBar() {
-    sprite.fillRect(0, 0, mW, TOP_BAR_H, HudColor::DIM);
+    tft.fillRect(0, 0, W, TOP_BAR_H, HudColor::DIM);
 
     // BLE 状态点
     int dotR = 4;
     int dotX = 10, dotY = TOP_BAR_H / 2;
-    sprite.fillCircle(dotX, dotY, dotR,
-                      mBleConnected ? HudColor::ACCENT : HudColor::DANGER);
+    tft.fillCircle(dotX, dotY, dotR,
+                   mBleConnected ? HudColor::ACCENT : HudColor::DANGER);
 
-    // 导航状态 + 帧计数
-    sprite.setTextColor(HudColor::WHITE, HudColor::DIM);
-    sprite.setTextDatum(ML_DATUM);
-    sprite.drawString(ScreenRenderer::mapStateLabel(mState.mapState),
-                      dotX + dotR + 6, dotY, 2);
+    // 导航状态
+    tft.setTextColor(HudColor::WHITE, HudColor::DIM);
+    tft.setTextDatum(ML_DATUM);
+    tft.drawString(ScreenRenderer::mapStateLabel(mState.mapState),
+                   dotX + dotR + 6, dotY, 2);
 
     // 方位角
-    sprite.setTextDatum(MR_DATUM);
+    tft.setTextDatum(MR_DATUM);
     char buf[32];
     snprintf(buf, sizeof(buf), "%s ^", bearingLabel(mState.location.bearing));
-    sprite.drawString(buf, mW - 6, dotY, 2);
+    tft.drawString(buf, W - 6, dotY, 2);
 }
 
 // ── 转向箭头（主区域左侧） ────────────────────────────────
 
 void ScreenTFT::drawTurnArrow() {
-    int cx = 100;  // 左侧区域中心
+    int cx = 100;
     int cy = MAIN_AREA_Y + MAIN_AREA_H / 2 + 10;
     int sz = 40;
 
@@ -200,7 +188,6 @@ void ScreenTFT::drawTurnArrow() {
 }
 
 void ScreenTFT::drawArrowIcon(int cx, int cy, int sz, int icon, uint16_t color) {
-    // 高德 ICON 到角度映射
     float angle = 0;
     switch (icon) {
         case 1: case 9:                      angle = 0;           break;
@@ -212,9 +199,9 @@ void ScreenTFT::drawArrowIcon(int cx, int cy, int sz, int icon, uint16_t color) 
         case 7:                              angle = 3 * PI / 4;   break;
         case 8: case 19:                     angle = PI;           break;
         case 15: // 到达
-            sprite.setTextColor(HudColor::ACCENT, HudColor::BG);
-            sprite.setTextDatum(MC_DATUM);
-            sprite.drawString("END", cx, cy, 4);
+            tft.setTextColor(HudColor::ACCENT, HudColor::BG);
+            tft.setTextDatum(MC_DATUM);
+            tft.drawString("END", cx, cy, 4);
             return;
         default: return;
     }
@@ -236,17 +223,17 @@ void ScreenTFT::drawArrowIcon(int cx, int cy, int sz, int icon, uint16_t color) 
     int x1 = cx + sw / 2, y1 = cy + hh / 2;
     int x2 = cx + sw / 2, y2 = cy + hh / 2 - sh;
     int x3 = cx - sw / 2, y3 = cy + hh / 2 - sh;
-    sprite.fillTriangle(rotX(x0, y0), rotY(x0, y0), rotX(x1, y1), rotY(x1, y1),
-                        rotX(x2, y2), rotY(x2, y2), color);
-    sprite.fillTriangle(rotX(x0, y0), rotY(x0, y0), rotX(x2, y2), rotY(x2, y2),
-                        rotX(x3, y3), rotY(x3, y3), color);
+    tft.fillTriangle(rotX(x0, y0), rotY(x0, y0), rotX(x1, y1), rotY(x1, y1),
+                     rotX(x2, y2), rotY(x2, y2), color);
+    tft.fillTriangle(rotX(x0, y0), rotY(x0, y0), rotX(x2, y2), rotY(x2, y2),
+                     rotX(x3, y3), rotY(x3, y3), color);
 
     // 箭头头
     int hx0 = cx - hw / 2, hy0 = cy - sh + hh / 2;
     int hx1 = cx + hw / 2, hy1 = cy - sh + hh / 2;
     int hx2 = cx,          hy2 = cy - sh + hh / 2 - hh;
-    sprite.fillTriangle(rotX(hx0, hy0), rotY(hx0, hy0), rotX(hx1, hy1), rotY(hx1, hy1),
-                        rotX(hx2, hy2), rotY(hx2, hy2), color);
+    tft.fillTriangle(rotX(hx0, hy0), rotY(hx0, hy0), rotX(hx1, hy1), rotY(hx1, hy1),
+                     rotX(hx2, hy2), rotY(hx2, hy2), color);
 }
 
 // ── 距离文本（箭头下方） ──────────────────────────────────
@@ -266,9 +253,9 @@ void ScreenTFT::drawDistance() {
     if (mState.guide.segRemainDis > 0 && mState.guide.segRemainDis < 200) color = HudColor::WARN;
     if (mState.guide.segRemainDis > 0 && mState.guide.segRemainDis < 50)  color = HudColor::DANGER;
 
-    sprite.setTextColor(color, HudColor::BG);
-    sprite.setTextDatum(BC_DATUM);
-    sprite.drawString(buf, cx, y, 4);
+    tft.setTextColor(color, HudColor::BG);
+    tft.setTextDatum(BC_DATUM);
+    tft.drawString(buf, cx, y, 4);
 }
 
 // ── 速度面板（右侧：限速圆 + 当前车速） ──────────────────
@@ -283,42 +270,41 @@ void ScreenTFT::drawSpeedPanel() {
     }
 
     // 当前车速
-    sprite.setTextColor(HudColor::ACCENT, HudColor::BG);
-    sprite.setTextDatum(TC_DATUM);
+    tft.setTextColor(HudColor::ACCENT, HudColor::BG);
+    tft.setTextDatum(TC_DATUM);
     char buf[8];
     snprintf(buf, sizeof(buf), "%d", mState.guide.curSpeed);
-    sprite.drawString(buf, cx, cy + 25, 4);
+    tft.drawString(buf, cx, cy + 25, 4);
 
-    sprite.setTextColor(HudColor::DIM, HudColor::BG);
-    sprite.drawString("km/h", cx, cy + 55, 2);
+    tft.setTextColor(HudColor::DIM, HudColor::BG);
+    tft.drawString("km/h", cx, cy + 55, 2);
 }
 
 void ScreenTFT::drawSpeedLimitCircle(int cx, int cy, int r, int speed, bool over) {
     uint16_t ring = over ? HudColor::DANGER : HudColor::WARN;
-    sprite.drawCircle(cx, cy, r, ring);
-    sprite.drawCircle(cx, cy, r - 1, ring);
-    sprite.fillCircle(cx, cy, r - 2, HudColor::BG);
-    sprite.setTextColor(over ? HudColor::DANGER : HudColor::WHITE, HudColor::BG);
-    sprite.setTextDatum(MC_DATUM);
+    tft.drawCircle(cx, cy, r, ring);
+    tft.drawCircle(cx, cy, r - 1, ring);
+    tft.fillCircle(cx, cy, r - 2, HudColor::BG);
+    tft.setTextColor(over ? HudColor::DANGER : HudColor::WHITE, HudColor::BG);
+    tft.setTextDatum(MC_DATUM);
     char buf[6];
     snprintf(buf, sizeof(buf), "%d", speed);
-    sprite.drawString(buf, cx, cy, 2);
+    tft.drawString(buf, cx, cy, 2);
 }
 
 // ── 车道指引 ──────────────────────────────────────────────
 
 void ScreenTFT::drawLaneBar() {
-    sprite.fillRect(0, LANE_BAR_Y, mW, LANE_BAR_H, HudColor::BG);
+    tft.fillRect(0, LANE_BAR_Y, W, LANE_BAR_H, HudColor::BG);
 
     int laneCount = mState.driveWay.laneCount;
     if (!mState.driveWay.enabled || laneCount == 0) {
-        // 无车道数据时显示电子眼
         if (mState.guide.cameraDist > 0) {
             char buf[24];
             snprintf(buf, sizeof(buf), "CAM %dm", mState.guide.cameraDist);
-            sprite.setTextColor(HudColor::WARN, HudColor::BG);
-            sprite.setTextDatum(MR_DATUM);
-            sprite.drawString(buf, mW - 6, LANE_BAR_Y + LANE_BAR_H / 2, 2);
+            tft.setTextColor(HudColor::WARN, HudColor::BG);
+            tft.setTextDatum(MR_DATUM);
+            tft.drawString(buf, W - 6, LANE_BAR_Y + LANE_BAR_H / 2, 2);
         }
         return;
     }
@@ -328,7 +314,7 @@ void ScreenTFT::drawLaneBar() {
     int laneW = 32;
     int laneH = 18;
     int totalW = laneCount * (laneW + 2);
-    int startX = (mW - totalW) / 2;
+    int startX = (W - totalW) / 2;
     if (startX < 6) startX = 6;
 
     for (int i = 0; i < laneCount; i++) {
@@ -337,10 +323,10 @@ void ScreenTFT::drawLaneBar() {
         int backIcon = mState.driveWay.lanes[i].backIcon;
 
         uint16_t color = HudColor::PRIMARY;
-        sprite.fillRoundRect(lx, ly, laneW, laneH, 3, color);
+        tft.fillRoundRect(lx, ly, laneW, laneH, 3, color);
 
-        sprite.setTextColor(HudColor::BG, color);
-        sprite.setTextDatum(MC_DATUM);
+        tft.setTextColor(HudColor::BG, color);
+        tft.setTextDatum(MC_DATUM);
         const char* label = "";
         switch (backIcon) {
             case 0: label = "^"; break;
@@ -352,16 +338,15 @@ void ScreenTFT::drawLaneBar() {
             case 6: label = "<>"; break;
             case 7: label = "<^>"; break;
         }
-        sprite.drawString(label, lx + laneW / 2, ly + laneH / 2, 2);
+        tft.drawString(label, lx + laneW / 2, ly + laneH / 2, 2);
     }
 
-    // 电子眼（右侧）
     if (mState.guide.cameraDist > 0) {
         char buf[20];
         snprintf(buf, sizeof(buf), "CAM %dm", mState.guide.cameraDist);
-        sprite.setTextColor(HudColor::WARN, HudColor::BG);
-        sprite.setTextDatum(MR_DATUM);
-        sprite.drawString(buf, mW - 4, LANE_BAR_Y + LANE_BAR_H / 2, 2);
+        tft.setTextColor(HudColor::WARN, HudColor::BG);
+        tft.setTextDatum(MR_DATUM);
+        tft.drawString(buf, W - 4, LANE_BAR_Y + LANE_BAR_H / 2, 2);
     }
 }
 
@@ -373,9 +358,8 @@ void ScreenTFT::drawTmcBar() {
     int totalDist = mState.tmc.totalDistance;
     if (totalDist <= 0) return;
 
-    int barW = mW - 12;
-    int startX = 6;
-    int x = startX;
+    int barW = W - 12;
+    int x = 6;
 
     for (int i = 0; i < mState.tmc.segmentCount && i < Nav::MAX_TMC_SEGMENTS; i++) {
         int segW = (int)((float)mState.tmc.segments[i].distance / totalDist * barW);
@@ -383,12 +367,12 @@ void ScreenTFT::drawTmcBar() {
 
         uint16_t color = HudColor::DIM;
         switch (mState.tmc.segments[i].status) {
-            case 1: color = HudColor::ACCENT; break;  // 畅通
-            case 2: color = HudColor::YELLOW; break;  // 缓行
-            case 3: color = HudColor::WARN;   break;  // 拥堵
-            case 4: color = HudColor::DANGER; break;  // 严重拥堵
+            case 1: color = HudColor::ACCENT; break;
+            case 2: color = HudColor::YELLOW; break;
+            case 3: color = HudColor::WARN;   break;
+            case 4: color = HudColor::DANGER; break;
         }
-        sprite.fillRect(x, TMC_BAR_Y, segW, TMC_BAR_H, color);
+        tft.fillRect(x, TMC_BAR_Y, segW, TMC_BAR_H, color);
         x += segW;
     }
 }
@@ -407,16 +391,15 @@ void ScreenTFT::drawRoadName() {
     }
 
     if (buf[0]) {
-        sprite.setTextColor(HudColor::WHITE, HudColor::BG);
-        sprite.setTextDatum(TC_DATUM);
-        sprite.drawString(buf, mW / 2, ROAD_BAR_Y + 2, 2);
+        tft.setTextColor(HudColor::WHITE, HudColor::BG);
+        tft.setTextDatum(TC_DATUM);
+        tft.drawString(buf, W / 2, ROAD_BAR_Y + 2, 2);
     }
 }
 
 // ── 底部信息栏 ────────────────────────────────────────────
 
 void ScreenTFT::drawBottomBar() {
-    // 全程剩余距离/时间
     if (mState.guide.routeRemainDis > 0 || mState.guide.routeRemainTime > 0) {
         char disBuf[16], timeBuf[16];
         ScreenRenderer::formatDistance(mState.guide.routeRemainDis, disBuf, sizeof(disBuf));
@@ -424,18 +407,17 @@ void ScreenTFT::drawBottomBar() {
 
         char buf[40];
         snprintf(buf, sizeof(buf), "%s / %s", disBuf, timeBuf);
-        sprite.setTextColor(HudColor::DIM, HudColor::BG);
-        sprite.setTextDatum(BL_DATUM);
-        sprite.drawString(buf, 6, mH - 4, 2);
+        tft.setTextColor(HudColor::DIM, HudColor::BG);
+        tft.setTextDatum(BL_DATUM);
+        tft.drawString(buf, 6, H - 4, 2);
     }
 
-    // GPS 坐标（简化显示精度）
     if (mState.location.valid) {
-        sprite.setTextColor(HudColor::DIM, HudColor::BG);
-        sprite.setTextDatum(BR_DATUM);
+        tft.setTextColor(HudColor::DIM, HudColor::BG);
+        tft.setTextDatum(BR_DATUM);
         char buf[24];
         snprintf(buf, sizeof(buf), "GPS:%d", mState.location.bearing);
-        sprite.drawString(buf, mW - 6, mH - 4, 2);
+        tft.drawString(buf, W - 6, H - 4, 2);
     }
 }
 
@@ -444,14 +426,14 @@ void ScreenTFT::drawBottomBar() {
 void ScreenTFT::drawIdleScreen() {
     drawTopBar();
 
-    sprite.setTextColor(HudColor::DIM, HudColor::BG);
-    sprite.setTextDatum(MC_DATUM);
-    sprite.drawString("Waiting for", mW / 2, mH / 2 - 16, 4);
-    sprite.drawString("Navigation Data", mW / 2, mH / 2 + 16, 4);
+    tft.setTextColor(HudColor::DIM, HudColor::BG);
+    tft.setTextDatum(MC_DATUM);
+    tft.drawString("Waiting for", W / 2, H / 2 - 16, 4);
+    tft.drawString("Navigation Data", W / 2, H / 2 + 16, 4);
 
     // 呼吸灯
     if (mFrameCounter % 4 < 2) {
-        sprite.fillCircle(mW / 2, mH / 2 + 50, 5, HudColor::PRIMARY);
+        tft.fillCircle(W / 2, H / 2 + 50, 5, HudColor::PRIMARY);
     }
 }
 
