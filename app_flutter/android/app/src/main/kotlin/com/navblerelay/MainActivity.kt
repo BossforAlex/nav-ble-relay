@@ -2,6 +2,7 @@ package com.navblerelay
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
@@ -22,6 +23,7 @@ import io.flutter.plugin.common.MethodChannel
  *
  * 平台通道：
  *   - `com.navblerelay/broadcast`：启动 / 停止高德广播监听
+ *   - `com.navblerelay/service`：启动 / 停止 BLE 前台服务（防止后台断联）
  *
  * 原生层不再实现 BLE GATT Server（避免双重角色冲突）。
  * flutter_blue_plus 已提供 GATT Client 能力，无需原生扩展。
@@ -31,9 +33,11 @@ class MainActivity : FlutterActivity() {
     companion object {
         private const val TAG = "MainActivity"
         private const val CH_BROADCAST = "com.navblerelay/broadcast"
+        private const val CH_SERVICE = "com.navblerelay/service"
     }
 
     private lateinit var broadcastChannel: MethodChannel
+    private lateinit var serviceChannel: MethodChannel
 
     private var navReceiver: NavBroadcastReceiver? = null
 
@@ -41,6 +45,42 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         broadcastChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CH_BROADCAST)
             .apply { setMethodCallHandler(::onBroadcastCall) }
+        serviceChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CH_SERVICE)
+            .apply { setMethodCallHandler(::onServiceCall) }
+    }
+
+    // ── 前台服务通道：start / stop ──────────────────────
+
+    private fun onServiceCall(call: MethodCall, result: MethodChannel.Result) {
+        when (call.method) {
+            "start" -> {
+                startForegroundService()
+                result.success(true)
+            }
+            "stop" -> {
+                stopForegroundService()
+                result.success(true)
+            }
+            else -> result.notImplemented()
+        }
+    }
+
+    private fun startForegroundService() {
+        val intent = Intent(this, BleForegroundService::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent)
+        } else {
+            startService(intent)
+        }
+        Log.i(TAG, "BLE 前台服务已请求启动")
+    }
+
+    private fun stopForegroundService() {
+        val intent = Intent(this, BleForegroundService::class.java).apply {
+            action = BleForegroundService.ACTION_STOP
+        }
+        startService(intent) // 发送 STOP 指令
+        Log.i(TAG, "BLE 前台服务已请求停止")
     }
 
     // ── 广播通道：start / stop / selfTest ──────────────

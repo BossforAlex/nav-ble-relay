@@ -24,6 +24,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
 import '../ble/ble_constants.dart';
@@ -66,6 +67,10 @@ class BleService extends ChangeNotifier {
   BleService() {
     _adapterSub = FlutterBluePlus.adapterState.listen(_onAdapterChanged);
   }
+
+  /// v0.5.12: Android 前台服务 MethodChannel（防止后台断联）
+  static const MethodChannel _serviceChannel =
+      MethodChannel('com.navblerelay/service');
 
   // ── 状态字段 ──────────────────────────────────────────
   BleStatus _status = BleStatus.stopped;
@@ -229,11 +234,19 @@ class BleService extends ChangeNotifier {
   }
 
   /// 手动连接指定的扫描结果（用户在设备列表中点击连接）
+  ///
+  /// v0.5.12: 添加 error 133 (GATT_ERROR) 重试机制。
+  /// Android 后台杀进程后 BLE 栈进入脏状态，首次连接返回 133，
+  /// 等待 500ms 后重试通常能恢复。
   Future<void> connectTo(ScanResult r) async {
     if (isConnected || _status == BleStatus.connecting) {
       debugPrint('[BLE] 已有连接/正在连接，忽略 connectTo');
       return;
     }
+
+    // v0.5.12: 先清理旧连接状态，防止 BLE 栈脏状态
+    await _cleanupBleStack();
+
     try {
       await FlutterBluePlus.stopScan();
     } catch (_) {}
@@ -251,18 +264,59 @@ class BleService extends ChangeNotifier {
     _lastError = '';
     _safeNotify();
 
-    try {
-      await _connectAndDiscover();
-    } catch (e) {
-      _status = BleStatus.error;
-      _lastError = '连接失败: $e';
-      _device = null;
-      _safeNotify();
+    // v0.5.12: 最多重试 2 次（error 133 常见于后台恢复后首次连接）
+    const maxRetries = 2;
+    for (int attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        if (attempt > 0) {
+          debugPrint('[BLE] 重试连接 (第 $attempt 次)...');
+          await Future.delayed(const Duration(milliseconds: 500));
+          // 重试前重新获取设备引用（解决 GATT 缓存问题）
+          _device = r.device;
+        }
+        await _connectAndDiscover();
+        return; // 成功
+      } catch (e) {
+        final errStr = e.toString();
+        final isGattError = errStr.contains('133') || errStr.contains('GATT_ERROR');
+        if (isGattError && attempt < maxRetries) {
+          debugPrint('[BLE] GATT_ERROR (133)，将重试...');
+          _lastError = '连接失败(133)，重试中...';
+          _safeNotify();
+          continue;
+        }
+        _status = BleStatus.error;
+        _lastError = '连接失败: $e';
+        _device = null;
+        _safeNotify();
+        return;
+      }
     }
+  }
+
+  /// v0.5.12: 清理 BLE 栈状态，防止 error 133
+  Future<void> _cleanupBleStack() async {
+    try {
+      if (_device != null) {
+        await _device?.disconnect();
+      }
+    } catch (_) {}
+    _connSub?.cancel();
+    _connSub = null;
+    _pollSub?.cancel();
+    _pollSub = null;
+    _device = null;
+    _chrData = null;
+    _chrPoll = null;
+    _isOurDevice = false;
+    // 停止前台服务
+    await _stopFgService();
   }
 
   /// 断开连接
   Future<void> disconnect() async {
+    // v0.5.12: 停止前台服务
+    await _stopFgService();
     try {
       _connSub?.cancel();
       _connSub = null;
@@ -274,6 +328,7 @@ class BleService extends ChangeNotifier {
     _chrData = null;
     _chrPoll = null;
     _isOurDevice = false;
+    _discoverySummary = '';
     _status = BleStatus.stopped;
     _deviceAddress = '';
     _deviceName = '';
@@ -332,6 +387,8 @@ class BleService extends ChangeNotifier {
         _status = BleStatus.stopped;
         _deviceAddress = '';
         _deviceName = '';
+        // v0.5.12: 停止前台服务
+        _stopFgService();
         _safeNotify();
       }
     });
@@ -408,6 +465,8 @@ class BleService extends ChangeNotifier {
     }
 
     _status = BleStatus.connected;
+    // v0.5.12: 启动 Android 前台服务，防止后台断联
+    _startFgService();
     _safeNotify();
 
     if (_isOurDevice && _chrPoll != null) {
@@ -780,6 +839,26 @@ class BleService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// v0.5.12: 启动 Android 前台服务（防止后台断联）
+  Future<void> _startFgService() async {
+    try {
+      await _serviceChannel.invokeMethod('start');
+      debugPrint('[BLE] 前台服务已启动');
+    } catch (e) {
+      debugPrint('[BLE] 前台服务启动失败（非 Android 或权限不足）: $e');
+    }
+  }
+
+  /// v0.5.12: 停止 Android 前台服务
+  Future<void> _stopFgService() async {
+    try {
+      await _serviceChannel.invokeMethod('stop');
+      debugPrint('[BLE] 前台服务已停止');
+    } catch (e) {
+      // 忽略（非 Android 平台）
+    }
+  }
+
   @override
   void dispose() {
     _disposed = true;
@@ -787,6 +866,7 @@ class BleService extends ChangeNotifier {
     _scanSub?.cancel();
     _connSub?.cancel();
     _pollSub?.cancel();
+    _stopFgService();
     _device?.disconnect();
     super.dispose();
   }

@@ -42,6 +42,12 @@
         <!-- 高德导航广播接收器：通过 MainActivity.registerNavReceiver() 动态注册 -->
         <!-- 不在 Manifest 中静态声明，避免创建无 onParsed 回调的空实例 -->
 
+        <!-- BLE 前台服务：防止后台被杀导致 BLE 断联 -->
+        <service
+            android:name=".BleForegroundService"
+            android:foregroundServiceType="connectedDevice"
+            android:exported="false" />
+
         <!-- flutter_blue_plus 插件需要的元数据 -->
         <meta-data
             android:name="flutterEmbedding"
