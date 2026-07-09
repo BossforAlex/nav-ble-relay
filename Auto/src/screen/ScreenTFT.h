@@ -61,7 +61,6 @@ private:
     static constexpr int LANE_BAR_Y  = MAIN_AREA_Y + MAIN_AREA_H;
     static constexpr int TMC_BAR_Y   = LANE_BAR_Y + LANE_BAR_H;
     static constexpr int ROAD_BAR_Y  = TMC_BAR_Y + TMC_BAR_H + 2;
-    static constexpr int BOTTOM_BAR_H = 22;
 
     // ── 渲染子模块 ──
     void renderFrame();

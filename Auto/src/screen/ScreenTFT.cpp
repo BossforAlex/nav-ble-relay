@@ -309,7 +309,7 @@ void ScreenTFT::drawLaneBar() {
         return;
     }
 
-    if (laneCount > 8) laneCount = 8;
+    if (laneCount > Nav::MAX_LANES) laneCount = Nav::MAX_LANES;
 
     int laneW = 32;
     int laneH = 18;
@@ -363,7 +363,7 @@ void ScreenTFT::drawTmcBar() {
     int startX = 6;
     int x = startX;
 
-    for (int i = 0; i < mState.tmc.segmentCount && i < MAX_TMC_SEGMENTS; i++) {
+    for (int i = 0; i < mState.tmc.segmentCount && i < Nav::MAX_TMC_SEGMENTS; i++) {
         int segW = (int)((float)mState.tmc.segments[i].distance / totalDist * barW);
         if (segW < 1) segW = 1;
 
@@ -402,8 +402,6 @@ void ScreenTFT::drawRoadName() {
 // ── 底部信息栏 ────────────────────────────────────────────
 
 void ScreenTFT::drawBottomBar() {
-    int y = mH - BOTTOM_BAR_H;
-
     // 全程剩余距离/时间
     if (mState.guide.routeRemainDis > 0 || mState.guide.routeRemainTime > 0) {
         char disBuf[16], timeBuf[16];
