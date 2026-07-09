@@ -2,14 +2,15 @@
 
 /**
  * @file ScreenTFT.h
- * @brief ILI9341 TFT 横屏 HUD 导航显示 (v0.6.2)
+ * @brief ILI9341 TFT 横屏 HUD 导航显示 (v0.6.3)
  *
  * 目标屏幕：MSP2807 2.8" ILI9341 SPI TFT (320x240)
- * 接线方式：ESP32-S3 SuperMini 标准 SPI 引脚
+ * 接线方式：ESP32-S3 SuperMini HSPI 引脚
+ *           CS=10 DC=2 RST=4 MOSI=11 SCK=12 BL=6
  *
- * v0.6.2: 移除 sprite 帧缓冲，直接绘制到 TFT。
- * 避免 PSRAM 依赖，兼容无 PSRAM 或 PSRAM 不稳定的克隆板。
- * 使用 tft.startWrite()/endWrite() 批量 SPI 事务减少闪烁。
+ * v0.6.3: 恢复 sprite 离屏帧缓冲（PSRAM），双缓冲消除画面闪烁。
+ * PSRAM 已确认正常工作（2MB AP_3v3）。
+ * 全分辨率 sprite 320x240x2=153KB，使用 ps_malloc 分配在 PSRAM。
  *
  * 横屏布局 (320x240)：
  * ┌──────────────────────────────────────────────────────┐
@@ -44,16 +45,19 @@ public:
 
 private:
     TFT_eSPI  tft;
+    TFT_eSprite sprite = TFT_eSprite(&tft);
 
     Nav::NavState mState;
     bool mBleConnected = false;
     unsigned long mLastRenderMs = 0;
     unsigned long mFrameCounter = 0;
     bool mInited = false;
+    bool mSpriteOk = false;
+
+    int mW = 320;
+    int mH = 240;
 
     // ── 布局常量（横屏 320x240） ──
-    static constexpr int W = 320;
-    static constexpr int H = 240;
     static constexpr int TOP_BAR_H  = 22;
     static constexpr int LANE_BAR_H = 24;
     static constexpr int TMC_BAR_H  = 8;

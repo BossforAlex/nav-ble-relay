@@ -101,7 +101,7 @@ class BroadcastService extends ChangeNotifier {
       cameraType: 1,
       cameraSpeed: 120,
     );
-    mapState = 0; // 导航中
+    mapState = 1; // 导航中 (Amap: 0=idle, 1=导航中)
     crossMap = null;
     lastBroadcastAction = 'SIMULATE_NAV';
     broadcastReceived = DateTime.now().millisecondsSinceEpoch;

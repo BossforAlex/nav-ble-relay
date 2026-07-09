@@ -536,7 +536,7 @@ class BleService extends ChangeNotifier {
       'type': 'state',
       'ts': ts,
       'data': {
-        'EXTRA_STATE': 0,  // 0=导航中
+        'EXTRA_STATE': 1,  // 1=导航中 (Amap 协议: 0=idle, 1=导航中, 2=已到达, 3=暂停)
         'EXTRA_CROSS_MAP': 'BLE TEST OK @ $ts',
       },
     };
