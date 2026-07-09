@@ -75,7 +75,7 @@ namespace Feature {
     constexpr bool BLE_AUTO_RECONNECT = true;        // 自动重连 BLE
     constexpr uint32_t BLE_SCAN_TIMEOUT_MS = 5000;   // BLE 扫描超时
     constexpr bool LOW_POWER_WHEN_IDLE = false;      // 空闲降频
-    constexpr uint32_t SCREEN_REFRESH_MS = 33;     // v0.6.4: 30fps，iWatch 丝滑体验
+    constexpr uint32_t SCREEN_REFRESH_MS = 50;     // v0.6.4: 20fps，SPI 40MHz 下 pushSprite 需~30ms，留 20ms 渲染
 }
 
 // ===================== 调试开关 =====================

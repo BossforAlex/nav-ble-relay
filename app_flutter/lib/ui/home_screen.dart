@@ -26,8 +26,11 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _relayWired = false;
-  /// v0.5.10: 防止 _relayToBle 重入（broadcast.notifyListeners 触发自身回调导致无限递归）
+  /// v0.6.4: 防止 BLE 写入并发 + 数据不丢失。
+  /// _relaying=true 时新数据不丢弃，而是设 _pendingRelay=true，
+  /// 当前 relay 完成后自动处理待发送数据。
   bool _relaying = false;
+  bool _pendingRelay = false;
 
   @override
   void initState() {
@@ -57,21 +60,25 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _relayWired = true;
   }
 
-  /// v0.6.3 修复：改为 async + await，确保 BLE 数据按序到达 ESP32。
-  /// ESP32 端 renderFrame() 需同时满足 mapState==Navigating 和 guide.valid，
-  /// 先发 state（设置导航状态）再发 guide（填充数据），确保最后一帧两者都满足。
+  /// v0.6.4 修复：async + await 保证 BLE 按序到达，同时用 _pendingRelay
+  /// 标记避免高频导航数据在 relay 期间被丢弃。
+  ///
+  /// 发送顺序：先 state（设置导航状态）→ 再 guide（填充数据），
+  /// 确保 ESP32 在同一帧内拿到 mapState+guide 两个条件。
   Future<void> _relayToBle(BroadcastService broadcast) async {
-    // v0.5.10: 防止重入——broadcast.notifyListeners() 会触发自身回调导致无限递归
-    if (_relaying) return;
     if (!mounted) return;
+    // v0.6.4: 不丢弃数据，标记 pending 等当前 relay 完成后处理
+    if (_relaying) {
+      _pendingRelay = true;
+      return;
+    }
     _relaying = true;
+    _pendingRelay = false;
     try {
       final ble = context.read<BleService>();
       final settings = context.read<SettingsService>();
       if (!ble.isConnected) return;
 
-      // 先发 mapState（设置导航状态），再发 guide（填充数据）
-      // 确保 ESP32 收到两条消息后，最后一帧 mapState+guide 都满足
       if (broadcast.mapState >= 0) {
         await ble.sendMapState(broadcast.mapState, broadcast.crossMap);
         broadcast.relayCount++;
@@ -97,9 +104,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         broadcast.relayCount++;
       }
       broadcast.lastRelayAt = DateTime.now();
-      broadcast.notifyListeners();
+      // 不调用 broadcast.notifyListeners()，避免 self-trigger 无限循环。
+      // UI 更新由 BroadcastService 自身数据变更时触发。
     } finally {
       _relaying = false;
+    }
+    // v0.6.4: relay 期间有新的导航数据到达，立即处理
+    if (_pendingRelay && mounted) {
+      _relayToBle(context.read<BroadcastService>());
     }
   }
 

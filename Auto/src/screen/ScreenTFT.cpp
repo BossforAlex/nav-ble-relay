@@ -5,16 +5,10 @@
 #include <stdio.h>
 
 // ══════════════════════════════════════════════════════════════
-// v0.6.4: iWatch 风格现代化 HUD 导航显示
-// 参考 Apple Watch 高德导航 (iOS-watch-navi) 设计：
-//   - 大号居中转向箭头 + 距离
-//   - 当前道路 / 下条道路
-//   - 车速 + 限速圆圈
-//   - 路况光柱 + 底部信息栏
-//   - 30fps sprite 双缓冲，丝滑无撕裂
-//
-// 屏幕：MSP2807 2.8" ILI9341 (320x240)
-// 接线：CS=10 DC=2 RST=4 MOSI=11 SCK=12 BL=6 (HSPI)
+// v0.6.4: iWatch 极简风格 HUD 导航显示
+// 屏幕：MSP2807 2.8" ILI9341 (320x240), SPI 40MHz
+// 20fps (50ms/frame), pushSprite ~30ms + 渲染 ~20ms
+// sprite 双缓冲消除画面撕裂
 // ══════════════════════════════════════════════════════════════
 
 ScreenTFT::ScreenTFT()
@@ -27,7 +21,7 @@ bool ScreenTFT::init() {
     delay(300);
 
     tft.init();
-    tft.setRotation(1);  // 横屏 320x240
+    tft.setRotation(1);
 
     mW = tft.width();
     mH = tft.height();
@@ -43,10 +37,9 @@ bool ScreenTFT::init() {
     delay(100);
 #endif
 
-    // 离屏 sprite 帧缓冲（PSRAM）
     uint16_t* buf = (uint16_t*)sprite.createSprite(mW, mH);
     if (buf == nullptr) {
-        Serial.println("[Screen] sprite 分配失败（PSRAM 未启用？检查 board 配置）");
+        Serial.println("[Screen] sprite 分配失败（PSRAM 未启用？）");
         return false;
     }
 
@@ -56,7 +49,7 @@ bool ScreenTFT::init() {
 
     mInited = true;
     mSpriteOk = true;
-    Serial.printf("[Screen] ILI9341 TFT %dx%d 横屏 (iWatch v0.6.4, 30fps)\n", mW, mH);
+    Serial.printf("[Screen] ILI9341 %dx%d 横屏 (v0.6.4, 20fps, SPI40M)\n", mW, mH);
     return true;
 }
 
@@ -93,7 +86,6 @@ void ScreenTFT::log(const char* msg) {
 void ScreenTFT::renderFrame() {
     if (!mInited || !mSpriteOk) return;
 
-    // 启动画面（第 1 帧）
     if (mFrameCounter == 1) {
         drawBootScreen();
         sprite.pushSprite(0, 0);
@@ -106,10 +98,11 @@ void ScreenTFT::renderFrame() {
 
     if (nav && mState.guide.valid) {
         drawTopBar();
-        drawSpeedPanel();
+        drawSpeedLimit();
         drawArrowAndDistance();
         drawRoadNames();
         drawLaneBar();
+        drawSpeed();
         drawTmcBar();
         drawBottomBar();
     } else if (mState.mapState == Nav::MapState::Arrived) {
@@ -117,7 +110,6 @@ void ScreenTFT::renderFrame() {
         sprite.setTextColor(HudColor::ACCENT, HudColor::BG);
         sprite.setTextDatum(MC_DATUM);
         sprite.drawString("已到达", mW / 2, mH / 2, 4);
-        sprite.drawString("Arrived", mW / 2, mH / 2 + 30, 2);
     } else {
         drawIdleScreen();
     }
@@ -137,61 +129,60 @@ void ScreenTFT::drawBootScreen() {
     sprite.fillScreen(HudColor::BG);
     int cx = mW / 2, cy = mH / 2;
 
-    // 外框
     sprite.drawRoundRect(10, 10, mW - 20, mH - 20, 8, HudColor::DARK);
     sprite.drawRoundRect(12, 12, mW - 24, mH - 24, 7, HudColor::DIM);
 
-    // 导航箭头 icon
-    int sz = 28;
+    int sz = 26;
     sprite.fillTriangle(cx, cy - sz, cx - sz, cy + sz / 2,
                         cx + sz, cy + sz / 2, HudColor::PRIMARY);
-    sprite.fillRect(cx - 4, cy + sz / 2, 8, 16, HudColor::PRIMARY);
+    sprite.fillRect(cx - 4, cy + sz / 2, 8, 14, HudColor::PRIMARY);
 
-    // 版本文字
     sprite.setTextColor(HudColor::DIM, HudColor::BG);
     sprite.setTextDatum(BC_DATUM);
     sprite.drawString("AutoNavDisplay v" PROJECT_VERSION, cx, mH - 14, 2);
 
-    // 进度条动画
     int barY = mH - 30;
     sprite.drawRoundRect(20, barY, mW - 40, 4, 2, HudColor::DARK);
     sprite.fillRoundRect(22, barY + 1, (mW - 44) / 3, 2, 1, HudColor::ACCENT);
     sprite.fillRoundRect(22 + (mW - 44) / 3, barY + 1, (mW - 44) / 3, 2, 1, HudColor::PRIMARY);
 }
 
-// ── 顶部状态栏（极简） ────────────────────────────────────
+// ── 顶部状态栏 ────────────────────────────────────────────
 
 void ScreenTFT::drawTopBar() {
-    // 半透明深色底条
     sprite.fillRect(0, 0, mW, TOP_BAR_H, HudColor::DARK);
 
-    // BLE 状态指示灯
-    int dotR = 3;
-    int dotX = 8, dotY = TOP_BAR_H / 2;
+    int dotR = 3, dotX = 7, dotY = TOP_BAR_H / 2;
     sprite.fillCircle(dotX, dotY, dotR,
                       mBleConnected ? HudColor::ACCENT : HudColor::DANGER);
 
-    // 导航状态标签
     sprite.setTextColor(HudColor::DIM, HudColor::DARK);
     sprite.setTextDatum(ML_DATUM);
-    sprite.drawString("NAV", dotX + dotR + 5, dotY, 2);
+    sprite.drawString("NAV", dotX + dotR + 4, dotY, 2);
 }
 
-// ── 转向箭头 + 距离（iWatch 风格：大号居中） ──────────────
+// ── 限速圆圈（右上角） ────────────────────────────────────
+
+void ScreenTFT::drawSpeedLimit() {
+    if (mState.guide.limitedSpeed <= 0) return;
+
+    bool over = mState.guide.curSpeed > mState.guide.limitedSpeed;
+    drawSpeedLimitCircle(LIMIT_CX, LIMIT_CY, LIMIT_R,
+                         mState.guide.limitedSpeed, over);
+}
+
+// ── 转向箭头 + 距离（大号居中） ────────────────────────────
 
 void ScreenTFT::drawArrowAndDistance() {
     int icon = mState.guide.icon;
 
-    // 脉冲动画：每 0.5 秒闪烁一次
     uint16_t arrowColor = HudColor::PRIMARY;
-    if (Feature::ENABLE_ANIMATION && (mFrameCounter % 15) < 8) {
+    if (Feature::ENABLE_ANIMATION && (mFrameCounter % 10) < 5) {
         arrowColor = HudColor::WHITE;
     }
 
-    // 绘制转向箭头（大号居中）
     drawArrowIcon(ARROW_CX, ARROW_CY, ARROW_SZ, icon, arrowColor);
 
-    // 距离文字（大号，居中）
     char buf[32];
     if (mState.guide.distanceText[0]) {
         snprintf(buf, sizeof(buf), "%s", mState.guide.distanceText);
@@ -205,17 +196,15 @@ void ScreenTFT::drawArrowAndDistance() {
 
     sprite.setTextColor(distColor, HudColor::BG);
     sprite.setTextDatum(TC_DATUM);
-    sprite.drawString(buf, ARROW_CX, DIST_Y, 4);  // 字体 4 = ~28px
-
-    // 分隔线
-    int sepY = DIST_Y + 24;
-    sprite.drawFastHLine(ARROW_CX - 60, sepY, 120, HudColor::DARK);
+    sprite.drawString(buf, ARROW_CX, DIST_Y, 4);
 }
 
-// ── 道路名称（iWatch 风格："从 XXX 进入" + 下条路） ──────
+// ── 道路名称（iWatch 格式："从 XXX 进入"） ────────────────
 
 void ScreenTFT::drawRoadNames() {
-    // 当前道路
+    // 分隔线
+    sprite.drawFastHLine(ARROW_CX - 70, ROAD_SEP_Y, 140, HudColor::DARK);
+
     char curBuf[80] = {0};
     if (mState.guide.curRoadName[0]) {
         snprintf(curBuf, sizeof(curBuf), "从 %s 进入", mState.guide.curRoadName);
@@ -227,62 +216,28 @@ void ScreenTFT::drawRoadNames() {
     sprite.setTextDatum(TC_DATUM);
     sprite.drawString(curBuf, ARROW_CX, CUR_ROAD_Y, 2);
 
-    // 下条道路
     if (mState.guide.nextRoadName[0]) {
         sprite.setTextColor(HudColor::DIM, HudColor::BG);
         sprite.drawString(mState.guide.nextRoadName, ARROW_CX, NEXT_ROAD_Y, 2);
     }
 }
 
-// ── 速度面板（iWatch 风格：限速圆圈 + 大号车速） ─────────
-
-void ScreenTFT::drawSpeedPanel() {
-    // 限速圆圈（右上角）
-    if (mState.guide.limitedSpeed > 0) {
-        bool over = mState.guide.curSpeed > mState.guide.limitedSpeed;
-        drawSpeedLimitCircle(SPEED_X, SPEED_Y, LIMIT_R, mState.guide.limitedSpeed, over);
-    }
-
-    // 当前车速（大号居中，在箭头下方区域）
-    int speedY = CONTENT_Y + 140;
-    char buf[8];
-    snprintf(buf, sizeof(buf), "%d", mState.guide.curSpeed);
-
-    sprite.setTextColor(HudColor::ACCENT, HudColor::BG);
-    sprite.setTextDatum(TC_DATUM);
-    sprite.drawString(buf, 80, speedY, 6);  // 字体 6 = ~48px 大号
-
-    sprite.setTextColor(HudColor::DIM, HudColor::BG);
-    sprite.drawString("km/h", 80, speedY + 28, 2);
-}
-
-// ── 车道指引（保留在道路名称下方） ────────────────────────
+// ── 车道指引 ──────────────────────────────────────────────
 
 void ScreenTFT::drawLaneBar() {
     int laneCount = mState.driveWay.laneCount;
-    if (!mState.driveWay.enabled || laneCount == 0) {
-        // 无车道数据时显示摄像头距离
-        if (mState.guide.cameraDist > 0) {
-            char buf[24];
-            snprintf(buf, sizeof(buf), "CAM %dm", mState.guide.cameraDist);
-            sprite.setTextColor(HudColor::WARN, HudColor::BG);
-            sprite.setTextDatum(MR_DATUM);
-            sprite.drawString(buf, mW - 6, NEXT_ROAD_Y + 14, 2);
-        }
-        return;
-    }
+    if (!mState.driveWay.enabled || laneCount == 0) return;
 
     if (laneCount > Nav::MAX_LANES) laneCount = Nav::MAX_LANES;
 
-    int laneW = 28;
-    int laneH = 16;
-    int laneY = NEXT_ROAD_Y + 8;
-    int totalW = laneCount * (laneW + 3);
+    int laneW = 26, laneH = 14, gap = 2;
+    int totalW = laneCount * (laneW + gap) - gap;
     int startX = (mW - totalW) / 2;
     if (startX < 6) startX = 6;
+    int laneY = NEXT_ROAD_Y + 4;
 
     for (int i = 0; i < laneCount; i++) {
-        int lx = startX + i * (laneW + 3);
+        int lx = startX + i * (laneW + gap);
         int backIcon = mState.driveWay.lanes[i].backIcon;
 
         uint16_t color = HudColor::PRIMARY;
@@ -305,7 +260,21 @@ void ScreenTFT::drawLaneBar() {
     }
 }
 
-// ── 路况光柱（细条，底部） ────────────────────────────────
+// ── 车速（大号居中） ──────────────────────────────────────
+
+void ScreenTFT::drawSpeed() {
+    char buf[8];
+    snprintf(buf, sizeof(buf), "%d", mState.guide.curSpeed);
+
+    sprite.setTextColor(HudColor::ACCENT, HudColor::BG);
+    sprite.setTextDatum(TC_DATUM);
+    sprite.drawString(buf, ARROW_CX, SPEED_Y, 6);
+
+    sprite.setTextColor(HudColor::DIM, HudColor::BG);
+    sprite.drawString("km/h", ARROW_CX, SPEED_Y + 26, 2);
+}
+
+// ── 路况光柱 ──────────────────────────────────────────────
 
 void ScreenTFT::drawTmcBar() {
     if (!mState.tmc.enabled || mState.tmc.segmentCount == 0) return;
@@ -313,8 +282,7 @@ void ScreenTFT::drawTmcBar() {
     int totalDist = mState.tmc.totalDistance;
     if (totalDist <= 0) return;
 
-    int barW = mW - 16;
-    int x = 8;
+    int barW = mW - 16, x = 8;
 
     for (int i = 0; i < mState.tmc.segmentCount && i < Nav::MAX_TMC_SEGMENTS; i++) {
         int segW = (int)((float)mState.tmc.segments[i].distance / totalDist * barW);
@@ -322,23 +290,23 @@ void ScreenTFT::drawTmcBar() {
 
         uint16_t color = HudColor::DARK;
         switch (mState.tmc.segments[i].status) {
-            case 1: color = HudColor::ACCENT; break;  // 畅通
-            case 2: color = HudColor::YELLOW; break;  // 缓行
-            case 3: color = HudColor::WARN;   break;  // 拥堵
-            case 4: color = HudColor::DANGER; break;  // 严重拥堵
+            case 1: color = HudColor::ACCENT; break;
+            case 2: color = HudColor::YELLOW; break;
+            case 3: color = HudColor::WARN;   break;
+            case 4: color = HudColor::DANGER; break;
         }
         sprite.fillRect(x, TMC_BAR_Y, segW, TMC_BAR_H, color);
         x += segW;
     }
 }
 
-// ── 底部信息栏（全程剩余 + 方位） ──────────────────────────
+// ── 底部信息栏 ────────────────────────────────────────────
 
 void ScreenTFT::drawBottomBar() {
-    // 分隔线
     sprite.drawFastHLine(0, TMC_BAR_Y - 2, mW, HudColor::DARK);
 
-    // 左侧：全程剩余距离 + 时间
+    int textY = BTM_BAR_Y + BTM_BAR_H / 2;
+
     if (mState.guide.routeRemainDis > 0 || mState.guide.routeRemainTime > 0) {
         char disBuf[16], timeBuf[16];
         ScreenRenderer::formatDistance(mState.guide.routeRemainDis, disBuf, sizeof(disBuf));
@@ -348,36 +316,32 @@ void ScreenTFT::drawBottomBar() {
         snprintf(buf, sizeof(buf), "%s | %s", timeBuf, disBuf);
         sprite.setTextColor(HudColor::DIM, HudColor::BG);
         sprite.setTextDatum(BL_DATUM);
-        sprite.drawString(buf, 6, BTM_BAR_Y + BTM_BAR_H / 2, 2);
+        sprite.drawString(buf, 6, textY, 2);
     }
 
-    // 右侧：方位指示
     if (mState.location.valid && mState.location.bearing > 0) {
         sprite.setTextColor(HudColor::DIM, HudColor::BG);
         sprite.setTextDatum(BR_DATUM);
         char buf[16];
         snprintf(buf, sizeof(buf), "%s ^", bearingLabel(mState.location.bearing));
-        sprite.drawString(buf, mW - 6, BTM_BAR_Y + BTM_BAR_H / 2, 2);
+        sprite.drawString(buf, mW - 6, textY, 2);
     }
 }
 
-// ── 空闲画面（iWatch 风格） ───────────────────────────────
+// ── 空闲画面 ──────────────────────────────────────────────
 
 void ScreenTFT::drawIdleScreen() {
     drawTopBar();
 
-    // 等待连接图标
     sprite.setTextColor(HudColor::DIM, HudColor::BG);
     sprite.setTextDatum(MC_DATUM);
-    sprite.drawString("等待导航数据", mW / 2, mH / 2 - 20, 4);
-    sprite.drawString("Waiting for", mW / 2, mH / 2 + 14, 2);
-    sprite.drawString("Navigation Data", mW / 2, mH / 2 + 34, 2);
+    sprite.drawString("等待导航数据", mW / 2, mH / 2 - 16, 4);
+    sprite.drawString("Waiting for Navigation Data", mW / 2, mH / 2 + 16, 2);
 
-    // 呼吸灯动画
     if (mFrameCounter % 20 < 10) {
-        sprite.fillCircle(mW / 2, mH / 2 + 60, 4, HudColor::PRIMARY);
+        sprite.fillCircle(mW / 2, mH / 2 + 44, 4, HudColor::PRIMARY);
     } else {
-        sprite.drawCircle(mW / 2, mH / 2 + 60, 4, HudColor::DARK);
+        sprite.drawCircle(mW / 2, mH / 2 + 44, 4, HudColor::DARK);
     }
 }
 
@@ -386,27 +350,27 @@ void ScreenTFT::drawIdleScreen() {
 void ScreenTFT::drawArrowIcon(int cx, int cy, int sz, int icon, uint16_t color) {
     float angle = 0;
     switch (icon) {
-        case 1: case 9:                      angle = 0;           break;  // 直行
-        case 2:                              angle = -PI / 2;     break;  // 左转
-        case 3:                              angle = PI / 2;      break;  // 右转
-        case 4:                              angle = -PI / 4;     break;  // 左前
-        case 5:                              angle = PI / 4;      break;  // 右前
-        case 6:                              angle = -3 * PI / 4; break;  // 左后
-        case 7:                              angle = 3 * PI / 4;  break;  // 右后
-        case 8: case 19:                     angle = PI;          break;  // 调头
-        case 15:  // 到达终点
+        case 1: case 9:                      angle = 0;           break;
+        case 2:                              angle = -PI / 2;     break;
+        case 3:                              angle = PI / 2;      break;
+        case 4:                              angle = -PI / 4;     break;
+        case 5:                              angle = PI / 4;      break;
+        case 6:                              angle = -3 * PI / 4; break;
+        case 7:                              angle = 3 * PI / 4;  break;
+        case 8: case 19:                     angle = PI;          break;
+        case 15:
             sprite.setTextColor(HudColor::ACCENT, HudColor::BG);
             sprite.setTextDatum(MC_DATUM);
             sprite.drawString("END", cx, cy, 4);
             return;
-        case 20:  // 环岛
+        case 20:
             sprite.drawCircle(cx, cy, sz / 2, color);
             sprite.drawCircle(cx, cy, sz / 2 - 2, color);
             sprite.setTextColor(color, HudColor::BG);
             sprite.setTextDatum(MC_DATUM);
             sprite.drawString("O", cx, cy, 2);
             return;
-        default:  // 未知 icon，画一个圆点
+        default:
             sprite.fillCircle(cx, cy, sz / 4, color);
             return;
     }
@@ -420,7 +384,6 @@ void ScreenTFT::drawArrowIcon(int cx, int cy, int sz, int icon, uint16_t color) 
         return (int)(dx * sinf(angle) + dy * cosf(angle) + cy);
     };
 
-    // 箭杆
     int sw = sz / 5, sh = sz * 2 / 3;
     int hw = sz / 2, hh = sz / 3;
 
@@ -433,7 +396,6 @@ void ScreenTFT::drawArrowIcon(int cx, int cy, int sz, int icon, uint16_t color) 
     sprite.fillTriangle(rotX(x0, y0), rotY(x0, y0), rotX(x2, y2), rotY(x2, y2),
                         rotX(x3, y3), rotY(x3, y3), color);
 
-    // 箭头头部
     int hx0 = cx - hw / 2, hy0 = cy - sh + hh / 2;
     int hx1 = cx + hw / 2, hy1 = cy - sh + hh / 2;
     int hx2 = cx,          hy2 = cy - sh + hh / 2 - hh;
@@ -441,17 +403,15 @@ void ScreenTFT::drawArrowIcon(int cx, int cy, int sz, int icon, uint16_t color) 
                         rotX(hx2, hy2), rotY(hx2, hy2), color);
 }
 
-// ── 限速圆圈（iWatch 风格） ────────────────────────────────
+// ── 限速圆圈 ──────────────────────────────────────────────
 
 void ScreenTFT::drawSpeedLimitCircle(int cx, int cy, int r, int speed, bool over) {
     uint16_t ring = over ? HudColor::DANGER : HudColor::WARN;
     uint16_t fill = over ? HudColor::DANGER : HudColor::BLUE;
 
-    // 圆环
     sprite.fillCircle(cx, cy, r, ring);
     sprite.fillCircle(cx, cy, r - 2, fill);
 
-    // 限速数字
     sprite.setTextColor(HudColor::WHITE, fill);
     sprite.setTextDatum(MC_DATUM);
     char buf[6];
@@ -459,7 +419,7 @@ void ScreenTFT::drawSpeedLimitCircle(int cx, int cy, int r, int speed, bool over
     sprite.drawString(buf, cx, cy, 2);
 }
 
-// ── 圆角按钮（工具函数） ──────────────────────────────────
+// ── 圆角按钮 ──────────────────────────────────────────────
 
 void ScreenTFT::drawRoundedBtn(int x, int y, int w, int h, int r, uint16_t bg, uint16_t border, const char* text) {
     sprite.fillRoundRect(x, y, w, h, r, bg);
