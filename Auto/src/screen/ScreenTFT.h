@@ -2,13 +2,25 @@
 
 /**
  * @file ScreenTFT.h
- * @brief ST7789 TFT 屏幕 HUD 风格实现
+ * @brief ILI9341 TFT 横屏 HUD 导航显示 (v0.6.0)
  *
- * 参考《小屏手机手搓hud》视频的 HUD 设计理念：
- * - 高对比黑底配色，夜间行车友好
- * - 大号转向箭头 + 距离 + 车速为核心信息
- * - 屏幕自适应：根据 TFT_WIDTH/TFT_HEIGHT 自动缩放字体和布局
- * - 限速标志、车道指引、路况光柱辅助显示
+ * 目标屏幕：MSP2807 2.8" ILI9341 SPI TFT (320x240)
+ * 接线方式：ESP32-S3 SuperMini 标准 SPI 引脚
+ *
+ * 横屏布局 (320x240)：
+ * ┌──────────────────────────────────────────────────────┐
+ * │ ● BLE │ 导航中 │ 帧:1234 │ 方位:北 ↑              │ top bar
+ * ├──────────────────────────────────────────────────────┤
+ * │  ← 左转                  ┌──────────┐              │
+ * │                          │ 限速  80 │              │ main
+ * │       300m               │ 当前  78 │              │
+ * │                          │  km/h    │              │
+ * │                          └──────────┘              │
+ * │ 车道: [↑] [↑] [→]                         CAM    │ lanes
+ * │██████████▓▓▓▓░░░░░░░░  (路况光柱)                    │ tmc bar
+ * │  中山路 → 人民路                                     │ road
+ * │  全程: 3.2 km / 5 min        纬度 39.9042          │ bottom
+ * └──────────────────────────────────────────────────────┘
  */
 
 #include "Screen.h"
@@ -27,48 +39,47 @@ public:
     void log(const char* msg) override;
 
 private:
-    TFT_eSPI tft;
-    TFT_eSprite sprite;      // 双缓冲离屏渲染，避免闪烁
+    TFT_eSPI  tft;
+    TFT_eSprite sprite;
 
     Nav::NavState mState;
     bool mBleConnected = false;
     unsigned long mLastRenderMs = 0;
     unsigned long mFrameCounter = 0;
     bool mInited = false;
-    bool mSpriteOk = false;  // sprite 帧缓冲是否分配成功
+    bool mSpriteOk = false;
 
-    // 屏幕尺寸（运行时获取）
-    int mWidth = 240;
-    int mHeight = 240;
+    int mW = 320;
+    int mH = 240;
 
-    // 自适应缩放因子（基于 240x240 基准）
-    float mScale = 1.0f;
+    // ── 布局常量（横屏 320x240） ──
+    static constexpr int TOP_BAR_H  = 22;
+    static constexpr int LANE_BAR_H = 24;
+    static constexpr int TMC_BAR_H  = 8;
+    static constexpr int MAIN_AREA_Y = TOP_BAR_H;
+    static constexpr int MAIN_AREA_H = 142;  // 22..164
+    static constexpr int LANE_BAR_Y  = MAIN_AREA_Y + MAIN_AREA_H;
+    static constexpr int TMC_BAR_Y   = LANE_BAR_Y + LANE_BAR_H;
+    static constexpr int ROAD_BAR_Y  = TMC_BAR_Y + TMC_BAR_H + 2;
+    static constexpr int BOTTOM_BAR_H = 22;
 
-    // 计算缩放因子
-    void computeScale();
-
-    // HUD 渲染各模块
+    // ── 渲染子模块 ──
     void renderFrame();
+    void drawBootScreen();
     void drawBackground();
-    void drawTopBar();              // BLE 状态 + 时间
-    void drawTurnArrow();           // 大号转向箭头
-    void drawDistance();            // 路口距离
-    void drawRoadName();            // 当前/下一道路名
-    void drawSpeed();              // 车速 + 限速标志
-    void drawLanes();               // 车道指引
-    void drawTmcBar();              // 路况光柱
-    void drawRouteInfo();           // 全程剩余
-    void drawCamera();              // 电子眼
-    void drawIdleScreen();         // 无导航时显示
-    // 启动画面：纯几何图形，不使用 drawString（避免 S3 字体渲染 crash）
-    void drawBootScreen();  // 启动画面
+    void drawTopBar();
+    void drawTurnArrow();
+    void drawDistance();
+    void drawSpeedPanel();    // 限速圆 + 当前车速
+    void drawLaneBar();
+    void drawTmcBar();
+    void drawRoadName();
+    void drawBottomBar();
+    void drawIdleScreen();
 
-    // 工具
-    int scale(int v) const { return (int)(v * mScale); }
-    uint8_t scaleFont(uint8_t f) const;
-
-    // 箭头绘制
-    void drawArrow(int cx, int cy, int size, int icon, uint16_t color);
-    // 限速标志
-    void drawSpeedLimit(int cx, int cy, int radius, int speed, bool overSpeed);
+    // ── 工具函数 ──
+    void drawArrowIcon(int cx, int cy, int size, int icon, uint16_t color);
+    void drawSpeedLimitCircle(int cx, int cy, int r, int speed, bool overSpeed);
+    const char* bearingLabel(int deg);
+    const char* arrowLabel(int icon);
 };

@@ -12,7 +12,7 @@
 
 // ===================== 项目信息 =====================
 #define PROJECT_NAME    "AutoNavDisplay"
-#define PROJECT_VERSION "0.5.11"
+#define PROJECT_VERSION "0.6.0"
 
 // ===================== 串口配置 =====================
 #ifndef SERIAL_BAUD
@@ -38,16 +38,17 @@ namespace BleUUID {
 }
 
 // ===================== 屏幕配置 =====================
+// v0.6.0: ILI9341 2.8" TFT 横屏 320x240 (MSP2807)
 // 默认使用串口虚拟屏幕（安全模式，无 TFT 时不会崩溃）
-// 连接 ST7789 TFT 屏幕后，将此处改为 0 或在 platformio.ini 的 S3 环境
+// 连接 ILI9341 TFT 屏幕后，将此处改为 0 或在 platformio.ini 的 S3 环境
 // build_flags 中添加 -D SCREEN_SERIAL_ONLY=0
 #ifndef SCREEN_SERIAL_ONLY
-#define SCREEN_SERIAL_ONLY 1
+#define SCREEN_SERIAL_ONLY 0  // v0.6.0: 默认启用 TFT
 #endif
 
-// TFT 屏幕默认分辨率，运行时会自适应
+// TFT 屏幕分辨率（ILI9341 横屏 320x240）
 #ifndef TFT_WIDTH
-#define TFT_WIDTH 240
+#define TFT_WIDTH 320
 #endif
 #ifndef TFT_HEIGHT
 #define TFT_HEIGHT 240
@@ -72,7 +73,7 @@ namespace Feature {
     constexpr bool BLE_AUTO_RECONNECT = true;        // 自动重连 BLE
     constexpr uint32_t BLE_SCAN_TIMEOUT_MS = 5000;   // BLE 扫描超时
     constexpr bool LOW_POWER_WHEN_IDLE = false;      // 空闲降频
-    constexpr uint32_t SCREEN_REFRESH_MS = 200;     // 屏幕刷新间隔（~5fps）
+    constexpr uint32_t SCREEN_REFRESH_MS = 100;     // v0.6.0: 10fps，画面流畅
 }
 
 // ===================== 调试开关 =====================

@@ -2,76 +2,52 @@
 #include "ScreenRenderer.h"
 #include "config/Config.h"
 #include <math.h>
+#include <stdio.h>
+
+// ══════════════════════════════════════════════════════════════
+// v0.6.0: ILI9341 横屏 320x240 HUD 导航显示
+// 屏幕：MSP2807 2.8" SPI ILI9341
+// 接线：CS=10 DC=2 RST=4 MOSI=11 SCK=12 BL=6
+// ══════════════════════════════════════════════════════════════
 
 ScreenTFT::ScreenTFT()
     : tft(), sprite(&tft) {
 }
 
-bool ScreenTFT::init() {
-    // 1. 初始化 TFT 硬件
-    tft.init();
-    mWidth = tft.width();
-    mHeight = tft.height();
+// ── 初始化 ────────────────────────────────────────────────
 
-    // 2. 验证 TFT 是否正常连接（width/height 为 0 说明未检测到屏幕）
-    if (mWidth == 0 || mHeight == 0) {
-        Serial.println("[Screen] TFT 未检测到(width=0)，回退到串口模式");
+bool ScreenTFT::init() {
+    tft.init();
+    tft.setRotation(1);  // 横屏 320x240
+    mW = tft.width();
+    mH = tft.height();
+
+    if (mW == 0 || mH == 0) {
+        Serial.println("[Screen] TFT 未检测到");
         return false;
     }
 
-    computeScale();
-
-    // 背光（GPIO 操作，不涉及 SPI）
 #ifdef TFT_BL
     pinMode(TFT_BL, OUTPUT);
     digitalWrite(TFT_BL, TFT_BACKLIGHT_ON);
 #endif
 
-    // ⚠️ 关键：init() 中不调用任何 tft 绘制操作（setRotation/fillScreen/
-    //    drawRect/fillTriangle 等），因为 ESP32-S3 上 TFT_eSPI 的 SPI
-    //    DMA / 像素写入路径存在 StoreProhibited crash（NULL + 0x10）。
-    //    所有渲染推迟到 renderFrame() 通过 sprite 帧缓冲（RAM）完成，
-    //    仅用 pushSprite() 做一次 SPI bulk 传输。
-
-    // 3. 创建离屏 sprite（双缓冲，避免闪烁）
+    // 创建离屏 sprite（双缓冲，避免闪烁）
     sprite.setColorDepth(16);
-    uint16_t* spriteBuf = (uint16_t*)sprite.createSprite(mWidth, mHeight);
-    if (spriteBuf == nullptr) {
-        // 内存不足，减小 sprite 尺寸再试一次
-        int halfW = mWidth / 2;
-        int halfH = mHeight / 2;
-        spriteBuf = (uint16_t*)sprite.createSprite(halfW, halfH);
-        if (spriteBuf == nullptr) {
-            Serial.println("[Screen] sprite 帧缓冲分配失败，将禁用渲染");
-            return false;
-        }
-        Serial.printf("[Screen] sprite 降级为 %dx%d（内存不足）\n", halfW, halfH);
+    sprite.setTextWrap(false);
+    uint16_t* buf = (uint16_t*)sprite.createSprite(mW, mH);
+    if (buf == nullptr) {
+        Serial.println("[Screen] sprite 帧缓冲分配失败");
+        return false;
     }
 
     mInited = true;
     mSpriteOk = true;
-
-    if (Debug::LOG_SYSTEM) {
-        Serial.printf("[Screen] TFT 初始化完成 %dx%d scale=%.2f\n", mWidth, mHeight, mScale);
-    }
-    Serial.println("[Screen] 启动画面将在首帧渲染时显示");
+    Serial.printf("[Screen] ILI9341 TFT 初始化完成 %dx%d 横屏\n", mW, mH);
     return true;
 }
 
-void ScreenTFT::computeScale() {
-    // 以 240x240 为基准计算缩放
-    int minDim = mWidth < mHeight ? mWidth : mHeight;
-    mScale = (float)minDim / 240.0f;
-    if (mScale < 0.5f) mScale = 0.5f;
-    if (mScale > 2.0f) mScale = 2.0f;
-}
-
-uint8_t ScreenTFT::scaleFont(uint8_t f) const {
-    int s = (int)(f * mScale);
-    if (s < 1) s = 1;
-    if (s > 8) s = 8;
-    return (uint8_t)s;
-}
+// ── 主循环入口 ────────────────────────────────────────────
 
 void ScreenTFT::update() {
     unsigned long now = millis();
@@ -99,10 +75,11 @@ void ScreenTFT::log(const char* msg) {
     }
 }
 
+// ── 帧渲染 ────────────────────────────────────────────────
+
 void ScreenTFT::renderFrame() {
     if (!mInited || !mSpriteOk) return;
 
-    // 首帧渲染启动画面（在 sprite 帧缓冲中绘制，避免 tft 直接 SPI 操作）
     if (mFrameCounter == 0) {
         drawBootScreen();
         sprite.pushSprite(0, 0);
@@ -111,250 +88,245 @@ void ScreenTFT::renderFrame() {
 
     drawBackground();
 
-    bool navigating = (mState.mapState == Nav::MapState::Navigating);
+    bool nav = (mState.mapState == Nav::MapState::Navigating);
 
-    if (navigating && mState.guide.valid) {
+    if (nav && mState.guide.valid) {
         drawTopBar();
         drawTurnArrow();
         drawDistance();
-        drawRoadName();
-        drawSpeed();
-        drawLanes();
+        drawSpeedPanel();
+        drawLaneBar();
         drawTmcBar();
-        drawRouteInfo();
-        drawCamera();
+        drawRoadName();
+        drawBottomBar();
     } else if (mState.mapState == Nav::MapState::Arrived) {
         drawTopBar();
         sprite.setTextColor(HudColor::ACCENT, HudColor::BG);
         sprite.setTextDatum(MC_DATUM);
-        sprite.setTextSize(scaleFont(4));
-        sprite.drawString("Arrived", mWidth / 2, mHeight / 2);
+        sprite.drawString("Arrived", mW / 2, mH / 2, 4);
     } else {
         drawIdleScreen();
     }
 
-    // 推送到屏幕
     sprite.pushSprite(0, 0);
 }
+
+// ── 背景 ──────────────────────────────────────────────────
 
 void ScreenTFT::drawBackground() {
     sprite.fillSprite(HudColor::BG);
 }
 
+// ── 启动画面 ──────────────────────────────────────────────
+
+void ScreenTFT::drawBootScreen() {
+    sprite.fillSprite(HudColor::BG);
+    int cx = mW / 2, cy = mH / 2;
+
+    // 外框
+    sprite.drawRect(8, 8, mW - 16, mH - 16, HudColor::PRIMARY);
+    sprite.drawRect(12, 12, mW - 24, mH - 24, HudColor::DIM);
+
+    // 导航箭头
+    int sz = 30;
+    sprite.fillTriangle(cx, cy - sz, cx - sz, cy + sz / 2,
+                        cx + sz, cy + sz / 2, HudColor::PRIMARY);
+    sprite.fillRect(cx - 5, cy + sz / 2, 10, 20, HudColor::PRIMARY);
+
+    // 版本文字
+    sprite.setTextColor(HudColor::DIM, HudColor::BG);
+    sprite.setTextDatum(BC_DATUM);
+    sprite.drawString("AutoNavDisplay v" PROJECT_VERSION, cx, mH - 12, 2);
+
+    // 进度条
+    int barY = mH - 32;
+    sprite.drawRect(18, barY, mW - 36, 5, HudColor::DIM);
+    sprite.fillRect(20, barY + 1, (mW - 40) / 3, 3, HudColor::ACCENT);
+    sprite.fillRect(20 + (mW - 40) / 3, barY + 1, (mW - 40) / 3, 3, HudColor::PRIMARY);
+}
+
+// ── 顶部状态栏 ────────────────────────────────────────────
+
 void ScreenTFT::drawTopBar() {
-    int barH = scale(20);
-    sprite.fillRect(0, 0, mWidth, barH, HudColor::DIM);
+    sprite.fillRect(0, 0, mW, TOP_BAR_H, HudColor::DIM);
 
     // BLE 状态点
-    int dotR = scale(4);
-    int dotX = scale(12);
-    int dotY = barH / 2;
-    sprite.fillCircle(dotX, dotY, dotR, mBleConnected ? HudColor::ACCENT : HudColor::DANGER);
+    int dotR = 4;
+    int dotX = 10, dotY = TOP_BAR_H / 2;
+    sprite.fillCircle(dotX, dotY, dotR,
+                      mBleConnected ? HudColor::ACCENT : HudColor::DANGER);
 
-    // 设备名
+    // 导航状态 + 帧计数
     sprite.setTextColor(HudColor::WHITE, HudColor::DIM);
     sprite.setTextDatum(ML_DATUM);
-    sprite.setTextSize(scaleFont(1));
-    sprite.drawString(PROJECT_NAME, dotX + dotR + scale(4), dotY);
+    sprite.drawString(ScreenRenderer::mapStateLabel(mState.mapState),
+                      dotX + dotR + 6, dotY, 2);
 
-    // 帧计数
+    // 方位角
     sprite.setTextDatum(MR_DATUM);
-    sprite.setTextColor(HudColor::PRIMARY, HudColor::DIM);
-    char buf[16];
-    snprintf(buf, sizeof(buf), "%lu", mFrameCounter);
-    sprite.drawString(buf, mWidth - scale(4), dotY);
+    char buf[32];
+    snprintf(buf, sizeof(buf), "%s ^", bearingLabel(mState.location.bearing));
+    sprite.drawString(buf, mW - 6, dotY, 2);
 }
+
+// ── 转向箭头（主区域左侧） ────────────────────────────────
 
 void ScreenTFT::drawTurnArrow() {
-    int cx = mWidth / 2;
-    int cy = scale(20) + scale(50);
-    int size = scale(45);
-    uint16_t color = HudColor::PRIMARY;
+    int cx = 100;  // 左侧区域中心
+    int cy = MAIN_AREA_Y + MAIN_AREA_H / 2 + 10;
+    int sz = 40;
 
     // 动画脉冲
-    if (Feature::ENABLE_ANIMATION) {
-        uint8_t phase = mFrameCounter % 4;
-        if (phase == 0) color = HudColor::PRIMARY;
-        else if (phase == 2) color = HudColor::WHITE;
+    uint16_t color = HudColor::PRIMARY;
+    if (Feature::ENABLE_ANIMATION && mFrameCounter % 6 < 3) {
+        color = HudColor::WHITE;
     }
 
-    drawArrow(cx, cy, size, mState.guide.icon, color);
+    drawArrowIcon(cx, cy, sz, mState.guide.icon, color);
 }
 
-void ScreenTFT::drawArrow(int cx, int cy, int size, int icon, uint16_t color) {
-    // 根据高德 ICON 定义绘制对应箭头
-    float angle = 0;  // 弧度，0 = 向上
-
+void ScreenTFT::drawArrowIcon(int cx, int cy, int sz, int icon, uint16_t color) {
+    // 高德 ICON 到角度映射
+    float angle = 0;
     switch (icon) {
-        case 1: case 9: angle = 0; break;           // 直行
-        case 2: angle = -PI / 2; break;              // 左转
-        case 3: angle = PI / 2; break;               // 右转
-        case 4: angle = -PI / 4; break;              // 左前方
-        case 5: angle = PI / 4; break;               // 右前方
-        case 6: angle = -3 * PI / 4; break;          // 左后方
-        case 7: angle = 3 * PI / 4; break;           // 右后方
-        case 8: case 19: angle = PI; break;          // 掉头
-        case 15: // 到达目的地 - 绘制旗帜
+        case 1: case 9:                      angle = 0;           break;
+        case 2:                              angle = -PI / 2;      break;
+        case 3:                              angle = PI / 2;       break;
+        case 4:                              angle = -PI / 4;      break;
+        case 5:                              angle = PI / 4;       break;
+        case 6:                              angle = -3 * PI / 4;  break;
+        case 7:                              angle = 3 * PI / 4;   break;
+        case 8: case 19:                     angle = PI;           break;
+        case 15: // 到达
             sprite.setTextColor(HudColor::ACCENT, HudColor::BG);
             sprite.setTextDatum(MC_DATUM);
-            sprite.setTextSize(scaleFont(4));
-            sprite.drawString("END", cx, cy);
+            sprite.drawString("END", cx, cy, 4);
             return;
-        default: angle = 0; break;
+        default: return;
     }
 
-    // 绘制粗箭头（杆 + 箭头头）
-    int shaftW = size / 6;
-    int shaftH = size * 2 / 3;
-    int headW = size / 2;
-    int headH = size / 3;
-
-    // 杆
-    int x0 = cx - shaftW / 2, y0 = cy + headH / 2;
-    int x1 = cx + shaftW / 2, y1 = cy + headH / 2;
-    int x2 = cx + shaftW / 2, y2 = cy + headH / 2 - shaftH;
-    int x3 = cx - shaftW / 2, y3 = cy + headH / 2 - shaftH;
-
-    // 箭头头（三角形）
-    int hx0 = cx - headW / 2, hy0 = cy - shaftH + headH / 2;
-    int hx1 = cx + headW / 2, hy1 = cy - shaftH + headH / 2;
-    int hx2 = cx, hy2 = cy - shaftH + headH / 2 - headH;
-
-    // 旋转 lambda
-    auto rotX = [&](int px, int py) -> int {
-        float dx = px - cx;
-        float dy = py - cy;
+    auto rotX = [&](int x, int y) {
+        float dx = x - cx, dy = y - cy;
         return (int)(dx * cosf(angle) - dy * sinf(angle) + cx);
     };
-    auto rotY = [&](int px, int py) -> int {
-        float dx = px - cx;
-        float dy = py - cy;
+    auto rotY = [&](int x, int y) {
+        float dx = x - cx, dy = y - cy;
         return (int)(dx * sinf(angle) + dy * cosf(angle) + cy);
     };
 
-    // 杆（矩形 -> 两个三角形）
-    sprite.fillTriangle(
-        rotX(x0, y0), rotY(x0, y0),
-        rotX(x1, y1), rotY(x1, y1),
-        rotX(x2, y2), rotY(x2, y2),
-        color);
-    sprite.fillTriangle(
-        rotX(x0, y0), rotY(x0, y0),
-        rotX(x2, y2), rotY(x2, y2),
-        rotX(x3, y3), rotY(x3, y3),
-        color);
+    int sw = sz / 5, sh = sz * 2 / 3;
+    int hw = sz / 2, hh = sz / 3;
+
+    // 杆（矩形 → 两个三角形）
+    int x0 = cx - sw / 2, y0 = cy + hh / 2;
+    int x1 = cx + sw / 2, y1 = cy + hh / 2;
+    int x2 = cx + sw / 2, y2 = cy + hh / 2 - sh;
+    int x3 = cx - sw / 2, y3 = cy + hh / 2 - sh;
+    sprite.fillTriangle(rotX(x0, y0), rotY(x0, y0), rotX(x1, y1), rotY(x1, y1),
+                        rotX(x2, y2), rotY(x2, y2), color);
+    sprite.fillTriangle(rotX(x0, y0), rotY(x0, y0), rotX(x2, y2), rotY(x2, y2),
+                        rotX(x3, y3), rotY(x3, y3), color);
 
     // 箭头头
-    sprite.fillTriangle(
-        rotX(hx0, hy0), rotY(hx0, hy0),
-        rotX(hx1, hy1), rotY(hx1, hy1),
-        rotX(hx2, hy2), rotY(hx2, hy2),
-        color);
+    int hx0 = cx - hw / 2, hy0 = cy - sh + hh / 2;
+    int hx1 = cx + hw / 2, hy1 = cy - sh + hh / 2;
+    int hx2 = cx,          hy2 = cy - sh + hh / 2 - hh;
+    sprite.fillTriangle(rotX(hx0, hy0), rotY(hx0, hy0), rotX(hx1, hy1), rotY(hx1, hy1),
+                        rotX(hx2, hy2), rotY(hx2, hy2), color);
 }
+
+// ── 距离文本（箭头下方） ──────────────────────────────────
 
 void ScreenTFT::drawDistance() {
-    int y = scale(20) + scale(100);
-    char distBuf[32];
+    int y = MAIN_AREA_Y + MAIN_AREA_H - 10;
+    int cx = 100;
 
+    char buf[32];
     if (mState.guide.distanceText[0]) {
-        strncpy(distBuf, mState.guide.distanceText, sizeof(distBuf) - 1);
-        distBuf[sizeof(distBuf) - 1] = '\0';
+        snprintf(buf, sizeof(buf), "%s", mState.guide.distanceText);
     } else {
-        ScreenRenderer::formatDistance(mState.guide.segRemainDis, distBuf, sizeof(distBuf));
+        ScreenRenderer::formatDistance(mState.guide.segRemainDis, buf, sizeof(buf));
     }
 
-    // 距离接近时变色提醒
     uint16_t color = HudColor::PRIMARY;
-    if (mState.guide.segRemainDis > 0 && mState.guide.segRemainDis < 200) {
-        color = HudColor::WARN;
-    }
-    if (mState.guide.segRemainDis > 0 && mState.guide.segRemainDis < 50) {
-        color = HudColor::DANGER;
-    }
+    if (mState.guide.segRemainDis > 0 && mState.guide.segRemainDis < 200) color = HudColor::WARN;
+    if (mState.guide.segRemainDis > 0 && mState.guide.segRemainDis < 50)  color = HudColor::DANGER;
 
     sprite.setTextColor(color, HudColor::BG);
-    sprite.setTextDatum(TC_DATUM);
-    sprite.setTextSize(scaleFont(6));
-    sprite.drawString(distBuf, mWidth / 2, y);
+    sprite.setTextDatum(BC_DATUM);
+    sprite.drawString(buf, cx, y, 4);
 }
 
-void ScreenTFT::drawRoadName() {
-    int y = scale(20) + scale(135);
+// ── 速度面板（右侧：限速圆 + 当前车速） ──────────────────
 
-    char roadBuf[80] = {0};
-    if (mState.guide.intersection[0]) {
-        strncpy(roadBuf, mState.guide.intersection, sizeof(roadBuf) - 1);
-    } else if (mState.guide.nextRoadName[0]) {
-        snprintf(roadBuf, sizeof(roadBuf), "-> %s", mState.guide.nextRoadName);
+void ScreenTFT::drawSpeedPanel() {
+    int cx = 260, cy = MAIN_AREA_Y + MAIN_AREA_H / 2;
+
+    // 限速圆
+    if (mState.guide.limitedSpeed > 0) {
+        bool over = mState.guide.curSpeed > mState.guide.limitedSpeed;
+        drawSpeedLimitCircle(cx, cy - 15, 30, mState.guide.limitedSpeed, over);
     }
 
-    if (roadBuf[0]) {
-        sprite.setTextColor(HudColor::WHITE, HudColor::BG);
-        sprite.setTextDatum(TC_DATUM);
-        sprite.setTextSize(scaleFont(2));
-        sprite.drawString(roadBuf, mWidth / 2, y);
-    }
-}
-
-void ScreenTFT::drawSpeed() {
-    int speedY = mHeight - scale(45);
-    int speedX = scale(10);
-
+    // 当前车速
     sprite.setTextColor(HudColor::ACCENT, HudColor::BG);
-    sprite.setTextDatum(BL_DATUM);
-    sprite.setTextSize(scaleFont(5));
-    char speedBuf[12];
-    snprintf(speedBuf, sizeof(speedBuf), "%d", mState.guide.curSpeed);
-    sprite.drawString(speedBuf, speedX, mHeight - scale(4));
+    sprite.setTextDatum(TC_DATUM);
+    char buf[8];
+    snprintf(buf, sizeof(buf), "%d", mState.guide.curSpeed);
+    sprite.drawString(buf, cx, cy + 25, 4);
 
     sprite.setTextColor(HudColor::DIM, HudColor::BG);
-    sprite.setTextSize(scaleFont(1));
-    sprite.drawString("km/h", speedX, mHeight - scale(4) - scaleFont(5) * 8);
-
-    // 限速标志
-    if (mState.guide.limitedSpeed > 0) {
-        int cx = mWidth - scale(35);
-        int cy = mHeight - scale(30);
-        int radius = scale(20);
-        bool overSpeed = mState.guide.curSpeed > mState.guide.limitedSpeed;
-        drawSpeedLimit(cx, cy, radius, mState.guide.limitedSpeed, overSpeed);
-    }
+    sprite.drawString("km/h", cx, cy + 55, 2);
 }
 
-void ScreenTFT::drawSpeedLimit(int cx, int cy, int radius, int speed, bool overSpeed) {
-    uint16_t ringColor = overSpeed ? HudColor::DANGER : HudColor::WARN;
-    sprite.drawCircle(cx, cy, radius, ringColor);
-    sprite.drawCircle(cx, cy, radius - 1, ringColor);
-    sprite.fillCircle(cx, cy, radius - 2, HudColor::BG);
-    sprite.setTextColor(overSpeed ? HudColor::DANGER : HudColor::WHITE, HudColor::BG);
+void ScreenTFT::drawSpeedLimitCircle(int cx, int cy, int r, int speed, bool over) {
+    uint16_t ring = over ? HudColor::DANGER : HudColor::WARN;
+    sprite.drawCircle(cx, cy, r, ring);
+    sprite.drawCircle(cx, cy, r - 1, ring);
+    sprite.fillCircle(cx, cy, r - 2, HudColor::BG);
+    sprite.setTextColor(over ? HudColor::DANGER : HudColor::WHITE, HudColor::BG);
     sprite.setTextDatum(MC_DATUM);
-    sprite.setTextSize(scaleFont(2));
-    char buf[8];
+    char buf[6];
     snprintf(buf, sizeof(buf), "%d", speed);
-    sprite.drawString(buf, cx, cy);
+    sprite.drawString(buf, cx, cy, 2);
 }
 
-void ScreenTFT::drawLanes() {
-    if (!mState.driveWay.enabled || mState.driveWay.laneCount == 0) return;
+// ── 车道指引 ──────────────────────────────────────────────
 
-    int laneY = mHeight - scale(70);
-    int laneAreaW = mWidth - scale(20);
+void ScreenTFT::drawLaneBar() {
+    sprite.fillRect(0, LANE_BAR_Y, mW, LANE_BAR_H, HudColor::BG);
+
     int laneCount = mState.driveWay.laneCount;
+    if (!mState.driveWay.enabled || laneCount == 0) {
+        // 无车道数据时显示电子眼
+        if (mState.guide.cameraDist > 0) {
+            char buf[24];
+            snprintf(buf, sizeof(buf), "CAM %dm", mState.guide.cameraDist);
+            sprite.setTextColor(HudColor::WARN, HudColor::BG);
+            sprite.setTextDatum(MR_DATUM);
+            sprite.drawString(buf, mW - 6, LANE_BAR_Y + LANE_BAR_H / 2, 2);
+        }
+        return;
+    }
+
     if (laneCount > 8) laneCount = 8;
-    int laneW = laneAreaW / laneCount;
-    int laneH = scale(12);
-    int startX = scale(10);
+
+    int laneW = 32;
+    int laneH = 18;
+    int totalW = laneCount * (laneW + 2);
+    int startX = (mW - totalW) / 2;
+    if (startX < 6) startX = 6;
 
     for (int i = 0; i < laneCount; i++) {
-        int lx = startX + i * laneW;
+        int lx = startX + i * (laneW + 2);
+        int ly = LANE_BAR_Y + (LANE_BAR_H - laneH) / 2;
         int backIcon = mState.driveWay.lanes[i].backIcon;
 
         uint16_t color = HudColor::PRIMARY;
-        sprite.fillRect(lx, laneY, laneW - 2, laneH, color);
+        sprite.fillRoundRect(lx, ly, laneW, laneH, 3, color);
 
         sprite.setTextColor(HudColor::BG, color);
         sprite.setTextDatum(MC_DATUM);
-        sprite.setTextSize(scaleFont(1));
         const char* label = "";
         switch (backIcon) {
             case 0: label = "^"; break;
@@ -365,139 +337,137 @@ void ScreenTFT::drawLanes() {
             case 5: label = "U"; break;
             case 6: label = "<>"; break;
             case 7: label = "<^>"; break;
-            default: break;
         }
-        sprite.drawString(label, lx + laneW / 2, laneY + laneH / 2);
+        sprite.drawString(label, lx + laneW / 2, ly + laneH / 2, 2);
+    }
+
+    // 电子眼（右侧）
+    if (mState.guide.cameraDist > 0) {
+        char buf[20];
+        snprintf(buf, sizeof(buf), "CAM %dm", mState.guide.cameraDist);
+        sprite.setTextColor(HudColor::WARN, HudColor::BG);
+        sprite.setTextDatum(MR_DATUM);
+        sprite.drawString(buf, mW - 4, LANE_BAR_Y + LANE_BAR_H / 2, 2);
     }
 }
+
+// ── 路况光柱 ──────────────────────────────────────────────
 
 void ScreenTFT::drawTmcBar() {
     if (!mState.tmc.enabled || mState.tmc.segmentCount == 0) return;
 
-    int barY = scale(20) + scale(115);
-    int barH = scale(6);
-    int barW = mWidth - scale(20);
-    int startX = scale(10);
-
     int totalDist = mState.tmc.totalDistance;
     if (totalDist <= 0) return;
 
+    int barW = mW - 12;
+    int startX = 6;
     int x = startX;
-    for (int i = 0; i < mState.tmc.segmentCount && i < 32; i++) {
+
+    for (int i = 0; i < mState.tmc.segmentCount && i < MAX_TMC_SEGMENTS; i++) {
         int segW = (int)((float)mState.tmc.segments[i].distance / totalDist * barW);
         if (segW < 1) segW = 1;
 
         uint16_t color = HudColor::DIM;
         switch (mState.tmc.segments[i].status) {
-            case 1: color = HudColor::ACCENT; break;
-            case 2: color = HudColor::YELLOW; break;
-            case 3: color = HudColor::WARN; break;
-            case 4: color = HudColor::DANGER; break;
-            default: break;
+            case 1: color = HudColor::ACCENT; break;  // 畅通
+            case 2: color = HudColor::YELLOW; break;  // 缓行
+            case 3: color = HudColor::WARN;   break;  // 拥堵
+            case 4: color = HudColor::DANGER; break;  // 严重拥堵
         }
-        sprite.fillRect(x, barY, segW, barH, color);
+        sprite.fillRect(x, TMC_BAR_Y, segW, TMC_BAR_H, color);
         x += segW;
     }
 }
 
-void ScreenTFT::drawRouteInfo() {
-    int y = mHeight - scale(60);
-    char disBuf[32];
-    char timeBuf[32];
-    ScreenRenderer::formatDistance(mState.guide.routeRemainDis, disBuf, sizeof(disBuf));
-    ScreenRenderer::formatTime(mState.guide.routeRemainTime, timeBuf, sizeof(timeBuf));
+// ── 道路名称 ──────────────────────────────────────────────
 
-    char info[64];
-    snprintf(info, sizeof(info), "%s / %s", disBuf, timeBuf);
+void ScreenTFT::drawRoadName() {
+    char buf[80] = {0};
+    if (mState.guide.intersection[0]) {
+        snprintf(buf, sizeof(buf), "%s", mState.guide.intersection);
+    } else if (mState.guide.nextRoadName[0]) {
+        snprintf(buf, sizeof(buf), "%s -> %s",
+                 mState.guide.curRoadName, mState.guide.nextRoadName);
+    } else if (mState.guide.curRoadName[0]) {
+        snprintf(buf, sizeof(buf), "%s", mState.guide.curRoadName);
+    }
 
-    sprite.setTextColor(HudColor::DIM, HudColor::BG);
-    sprite.setTextDatum(TC_DATUM);
-    sprite.setTextSize(scaleFont(1));
-    sprite.drawString(info, mWidth / 2, y);
+    if (buf[0]) {
+        sprite.setTextColor(HudColor::WHITE, HudColor::BG);
+        sprite.setTextDatum(TC_DATUM);
+        sprite.drawString(buf, mW / 2, ROAD_BAR_Y + 2, 2);
+    }
 }
 
-void ScreenTFT::drawCamera() {
-    if (mState.guide.cameraDist <= 0) return;
+// ── 底部信息栏 ────────────────────────────────────────────
 
-    int camY = mHeight - scale(50);
-    int camX = mWidth / 2;
+void ScreenTFT::drawBottomBar() {
+    int y = mH - BOTTOM_BAR_H;
 
-    char distBuf[32];
-    ScreenRenderer::formatDistance(mState.guide.cameraDist, distBuf, sizeof(distBuf));
+    // 全程剩余距离/时间
+    if (mState.guide.routeRemainDis > 0 || mState.guide.routeRemainTime > 0) {
+        char disBuf[16], timeBuf[16];
+        ScreenRenderer::formatDistance(mState.guide.routeRemainDis, disBuf, sizeof(disBuf));
+        ScreenRenderer::formatTime(mState.guide.routeRemainTime, timeBuf, sizeof(timeBuf));
 
-    sprite.setTextColor(HudColor::WARN, HudColor::BG);
-    sprite.setTextDatum(TC_DATUM);
-    sprite.setTextSize(scaleFont(2));
-    char buf[40];
-    snprintf(buf, sizeof(buf), "CAM %s", distBuf);
-    sprite.drawString(buf, camX, camY);
+        char buf[40];
+        snprintf(buf, sizeof(buf), "%s / %s", disBuf, timeBuf);
+        sprite.setTextColor(HudColor::DIM, HudColor::BG);
+        sprite.setTextDatum(BL_DATUM);
+        sprite.drawString(buf, 6, mH - 4, 2);
+    }
+
+    // GPS 坐标（简化显示精度）
+    if (mState.location.valid) {
+        sprite.setTextColor(HudColor::DIM, HudColor::BG);
+        sprite.setTextDatum(BR_DATUM);
+        char buf[24];
+        snprintf(buf, sizeof(buf), "GPS:%d", mState.location.bearing);
+        sprite.drawString(buf, mW - 6, mH - 4, 2);
+    }
 }
+
+// ── 空闲画面 ──────────────────────────────────────────────
 
 void ScreenTFT::drawIdleScreen() {
     drawTopBar();
 
     sprite.setTextColor(HudColor::DIM, HudColor::BG);
     sprite.setTextDatum(MC_DATUM);
-    sprite.setTextSize(scaleFont(2));
-    sprite.drawString("Waiting for", mWidth / 2, mHeight / 2 - scale(15));
-    sprite.drawString("navigation", mWidth / 2, mHeight / 2 + scale(15));
+    sprite.drawString("Waiting for", mW / 2, mH / 2 - 16, 4);
+    sprite.drawString("Navigation Data", mW / 2, mH / 2 + 16, 4);
 
-    if (mFrameCounter % 2 == 0) {
-        sprite.fillCircle(mWidth / 2, mHeight / 2 + scale(40), scale(4), HudColor::PRIMARY);
+    // 呼吸灯
+    if (mFrameCounter % 4 < 2) {
+        sprite.fillCircle(mW / 2, mH / 2 + 50, 5, HudColor::PRIMARY);
     }
 }
 
-// ══════════════════════════════════════════════════════════════
-// 启动画面：在 sprite 帧缓冲（RAM）中绘制，避免 tft 直接 SPI 操作
-// 原因：ESP32-S3 上 TFT_eSPI 的 tft.fillTriangle / tft.fillRect /
-// tft.drawRect / tft.fillCircle 等直接 SPI 像素写入路径存在
-// StoreProhibited crash（EXCVADDR: 0x00000010 = NULL + 0x10）。
-// 在 sprite 中绘制完全在 RAM 中进行，仅 pushSprite 做一次 SPI bulk。
-// ══════════════════════════════════════════════════════════════
-void ScreenTFT::drawBootScreen() {
-    sprite.fillSprite(HudColor::BG);
+// ── 工具函数 ──────────────────────────────────────────────
 
-    int cx = mWidth / 2;
-    int cy = mHeight / 2;
+const char* ScreenTFT::bearingLabel(int deg) {
+    if (deg < 0) return "?";
+    if (deg < 23 || deg >= 338) return "N";
+    if (deg < 68)  return "NE";
+    if (deg < 113) return "E";
+    if (deg < 158) return "SE";
+    if (deg < 203) return "S";
+    if (deg < 248) return "SW";
+    if (deg < 293) return "W";
+    return "NW";
+}
 
-    // ── 外框（double border） ──
-    sprite.drawRect(scale(8),  scale(8),
-                 mWidth - scale(16), mHeight - scale(16), HudColor::PRIMARY);
-    sprite.drawRect(scale(12), scale(12),
-                 mWidth - scale(24), mHeight - scale(24), HudColor::DIM);
-
-    // ── 中心导航箭头（HUD 风格） ──
-    int arrowSize = scale(28);
-    int arrowY = cy - scale(15);
-
-    // 箭头头（大三角形）
-    int tipX = cx;
-    int tipY = arrowY - arrowSize;
-    int leftX  = cx - arrowSize;
-    int leftY  = arrowY + arrowSize / 2;
-    int rightX = cx + arrowSize;
-    int rightY = arrowY + arrowSize / 2;
-    sprite.fillTriangle(tipX, tipY, leftX, leftY, rightX, rightY, HudColor::PRIMARY);
-
-    // 箭头杆
-    int shaftW = scale(8);
-    int shaftH = scale(18);
-    int shaftBaseY = arrowY + arrowSize / 2;
-    sprite.fillRect(cx - shaftW / 2, shaftBaseY, shaftW, shaftH, HudColor::PRIMARY);
-
-    // ── 底部进度条（表示启动中） ──
-    int barY = mHeight - scale(28);
-    int barW = mWidth - scale(36);
-    int barX = scale(18);
-    int barH = scale(4);
-    sprite.drawRect(barX, barY, barW, barH, HudColor::DIM);
-
-    // 分三段填充（视觉效果：启动进度）
-    int segW = barW / 3;
-    sprite.fillRect(barX + 2, barY + 1, segW - 2, barH - 2, HudColor::ACCENT);
-    sprite.fillRect(barX + segW + 2, barY + 1, segW - 2, barH - 2, HudColor::PRIMARY);
-    sprite.fillRect(barX + segW * 2 + 2, barY + 1, segW - 4, barH - 2, HudColor::DIM);
-
-    // ── 版本标记（右下角小圆点） ──
-    sprite.fillCircle(mWidth - scale(14), mHeight - scale(14), scale(3), HudColor::DIM);
+const char* ScreenTFT::arrowLabel(int icon) {
+    switch (icon) {
+        case 1:  return "^";
+        case 2:  return "<";
+        case 3:  return ">";
+        case 4:  return "<^";
+        case 5:  return "^>";
+        case 6:  return "<v";
+        case 7:  return "v>";
+        case 8:  return "U";
+        case 15: return "END";
+        default: return "?";
+    }
 }

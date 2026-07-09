@@ -133,7 +133,7 @@ void setup() {
 #if SCREEN_SERIAL_ONLY
                   "串口直通显示"
 #else
-                  "ST7789 TFT HUD"
+                  "ILI9341 TFT 横屏"
 #endif
     );
     Serial.println("╚══════════════════════════════════════════════╝");
@@ -155,6 +155,8 @@ void setup() {
     // 初始化 BLE GATT Server
     sBleServer.begin(PROJECT_NAME);  // ESP32 广播名为 AutoNavDisplay
     sBleServer.setDataCallback(onBleData);
+    // v0.6.0: poll 间隔 1 秒（配合 10fps 屏幕刷新，画面流畅）
+    sBleServer.setPollIntervalMs(1000);
     Serial.flush();
 }
 
