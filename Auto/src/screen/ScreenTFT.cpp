@@ -17,33 +17,51 @@ ScreenTFT::ScreenTFT()
 // ── 初始化 ────────────────────────────────────────────────
 
 bool ScreenTFT::init() {
+    // v0.6.2: 上电后等待电源稳定（MSP2807 模块需 5V 供电）
+    // 若电压不稳，ILI9341 初始化可能失败或导致 ESP32 掉电
+    delay(300);
+
     tft.init();
     tft.setRotation(1);  // 横屏 320x240
     mW = tft.width();
     mH = tft.height();
 
     if (mW == 0 || mH == 0) {
-        Serial.println("[Screen] TFT 未检测到");
+        Serial.println("[Screen] TFT 未检测到（检查 5V 供电 + SPI 接线）");
         return false;
     }
+
+    // v0.6.2: 降低 SPI 频率（27MHz，ILI9341 推荐 ≤ 40MHz）
+    // 避免在高频下因接线不良导致 SPI 通信失败
+    tft.setSPISpeed(27000000);
 
 #ifdef TFT_BL
     pinMode(TFT_BL, OUTPUT);
     digitalWrite(TFT_BL, TFT_BACKLIGHT_ON);
+    // 背光软启动，避免瞬间大电流拉低电压
+    delay(100);
 #endif
 
-    // 创建离屏 sprite（双缓冲，避免闪烁）
+    // v0.6.2: 创建 sprite 帧缓冲（需要 PSRAM）
+    // 若 PSRAM 未配置，malloc 返回 nullptr
     sprite.setColorDepth(16);
     sprite.setTextWrap(false);
     uint16_t* buf = (uint16_t*)sprite.createSprite(mW, mH);
     if (buf == nullptr) {
-        Serial.println("[Screen] sprite 帧缓冲分配失败");
-        return false;
+        // 尝试半分辨率（80KB，内部 SRAM 可能够）
+        Serial.println("[Screen] 全分辨率 sprite 分配失败，尝试半分辨率...");
+        mW = 160; mH = 120;
+        buf = (uint16_t*)sprite.createSprite(mW, mH);
+        if (buf == nullptr) {
+            Serial.println("[Screen] sprite 帧缓冲分配失败（PSRAM 未启用？）");
+            return false;
+        }
+        Serial.printf("[Screen] 已降级为 %dx%d 半分辨率模式\n", mW, mH);
     }
 
     mInited = true;
     mSpriteOk = true;
-    Serial.printf("[Screen] ILI9341 TFT 初始化完成 %dx%d 横屏\n", mW, mH);
+    Serial.printf("[Screen] ILI9341 TFT 初始化完成 %dx%d 横屏 (PSRAM)\n", mW, mH);
     return true;
 }
 

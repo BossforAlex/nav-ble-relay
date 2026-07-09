@@ -143,6 +143,12 @@ void setup() {
     // 启动阶段主动喂狗
     esp_task_wdt_reset();
 
+    // v0.6.2: 上电后等待 500ms 让电源稳定
+    // MSP2807 模块需 5V 供电（VCC 接 5V 而非 3.3V）
+    // 若 3.3V 供电，背光启动瞬间拉低电压 → ESP32 掉电重启
+    delay(500);
+    esp_task_wdt_reset();
+
     // 初始化屏幕
     bool screenOk = sScreen.init();
     if (!screenOk) {
