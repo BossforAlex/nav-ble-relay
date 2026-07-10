@@ -40,6 +40,12 @@
 static BleServer sBleServer;
 static Nav::NavState sNavState;
 
+// v0.6.8: BLE 数据到达后只更新 NavState，不直接调 LVGL API。
+// 由 loop() 在消费完所有 BLE 事件后统一刷屏一次，避免：
+//   1) LVGL 非线程安全调用（BLE 回调可能在不同上下文）
+//   2) 每包都 applyNavState + lv_timer_handler 导致栈暴涨 → WDT panic
+static bool sNavDirty = false;
+
 // BLE 数据接收缓冲区（静态，避免堆碎片）
 // v0.5.7：单 char 通道，JSON 带 "type" 字段（guide/drive/tmc/state/location）
 static char sJsonBuffer[2048];
@@ -198,12 +204,12 @@ static void onBleData(const uint8_t* data, size_t len) {
     }
 
     if (ok) {
-        sNavState.lastUpdateMs = millis();
-        sScreen.setNavState(sNavState);
-        if (Debug::LOG_BLE_RAW) {
-            Serial.printf("[BLE] ✓ %s (%u 字节)\n", type, (unsigned)len);
-        }
-    } else {
+            sNavState.lastUpdateMs = millis();
+            sNavDirty = true;  // v0.6.8: 只标记，loop() 统一刷屏
+            if (Debug::LOG_BLE_RAW) {
+                Serial.printf("[BLE] ✓ %s (%d 字节)\n", type, jsonLen);
+            }
+        } else {
         Serial.printf("[BLE] ✗ %s 解析失败: %s\n", type, sJsonBuffer);
     }
 }
@@ -276,7 +282,14 @@ void loop() {
 
     // 消费 BLE 事件队列（在主任务上下文中处理串口打印、JSON 解析）
     sBleServer.loop();
+    // v0.6.8: 消费完所有 BLE 事件后，统一刷屏一次。
+    // 避免每包都 applyNavState()（每包 5-10 次 LVGL 对象创建/销毁）
+    // 导致栈暴涨 → 堆栈碰撞 CPU1 IDLE1 → WDT panic
     sScreen.setBleConnected(sBleServer.isConnected());
+    if (sNavDirty) {
+        sNavDirty = false;
+        sScreen.setNavState(sNavState);
+    }
     sScreen.update();
 
     // 短延时，让 BLE 任务有足够 CPU 时间
