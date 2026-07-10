@@ -79,6 +79,10 @@ static void onBleData(const uint8_t* data, size_t len) {
             sChunkLen = 0;
         }
 
+        // v0.6.6: 新消息开始 (idx=0) → 总是重置缓冲
+        // 这是关键修复：之前如果 chunk 错乱会丢弃整个当前状态，
+        // 导致 Flutter 端 _onPollReceived 用 Future.wait() 并行 5 个 write
+        // 时，guide+drive 分片交错后两个消息全丢
         if (idx == 0) {
             // 第一片：重置缓冲
             sChunkLen = 0;
@@ -87,15 +91,28 @@ static void onBleData(const uint8_t* data, size_t len) {
             sChunkStartMs = millis();
         }
 
-        // 校验分片一致性
+        // v0.6.6 改进:分片错乱时保守处理
+        //   - 如果新片是 idx=0 (新消息开始) → 上面已重置，此处一定一致
+        //   - 如果新片是 idx>0 但和当前状态不匹配
+        //       A) 当前 sChunkTotal==0 (已被超时/前次错乱清空) → 重新开始
+        //       B) 当前 sChunkTotal>0 (在处理另一条消息中) → 丢弃这个新片
+        //          因为这条消息属于另一条并发消息，保留当前状态更重要
         if (total != sChunkTotal || idx != sChunkReceived) {
+            if (sChunkTotal == 0 && idx > 0) {
+                // 状态已空，新片是中间片 → 重新开始（按 idx 推断 total=idx+1 不安全，直接丢弃）
+                if (Debug::LOG_BLE_RAW) {
+                    Serial.printf("[BLE] 分片孤立 (idx=%d, 无前置), 丢弃\n", idx);
+                }
+                sChunkTotal = 0;
+                sChunkReceived = 0;
+                sChunkLen = 0;
+                return;
+            }
             if (Debug::LOG_BLE_RAW) {
-                Serial.printf("[BLE] 分片错乱 (期望 %d/%d, 收到 %d/%d), 丢弃\n",
+                Serial.printf("[BLE] 分片错乱 (期望 %d/%d, 收到 %d/%d), 丢弃新片保留当前消息\n",
                               sChunkReceived, sChunkTotal, idx, total);
             }
-            sChunkTotal = 0;
-            sChunkReceived = 0;
-            sChunkLen = 0;
+            // 关键:不重置 sChunkTotal 等,保留当前消息进度
             return;
         }
 
@@ -249,7 +266,7 @@ void setup() {
     // 初始化 BLE GATT Server
     sBleServer.begin(PROJECT_NAME);  // ESP32 广播名为 AutoNavDisplay
     sBleServer.setDataCallback(onBleData);
-    sBleServer.setPollIntervalMs(500);  // v0.6.6: 500ms poll = 最多 1s 内必有数据更新
+    sBleServer.setPollIntervalMs(500);  // v0.6.7: 500ms poll = 最多 1s 内必有数据更新
     Serial.flush();
 }
 

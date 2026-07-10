@@ -157,6 +157,13 @@ class BleService extends ChangeNotifier {
   String? _pendingCrossMap;
   DateTime _lastFlushMs = DateTime.fromMillisecondsSinceEpoch(0);
 
+  // ── v0.6.6 关键修复:全局 BLE 写锁 ──
+  // 之前的问题:_onPollReceived 用 Future.wait() 并行发送 5 个 pending 数据
+  // 当其中 2 个 (guide + drive) 都被分片传输时,它们各自的 chunk 会交错到达
+  // ESP32 → 分片校验失败 → 整个 JSON 被丢弃 → 屏幕永远停在 idle
+  // 修复:用串行写链确保任意时刻只有 1 个 BLE write 在飞
+  Future<void> _writeChain = Future.value();
+
   /// 监听适配器状态变化
   void _onAdapterChanged(BluetoothAdapterState state) {
     if (state == BluetoothAdapterState.on) {
@@ -487,12 +494,12 @@ class BleService extends ChangeNotifier {
   }
 
   /// 收到 ESP32 的 indicate：立刻把缓存的最新数据 flush 一次
-  void _onPollReceived(List<int> value) {
-    // ESP32 每 2 秒无活动就发空 indicate
+  void _onPollReceived(List<int> value) async {
+    // ESP32 每 500ms 无活动就发空 indicate
     // 收到后立刻把所有 pending 数据写一次
     if (!_isOurDevice || _chrData == null) return;
 
-    // 节流：避免太频繁（虽然 ESP32 端 2 秒一次，但保险起见 100ms 内只 flush 一次）
+    // 节流：避免太频繁（虽然 ESP32 端 500ms 一次，但保险起见 100ms 内只 flush 一次）
     final now = DateTime.now();
     if (now.difference(_lastFlushMs).inMilliseconds < 100) {
       _throttled++;
@@ -501,25 +508,23 @@ class BleService extends ChangeNotifier {
     }
     _lastFlushMs = now;
 
-    // 并行写入所有 pending 数据
-    final futures = <Future<void>>[];
+    // v0.6.6 关键修复:绝对禁止并行写!
+    // 之前用 Future.wait() 并行 5 个 write,当 guide+drive 同时分片时会交错
+    // 现在改为顺序 await,每个 sendXxx 内部都走 _writeChain 锁,确保单飞
     if (_pendingGuide != null) {
-      futures.add(sendGuideInfo(_pendingGuide!, compact: false));
+      await sendGuideInfo(_pendingGuide!, compact: false);
     }
     if (_pendingDrive != null) {
-      futures.add(sendDriveWay(_pendingDrive!));
+      await sendDriveWay(_pendingDrive!);
     }
     if (_pendingTmc != null) {
-      futures.add(sendTmcSegment(_pendingTmc!));
+      await sendTmcSegment(_pendingTmc!);
     }
     if (_pendingLocation != null) {
-      futures.add(sendLocation(_pendingLocation!));
+      await sendLocation(_pendingLocation!);
     }
     if (_pendingState != null) {
-      futures.add(sendMapState(_pendingState!, _pendingCrossMap));
-    }
-    if (futures.isNotEmpty) {
-      Future.wait(futures);
+      await sendMapState(_pendingState!, _pendingCrossMap);
     }
   }
 
@@ -706,7 +711,23 @@ class BleService extends ChangeNotifier {
   }
 
   /// 向 CHAR_DATA 写入原始字节（不编码 JSON）
+  ///
+  /// v0.6.6: 整段代码包在 _writeChain 串行链中,保证任意时刻只有 1 个 BLE write 在飞。
+  /// 防止并发写入导致 ESP32 端分片重组错乱。
   Future<bool> _writeRaw(List<int> bytes, String label) async {
+    final prev = _writeChain;
+    final completer = Completer<void>();
+    _writeChain = completer.future;
+    try {
+      await prev;
+      return await _writeRawImpl(bytes, label);
+    } finally {
+      completer.complete();
+    }
+  }
+
+  /// _writeRaw 的实际实现（不带锁）
+  Future<bool> _writeRawImpl(List<int> bytes, String label) async {
     final chr = _chrData!;
     final p = chr.properties;
     final canWriteResp = p.write;
