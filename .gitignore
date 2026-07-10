@@ -8,6 +8,9 @@
 .pio/
 .pioenvs/
 .piolibdeps/
+# Merged firmware binaries (由 GitHub Actions 自动构建)
+Auto/firmware-*-merged.bin
+Auto/firmware-*.bin
 
 # Android / Flutter
 .gradle/

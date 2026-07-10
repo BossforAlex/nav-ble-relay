@@ -249,8 +249,7 @@ void setup() {
     // 初始化 BLE GATT Server
     sBleServer.begin(PROJECT_NAME);  // ESP32 广播名为 AutoNavDisplay
     sBleServer.setDataCallback(onBleData);
-    // v0.6.0: poll 间隔 1 秒（配合 10fps 屏幕刷新，画面流畅）
-    sBleServer.setPollIntervalMs(1000);
+    sBleServer.setPollIntervalMs(500);  // v0.6.6: 500ms poll = 最多 1s 内必有数据更新
     Serial.flush();
 }
 
