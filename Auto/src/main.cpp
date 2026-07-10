@@ -289,6 +289,7 @@ void loop() {
     sScreen.setBleConnected(sBleServer.isConnected());
     if (sNavDirty) {
         sNavDirty = false;
+        Serial.printf("[main] sNavDirty → setNavState (lastUpdate=%lu)\n", sNavState.lastUpdateMs);
         sScreen.setNavState(sNavState);
     }
     sScreen.update();

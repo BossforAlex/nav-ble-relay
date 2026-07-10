@@ -77,9 +77,10 @@ bool ScreenLVGL::init() {
     lv_disp_drv_register(&mDispDrv);
 
     ui_init();
-    showIdleScreen();
 
     mInited = true;
+    showIdleScreen();
+
     Serial.printf("[ScreenLVGL] ILI9341 %dx%d + LVGL v%d.%d.%d 初始化完成\n",
                   w, h, LVGL_VERSION_MAJOR, LVGL_VERSION_MINOR, LVGL_VERSION_PATCH);
     return true;
@@ -89,13 +90,9 @@ bool ScreenLVGL::init() {
 
 void ScreenLVGL::update() {
     if (!mInited) return;
-    // v0.6.6 关键修复：绝不能因为暂时没数据就抹掉屏幕！
-    // 用户反馈 v0.6.5 的 3 秒超时机制会导致导航过程中"等待数据"反复闪现，
-    // 严重干扰视线。新策略：
-    //   1) BLE INDICATE poll 由 BleServer::loop() 主动触发（每 1s）
-    //   2) 手机收到 INDICATE → 立即把最新一次广播数据写回 CHAR_DATA
-    //   3) 屏幕始终显示最后接收到的 NavState（包括超速提示等所有细节）
-    //   4) 只有重启 / 显式调用 setNavState(idle) 才会切到空闲画面
+    // v0.6.8 关键修复: lv_tick_inc() 必须调用，否则 lv_timer_handler()
+    // 内部 lv_tick_get() 始终返回 0 → 判断时间未到 → 直接 return 不刷新！
+    lv_tick_inc(5);
     lv_timer_handler();
 }
 
@@ -191,13 +188,15 @@ void ScreenLVGL::formatRouteInfo(char* out, size_t outSize) {
 void ScreenLVGL::applyNavState() {
     if (!mInited) return;
 
-    // v0.6.6: 不再因为 !nav 或 !valid 就回退到 idle 画面。
-    // 屏幕始终显示最后接收到的 NavState（断流也不擦屏）。
-    // 如果是真正的初始空状态（mState.lastUpdateMs == 0），才显示一次 idle
     if (mState.lastUpdateMs == 0) {
         showIdleScreen();
         return;
     }
+
+    Serial.printf("[ScreenLVGL] applyNavState: speed=%d icon=%d road=%s dist=%d\n",
+                  mState.guide.curSpeed, mState.guide.icon,
+                  mState.guide.curRoadName[0] ? mState.guide.curRoadName : "(none)",
+                  mState.guide.segRemainDis);
 
     // 道路名称
     if (mState.guide.curRoadName[0]) {
