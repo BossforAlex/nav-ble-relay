@@ -8,28 +8,33 @@ extern "C" {
 #include "lvgl.h"
 #include "fonts/fonts.h"
 
+// ══════════════════════════════════════════════════════════════
+// v0.8.0: 三栏黄金比例布局
+//   左 (100px): 路名 → 转向箭头 → 距离
+//   中 (140px): 车道指引条 (Flexbox) → 大字时速 → km/h
+//   右 ( 65px): 限速红圈 → 连接状态图标
+// ══════════════════════════════════════════════════════════════
+
 extern lv_obj_t *ui_Screen1;
 
-// 顶部：道路名称（左上）
-extern lv_obj_t *ui_RoadNameLabel;
-// 顶部：车道指引容器（居中蓝条）
-extern lv_obj_t *ui_LaneContainer;
-// 左侧：转向大箭头
-extern lv_obj_t *ui_TurnArrow;
-// 左侧：路口距离文字（"725米"）
-extern lv_obj_t *ui_DistanceLabel;
-// 中央：当前车速（超大数字 "0"）
-extern lv_obj_t *ui_SpeedLabel;
-extern lv_obj_t *ui_SpeedUnitLabel;
-// 右上：限速圆圈 + 数字
-extern lv_obj_t *ui_LimitSign;
-extern lv_obj_t *ui_LimitLabel;
-// 右下：链条/电子眼图标（v0.6.6 重新设计：用 canvas 绘制自定义链条）
-extern lv_obj_t *ui_ChainIcon;
-// 左上：BLE 连接状态小点
-extern lv_obj_t *ui_BleDot;
-// 左下角：剩余总路程/时间（v0.6.6 新增）
-extern lv_obj_t *ui_RouteInfoLabel;
+// 左侧导航栏
+extern lv_obj_t *ui_RoadNameLabel;   // 路名（顶部居中）
+extern lv_obj_t *ui_TurnArrow;       // 转向大箭头（中央）
+extern lv_obj_t *ui_DistanceLabel;   // 剩余距离（底部）
+
+// 中间时速区
+extern lv_obj_t *ui_LaneContainer;   // 车道指引容器（Flexbox 弹性布局）
+extern lv_obj_t *ui_SpeedLabel;      // 大字时速数字
+extern lv_obj_t *ui_SpeedUnitLabel;  // 速度单位 km/h
+
+// 右侧状态区
+extern lv_obj_t *ui_LimitSign;       // 限速圆圈背景
+extern lv_obj_t *ui_LimitLabel;      // 限速数字
+extern lv_obj_t *ui_ChainIcon;       // 蓝牙连接状态图标
+
+// 全局装饰
+extern lv_obj_t *ui_BleDot;          // BLE 连接状态小点（左上角）
+extern lv_obj_t *ui_RouteInfoLabel;  // 剩余全程信息（底部横跨）
 
 void ui_init(void);
 

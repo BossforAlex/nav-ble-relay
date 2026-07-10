@@ -5,9 +5,11 @@
 #include <string.h>
 
 // ══════════════════════════════════════════════════════════════
-// v0.6.6: 基于 LVGL 的现代化 HUD 显示
-// 移植自 https://github.com/BossforAlex/LVGL-NAV
-// 完全对照 a.jpg 重新设计布局
+// v0.8.0: 三栏黄金比例布局（参照 UI.TXT 设计规范）
+//   左 (100px): 导航信息 — 路名 / 转向箭头 / 剩余距离
+//   中 (140px): 时速 + 车道 — Flexbox 车道条 / 大字时速 / km/h
+//   右 ( 65px): 状态 — 限速红圈 / 连接图标
+//   底: 全程剩余信息
 // ══════════════════════════════════════════════════════════════
 
 ScreenLVGL::ScreenLVGL() = default;
@@ -247,40 +249,28 @@ void ScreenLVGL::applyNavState() {
     lv_label_set_text(ui_RouteInfoLabel, routeBuf);
 }
 
-// ── 设置车道箭头 ──────────────────────────────────────────
+// ── 设置车道箭头（Flexbox 自动布局） ──────────────────────────
 
 void ScreenLVGL::setLaneArrows() {
     // 清除现有子对象
     lv_obj_clean(ui_LaneContainer);
 
-    // 车道数量：若导航中无 driveWay.enabled 或 laneCount==0，
-    // 仍显示 3 个默认直行箭头（与 a.jpg 默认态一致）
+    // 车道数量
     int laneCount = mState.driveWay.enabled ? mState.driveWay.laneCount : 0;
     if (laneCount == 0) {
-        // 默认 3 车道直行
-        laneCount = 3;
+        laneCount = 4;  // 默认 4 车道直行
     }
     if (laneCount > Nav::MAX_LANES) laneCount = Nav::MAX_LANES;
 
     lv_obj_clear_flag(ui_LaneContainer, LV_OBJ_FLAG_HIDDEN);
 
-    // a.jpg 显示 6 个箭头（每个 ~28px 宽，间距 6px），填满 212px
-    // 实际 laneCount 由数据决定，若 laneCount>6 则每箭头更窄
-    int totalW = 212 - 8;  // 留 4px 边距
-    int arrowW = totalW / laneCount;
-    if (arrowW > 32) arrowW = 32;
-    int startX = (212 - arrowW * laneCount) / 2;
-    if (startX < 2) startX = 2;
-
+    // Flexbox 自动布局，无需手动计算位置。
+    // 每个箭头宽度自适应，容器 132px 由 Flexbox 均匀分配。
     for (int i = 0; i < laneCount; i++) {
         lv_obj_t* arrow = lv_label_create(ui_LaneContainer);
         int backIcon = (i < mState.driveWay.laneCount)
                         ? mState.driveWay.lanes[i].backIcon : 1;
 
-        // backIcon 映射：
-        //   0 = 左转  1 = 直行  2 = 右转  3 = 左+直  4 = 直+右
-        //   5 = 左+直+右（保留/未用） 6 = 调头  7 = ?
-        // v0.6.9: 使用 Unicode 箭头 ← ↑ → ↓ ↶
         const char* symbol = "↑";
         if (backIcon == 0) symbol = "←";
         else if (backIcon == 1) symbol = "↑";
@@ -291,11 +281,10 @@ void ScreenLVGL::setLaneArrows() {
 
         lv_label_set_text_static(arrow, symbol);
         lv_obj_set_style_text_color(arrow, lv_color_white(), 0);
-        // 车道箭头使用 arrows_20 字体
         lv_obj_set_style_text_font(arrow, &arrows_20, 0);
         lv_obj_set_style_text_align(arrow, LV_TEXT_ALIGN_CENTER, 0);
-        lv_obj_set_size(arrow, arrowW, 30);
-        lv_obj_set_pos(arrow, startX + i * arrowW, 3);
+        // Flexbox 子元素：宽度自适应，高度撑满容器
+        lv_obj_set_height(arrow, 24);
     }
 }
 
