@@ -35,6 +35,14 @@ jobs:
       - name: Install PlatformIO
         run: pip install platformio esptool
 
+      - name: Verify fonts are up-to-date
+        run: |
+          if [ ! -f src/ui/fonts/cjk_20.c ]; then
+            echo "::error::Font files not found! Run: bash scripts/generate_fonts.sh"
+            exit 1
+          fi
+          echo "Font files: $(ls -la src/ui/fonts/*.c 2>/dev/null | wc -l) generated"
+
       - name: Build ESP32-S3 firmware (with TFT screen)
         run: |
           set -x

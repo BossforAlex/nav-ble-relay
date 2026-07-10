@@ -1,4 +1,5 @@
 #include "ui.h"
+#include "fonts/fonts.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -93,11 +94,10 @@ void ui_init(void)
 
     lv_style_init(&style_text_white);
     lv_style_set_text_color(&style_text_white, lv_color_white());
-    lv_style_set_text_font(&style_text_white, &lv_font_montserrat_24);
+    lv_style_set_text_align(&style_text_white, LV_TEXT_ALIGN_LEFT);
 
     lv_style_init(&style_text_light);
     lv_style_set_text_color(&style_text_light, lv_color_hex(0xE0E0E0));
-    lv_style_set_text_font(&style_text_light, &lv_font_montserrat_20);
 
     lv_style_init(&style_text_huge);
     lv_style_set_text_color(&style_text_huge, lv_color_white());
@@ -138,7 +138,7 @@ void ui_init(void)
     ui_RoadNameLabel = lv_label_create(ui_Screen1);
     lv_label_set_text_static(ui_RoadNameLabel, "");
     lv_obj_add_style(ui_RoadNameLabel, &style_text_white, 0);
-    lv_obj_set_style_text_font(ui_RoadNameLabel, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_font(ui_RoadNameLabel, &cjk_20, 0);
     lv_obj_set_pos(ui_RoadNameLabel, 14, 6);
     lv_obj_set_width(ui_RoadNameLabel, 130);
     lv_label_set_long_mode(ui_RoadNameLabel, LV_LABEL_LONG_SCROLL_CIRCULAR);
@@ -164,14 +164,14 @@ void ui_init(void)
     lv_label_set_text_static(ui_LimitLabel, "");
     lv_obj_center(ui_LimitLabel);
     lv_obj_set_style_text_color(ui_LimitLabel, lv_color_white(), 0);
-    lv_obj_set_style_text_font(ui_LimitLabel, &lv_font_montserrat_20, 0);
+    lv_obj_set_style_text_font(ui_LimitLabel, &cjk_20, 0);
 
     // ── 左侧中：超大转向箭头 ──
     // 位置：(0, 60)，尺寸：(110, 110)，纯白色 fork 风格箭头
     ui_TurnArrow = lv_label_create(ui_Screen1);
     lv_label_set_text_static(ui_TurnArrow, "");
     lv_obj_set_style_text_color(ui_TurnArrow, lv_color_white(), 0);
-    lv_obj_set_style_text_font(ui_TurnArrow, &lv_font_montserrat_48, 0);
+    lv_obj_set_style_text_font(ui_TurnArrow, &arrows_48, 0);
     lv_obj_set_style_text_align(ui_TurnArrow, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_size(ui_TurnArrow, 110, 110);
     lv_obj_set_pos(ui_TurnArrow, 0, 60);
@@ -181,7 +181,7 @@ void ui_init(void)
     ui_DistanceLabel = lv_label_create(ui_Screen1);
     lv_label_set_text_static(ui_DistanceLabel, "");
     lv_obj_set_style_text_color(ui_DistanceLabel, lv_color_white(), 0);
-    lv_obj_set_style_text_font(ui_DistanceLabel, &lv_font_montserrat_24, 0);
+    lv_obj_set_style_text_font(ui_DistanceLabel, &cjk_24, 0);
     lv_obj_set_style_text_align(ui_DistanceLabel, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_size(ui_DistanceLabel, 110, 36);
     lv_obj_set_pos(ui_DistanceLabel, 4, 178);
@@ -199,7 +199,7 @@ void ui_init(void)
     ui_SpeedUnitLabel = lv_label_create(ui_Screen1);
     lv_label_set_text_static(ui_SpeedUnitLabel, "km/h");
     lv_obj_set_style_text_color(ui_SpeedUnitLabel, lv_color_hex(0xB0B0B0), 0);
-    lv_obj_set_style_text_font(ui_SpeedUnitLabel, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_font(ui_SpeedUnitLabel, &cjk_14, 0);
     lv_obj_set_pos(ui_SpeedUnitLabel, 196, 162);
 
     // ── 右下：链条图标（v0.6.6 新增，参考 a.jpg） ──
@@ -214,7 +214,7 @@ void ui_init(void)
     ui_RouteInfoLabel = lv_label_create(ui_Screen1);
     lv_label_set_text_static(ui_RouteInfoLabel, "");
     lv_obj_set_style_text_color(ui_RouteInfoLabel, lv_color_hex(0x888888), 0);
-    lv_obj_set_style_text_font(ui_RouteInfoLabel, &lv_font_montserrat_14, 0);
+    lv_obj_set_style_text_font(ui_RouteInfoLabel, &cjk_14, 0);
     lv_obj_set_pos(ui_RouteInfoLabel, 4, 222);
     lv_obj_set_size(ui_RouteInfoLabel, 200, 16);
 

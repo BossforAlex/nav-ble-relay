@@ -12,7 +12,7 @@
 
 // ===================== 项目信息 =====================
 #define PROJECT_NAME    "AutoNavDisplay"
-#define PROJECT_VERSION "0.6.9"
+#define PROJECT_VERSION "0.7.0"
 
 // ===================== 串口配置 =====================
 #ifndef SERIAL_BAUD

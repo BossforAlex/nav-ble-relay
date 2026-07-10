@@ -6,6 +6,7 @@ extern "C" {
 #endif
 
 #include "lvgl.h"
+#include "fonts/fonts.h"
 
 extern lv_obj_t *ui_Screen1;
 

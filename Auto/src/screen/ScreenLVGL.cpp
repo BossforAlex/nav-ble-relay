@@ -280,22 +280,19 @@ void ScreenLVGL::setLaneArrows() {
         // backIcon 映射：
         //   0 = 左转  1 = 直行  2 = 右转  3 = 左+直  4 = 直+右
         //   5 = 左+直+右（保留/未用） 6 = 调头  7 = ?
-        const char* symbol = LV_SYMBOL_UP;
-        if (backIcon == 0) symbol = LV_SYMBOL_LEFT;
-        else if (backIcon == 1) symbol = LV_SYMBOL_UP;
-        else if (backIcon == 2) symbol = LV_SYMBOL_RIGHT;
-        else if (backIcon == 3) symbol = LV_SYMBOL_LEFT;  // 左+直 → 简化左
-        else if (backIcon == 4) symbol = LV_SYMBOL_RIGHT;  // 直+右 → 简化右
-        else if (backIcon == 6) symbol = LV_SYMBOL_DOWN;  // 调头
+        // v0.6.9: 使用 Unicode 箭头 ← ↑ → ↓ ↶
+        const char* symbol = "↑";
+        if (backIcon == 0) symbol = "←";
+        else if (backIcon == 1) symbol = "↑";
+        else if (backIcon == 2) symbol = "→";
+        else if (backIcon == 3) symbol = "↰";  // 左+直
+        else if (backIcon == 4) symbol = "↱";  // 直+右
+        else if (backIcon == 6) symbol = "↶";  // 调头
 
         lv_label_set_text_static(arrow, symbol);
         lv_obj_set_style_text_color(arrow, lv_color_white(), 0);
-        // 字体大小根据箭头宽度自适应
-        const lv_font_t* font = &lv_font_montserrat_20;
-        if (arrowW <= 18) font = &lv_font_montserrat_14;
-        else if (arrowW <= 24) font = &lv_font_montserrat_20;
-        else font = &lv_font_montserrat_24;
-        lv_obj_set_style_text_font(arrow, font, 0);
+        // 车道箭头使用 arrows_20 字体
+        lv_obj_set_style_text_font(arrow, &arrows_20, 0);
         lv_obj_set_style_text_align(arrow, LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_set_size(arrow, arrowW, 30);
         lv_obj_set_pos(arrow, startX + i * arrowW, 3);
@@ -305,25 +302,30 @@ void ScreenLVGL::setLaneArrows() {
 // ── 设置转向图标（a.jpg fork 风格：左上箭头） ──────────────
 
 void ScreenLVGL::setTurnSymbol(int icon) {
-    // 高德 AmapAuto icon 编号 → LVGL symbol 映射
-    // 与开源参考库 BossforAlex/LVGL-NAV 保持一致
-    const char* symbol = LV_SYMBOL_UP;
+    // 高德 AmapAuto icon 编号 → Unicode 箭头映射
+    // v0.6.9: 使用 arrows_48 字体中的 Unicode 箭头，比 LVGL 内置符号更清晰易读
+    //
+    // 箭头映射:
+    //   ← 左转  ↑ 直行  → 右转  ↓ 调头
+    //   ↰ 左前  ↱ 右前  ↶ 左后/左调头  ↷ 右后/右调头
+    //   ◎ 环岛  ★ 到达
+    const char* symbol = "↑";
 
     switch (icon) {
-        case 0:  symbol = LV_SYMBOL_LEFT;     break;  // 左转
-        case 1:  symbol = LV_SYMBOL_UP;       break;  // 直行
-        case 2:  symbol = LV_SYMBOL_RIGHT;    break;  // 右转
-        case 3:  symbol = LV_SYMBOL_LEFT;     break;  // 左前方掉头
-        case 4:  symbol = LV_SYMBOL_LEFT;     break;  // 左前方（左前）
-        case 5:  symbol = LV_SYMBOL_RIGHT;    break;  // 右前方（右前）
-        case 6:  symbol = LV_SYMBOL_LEFT;     break;  // 左后方（rare）
-        case 7:  symbol = LV_SYMBOL_RIGHT;    break;  // 右后方（rare）
-        case 8:  symbol = LV_SYMBOL_DOWN;     break;  // 调头
-        case 9:  symbol = LV_SYMBOL_UP;       break;  // 继续直行
-        case 15: symbol = LV_SYMBOL_OK;       break;  // 到达目的地
-        case 19: symbol = LV_SYMBOL_DOWN;     break;  // 调头（旧版）
-        case 20: symbol = LV_SYMBOL_REFRESH;  break;  // 环岛
-        default: symbol = LV_SYMBOL_UP;       break;  // 默认直行
+        case 0:  symbol = "←";  break;  // 左转
+        case 1:  symbol = "↑";  break;  // 直行
+        case 2:  symbol = "→";  break;  // 右转
+        case 3:  symbol = "↶";  break;  // 左前方掉头
+        case 4:  symbol = "↰";  break;  // 左前方
+        case 5:  symbol = "↱";  break;  // 右前方
+        case 6:  symbol = "↶";  break;  // 左后方
+        case 7:  symbol = "↷";  break;  // 右后方
+        case 8:  symbol = "↷";  break;  // 调头
+        case 9:  symbol = "↑";  break;  // 继续直行
+        case 15: symbol = "★";  break;  // 到达目的地
+        case 19: symbol = "↷";  break;  // 调头（旧版）
+        case 20: symbol = "◎";  break;  // 环岛
+        default: symbol = "↑";  break;  // 默认直行
     }
 
     lv_label_set_text_static(ui_TurnArrow, symbol);
