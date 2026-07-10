@@ -61,7 +61,8 @@ public:
 
     // 初始化 BLE 并启动 GATT Server + 广播
     // deviceName: ESP32 本地广播名（如 "AutoNavDisplay"）
-    void begin(const char* deviceName);
+    // 返回 true 表示 BLE 成功启动，false 表示初始化失败
+    bool begin(const char* deviceName);
 
     // 注册数据回调
     void setDataCallback(DataCallback cb) { dataCallback = cb; }

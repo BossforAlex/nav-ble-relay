@@ -63,24 +63,7 @@ private:
 // BleServer 实现
 // ============================================================
 
-void BleServer::begin(const char* deviceName) {
-    // 关键：关闭 NimBLE 内部日志 spam
-    // 否则每次连接都会打印大量 "subscribe event / mtu update event" 等
-    // 干扰用户对真实数据的观察。我们保留自己的诊断日志。
-    esp_log_level_set("NimBLE", ESP_LOG_NONE);
-    esp_log_level_set("NimBLEServer", ESP_LOG_NONE);
-    esp_log_level_set("NimBLEService", ESP_LOG_NONE);
-    esp_log_level_set("NimBLECharacteristic", ESP_LOG_NONE);
-    esp_log_level_set("NimBLEAdvertising", ESP_LOG_NONE);
-    esp_log_level_set("NimBLEDevice", ESP_LOG_NONE);
-    esp_log_level_set("NimBLEUtils", ESP_LOG_NONE);
-    esp_log_level_set("NimBLERemoteService", ESP_LOG_NONE);
-    esp_log_level_set("NimBLERemoteCharacteristic", ESP_LOG_NONE);
-    esp_log_level_set("NimBLEClient", ESP_LOG_NONE);
-    esp_log_level_set("NimBLEScan", ESP_LOG_NONE);
-    // 兜底：把全局默认日志级别提到 WARN，避免某些组件在运行时被设回 INFO
-    esp_log_level_set("*", ESP_LOG_WARN);
-
+bool BleServer::begin(const char* deviceName) {
     // 关闭 BLE 安全 / 配对 / 加密要求
     // 关键：NimBLE 默认要求 Secure Connection (LESC) 配对，
     // 很多手机 / Android 版本会触发 SEC_REQ_EVT 协商但不接受 LESC，
@@ -94,8 +77,27 @@ void BleServer::begin(const char* deviceName) {
     // 关键：禁用 BLE 默认的 CCCD 自动订阅行为
     NimBLEDevice::setOwnAddrType(BLE_OWN_ADDR_PUBLIC);
 
-    // 初始化 BLE 协议栈
-    NimBLEDevice::init(deviceName);
+    // v0.7.1: BLE 初始化重试机制
+    // 非 USB 供电时，电源不稳定可能导致 BLE 控制器初始化失败。
+    // 重试最多 3 次，每次间隔 500ms 让电源稳定。
+    bool bleOk = false;
+    for (int attempt = 1; attempt <= 3; attempt++) {
+        Serial.printf("[BLE] 初始化 BLE 协议栈 (第 %d/3 次)...\n", attempt);
+        bleOk = NimBLEDevice::init(deviceName);
+        if (bleOk) {
+            Serial.printf("[BLE] ✓ BLE 协议栈初始化成功\n");
+            break;
+        }
+        Serial.printf("[BLE] ✗ BLE 初始化失败 (第 %d/3 次)，500ms 后重试...\n", attempt);
+        delay(500);
+        esp_task_wdt_reset();
+    }
+
+    if (!bleOk) {
+        Serial.println("[BLE] ✗✗✗ BLE 初始化全部失败！请检查供电或重启设备");
+        started = false;
+        return false;
+    }
 
     // 发射功率适当调整，确保与各种手机兼容
     NimBLEDevice::setPower(ESP_PWR_LVL_P6, ESP_BLE_PWR_TYPE_DEFAULT);
@@ -110,7 +112,8 @@ void BleServer::begin(const char* deviceName) {
     server = NimBLEDevice::createServer();
     if (server == nullptr) {
         Serial.println("[BLE] 创建 GATT Server 失败");
-        return;
+        started = false;
+        return false;
     }
     ServerCallbacks* serverCb = new ServerCallbacks(this);
     server->setCallbacks(serverCb);
@@ -154,6 +157,21 @@ void BleServer::begin(const char* deviceName) {
 
     started = true;
 
+    // v0.7.1: 初始化成功后才关闭 NimBLE 内部日志 spam
+    // 之前把日志抑制放在 init 前，导致看不到 BLE 初始化失败的错误信息
+    esp_log_level_set("NimBLE", ESP_LOG_NONE);
+    esp_log_level_set("NimBLEServer", ESP_LOG_NONE);
+    esp_log_level_set("NimBLEService", ESP_LOG_NONE);
+    esp_log_level_set("NimBLECharacteristic", ESP_LOG_NONE);
+    esp_log_level_set("NimBLEAdvertising", ESP_LOG_NONE);
+    esp_log_level_set("NimBLEDevice", ESP_LOG_NONE);
+    esp_log_level_set("NimBLEUtils", ESP_LOG_NONE);
+    esp_log_level_set("NimBLERemoteService", ESP_LOG_NONE);
+    esp_log_level_set("NimBLERemoteCharacteristic", ESP_LOG_NONE);
+    esp_log_level_set("NimBLEClient", ESP_LOG_NONE);
+    esp_log_level_set("NimBLEScan", ESP_LOG_NONE);
+    esp_log_level_set("*", ESP_LOG_WARN);
+
     // 初始化活动时间戳
     _lastActivityMs.store(millis());
     _lastPollSentMs.store(0);
@@ -175,6 +193,7 @@ void BleServer::begin(const char* deviceName) {
     Serial.println("════════════════════════════════════════════════════════════");
     Serial.printf("[BLE] ✓ 等待手机连接...\n");
     Serial.flush();  // 强制刷新串口，确保用户立即看到
+    return true;
 }
 
 void BleServer::loop() {

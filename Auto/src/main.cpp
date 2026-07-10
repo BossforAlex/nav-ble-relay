@@ -266,12 +266,22 @@ void setup() {
     if (!screenOk) {
         Serial.println("[Screen] 屏幕初始化失败，回退到串口直通");
     }
-    sScreen.log("系统启动，等待手机 BLE 连接...");
     Serial.flush();
     delay(50);
 
     // 初始化 BLE GATT Server
-    sBleServer.begin(PROJECT_NAME);  // ESP32 广播名为 AutoNavDisplay
+    // v0.7.1: 屏幕初始化后额外延时 300ms，让 TFT 背光电流尖峰过去后再启动 BLE。
+    // 非 USB 供电时，背光启动瞬间拉低电压 → BLE 射频初始化失败。
+    delay(300);
+    esp_task_wdt_reset();
+
+    bool bleOk = sBleServer.begin(PROJECT_NAME);  // ESP32 广播名为 AutoNavDisplay
+    if (!bleOk) {
+        Serial.println("[main] BLE 初始化失败！设备将无法接收导航数据");
+        sScreen.log("BLE 初始化失败，请重启设备");
+    } else {
+        sScreen.log("系统启动，等待手机 BLE 连接...");
+    }
     sBleServer.setDataCallback(onBleData);
     sBleServer.setPollIntervalMs(500);  // v0.6.7: 500ms poll = 最多 1s 内必有数据更新
     Serial.flush();
