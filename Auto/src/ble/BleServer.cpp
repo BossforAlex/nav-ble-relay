@@ -77,11 +77,10 @@ bool BleServer::begin(const char* deviceName) {
     // 关键：禁用 BLE 默认的 CCCD 自动订阅行为
     NimBLEDevice::setOwnAddrType(BLE_OWN_ADDR_PUBLIC);
 
-    // v0.7.1: BLE 初始化重试机制
-    // 非 USB 供电时，电源不稳定可能导致 BLE 控制器初始化失败。
-    // NimBLEDevice::init() 返回 void，无法直接检查结果。
+    // v0.8.1: BLE 初始化重试机制（增强）
+    // 非 USB 供电时，USB CDC 未连接主机会抢占 BLE 射频资源。
     // 改为通过 createServer() 是否成功来验证初始化状态。
-    // 重试最多 3 次，每次间隔 500ms 让电源稳定。
+    // 重试最多 3 次，每次间隔 1000ms 让电源和 USB 栈完全稳定。
     for (int attempt = 1; attempt <= 3; attempt++) {
         Serial.printf("[BLE] 初始化 BLE 协议栈 (第 %d/3 次)...\n", attempt);
         NimBLEDevice::init(deviceName);
@@ -93,10 +92,10 @@ bool BleServer::begin(const char* deviceName) {
             break;
         }
 
-        Serial.printf("[BLE] ✗ BLE 初始化失败 (第 %d/3 次)，500ms 后重试...\n", attempt);
+        Serial.printf("[BLE] ✗ BLE 初始化失败 (第 %d/3 次)，1000ms 后重试...\n", attempt);
         // 清理失败的初始化状态，避免 NimBLE 内部状态错乱
         NimBLEDevice::deinit(true);
-        delay(500);
+        delay(1000);
         esp_task_wdt_reset();
     }
 

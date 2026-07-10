@@ -230,7 +230,6 @@ void setup() {
     Serial.printf("██  %s v%s\n", PROJECT_NAME, PROJECT_VERSION);
     Serial.printf("██  FW: v%s  (%s %s)\n", PROJECT_VERSION, __DATE__, __TIME__);
     Serial.println("██████████████████████████████████████████████");
-    Serial.flush();
     delay(50);
 
     Serial.println();
@@ -249,42 +248,38 @@ void setup() {
 #endif
     );
     Serial.println("╚══════════════════════════════════════════════╝");
-    Serial.flush();
     delay(50);
 
     // 启动阶段主动喂狗
     esp_task_wdt_reset();
 
-    // v0.6.2: 上电后等待 500ms 让电源稳定
-    // MSP2807 模块需 5V 供电（VCC 接 5V 而非 3.3V）
-    // 若 3.3V 供电，背光启动瞬间拉低电压 → ESP32 掉电重启
-    delay(500);
+    // v0.8.1: BLE 初始化必须放在屏幕之前！
+    // 原因：USB CDC 未连接主机时，后台任务会抢占 BLE 射频初始化资源。
+    // 屏幕背光启动瞬间电流尖峰进一步恶化 → BLE 控制器初始化失败。
+    // 先启动 BLE（电源最干净），再启动屏幕。
+    // 上电后等待 1000ms 让电源和 USB 栈完全稳定。
+    delay(1000);
     esp_task_wdt_reset();
 
-    // 初始化屏幕
+    bool bleOk = sBleServer.begin(PROJECT_NAME);
+    if (!bleOk) {
+        Serial.println("[main] BLE 初始化失败！设备将无法接收导航数据");
+    }
+    sBleServer.setDataCallback(onBleData);
+    sBleServer.setPollIntervalMs(500);
+    delay(50);
+
+    // ── BLE 就绪后再初始化屏幕 ──
     bool screenOk = sScreen.init();
     if (!screenOk) {
         Serial.println("[Screen] 屏幕初始化失败，回退到串口直通");
     }
-    Serial.flush();
-    delay(50);
-
-    // 初始化 BLE GATT Server
-    // v0.7.1: 屏幕初始化后额外延时 300ms，让 TFT 背光电流尖峰过去后再启动 BLE。
-    // 非 USB 供电时，背光启动瞬间拉低电压 → BLE 射频初始化失败。
-    delay(300);
-    esp_task_wdt_reset();
-
-    bool bleOk = sBleServer.begin(PROJECT_NAME);  // ESP32 广播名为 AutoNavDisplay
-    if (!bleOk) {
-        Serial.println("[main] BLE 初始化失败！设备将无法接收导航数据");
-        sScreen.log("BLE 初始化失败，请重启设备");
-    } else {
+    if (bleOk) {
         sScreen.log("系统启动，等待手机 BLE 连接...");
+    } else {
+        sScreen.log("BLE 初始化失败，请重启设备");
     }
-    sBleServer.setDataCallback(onBleData);
-    sBleServer.setPollIntervalMs(500);  // v0.6.7: 500ms poll = 最多 1s 内必有数据更新
-    Serial.flush();
+    delay(50);
 }
 
 void loop() {
