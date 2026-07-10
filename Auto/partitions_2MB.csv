@@ -1,0 +1,7 @@
+# Name,   Type, SubType, Offset,  Size, Flags
+# Custom partition table: 2MB app + 1.5MB SPIFFS (no OTA)
+# Needed for v0.7.1+ with large CJK font data (~500KB fonts)
+nvs,      data, nvs,     0x9000,  0x5000,
+otadata,  data, ota,     0xe000,  0x2000,
+app0,     app,  ota_0,   0x10000, 0x200000,
+spiffs,   data, spiffs,  0x210000,0x1F0000,
