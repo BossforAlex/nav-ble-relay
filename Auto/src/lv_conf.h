@@ -1,0 +1,96 @@
+/**
+ * @file lv_conf.h
+ * @brief LVGL v8.4 配置（适配 ESP32-S3 + ILI9341 320x240）
+ */
+
+#ifndef LV_CONF_H
+#define LV_CONF_H
+
+#include <stdint.h>
+
+/* 颜色深度 16-bit (RGB565) */
+#define LV_COLOR_DEPTH     16
+
+/* 显示缓冲区：320*240/10 = 7.7KB，较小以节省内存 */
+#define LV_DISP_DEF_REFR_PERIOD    20
+#define LV_INDEV_DEF_READ_PERIOD   20
+
+/* 使用 1/10 屏幕大小的单缓冲 */
+#define LV_DISP_BUF_SIZE           (320 * 240 / 10)
+
+/* v0.6.5: 为 LVGL 默认主题能链接，启用被 theme_default 引用的核心 widgets */
+#define LV_USE_PERF_MONITOR        0
+#define LV_USE_MEM_MONITOR         0
+#define LV_USE_ANIMATION           1
+#define LV_USE_LABEL               1
+#define LV_USE_BTN                 1
+#define LV_USE_IMG                 1
+#define LV_USE_BTNMATRIX           1
+#define LV_USE_BAR                 0
+#define LV_USE_SLIDER              0
+#define LV_USE_SWITCH              0
+#define LV_USE_DROPDOWN            1
+#define LV_USE_ROLLER              1
+#define LV_USE_TEXTAREA            0
+#define LV_USE_CHECKBOX            0
+#define LV_USE_LIST                0
+#define LV_USE_TABLE               0
+#define LV_USE_CHART               0
+#define LV_USE_WIN                 0
+#define LV_USE_SPAN                0
+#define LV_USE_SPINNER             0
+#define LV_USE_SPINBOX             0
+#define LV_USE_KEYBOARD            0
+#define LV_USE_OBJ                 1
+#define LV_USE_FLEX                1
+#define LV_USE_GRID                0
+
+/* extra widgets：只启用主题需要的，关闭其余以节省 Flash */
+#define LV_USE_EXTRA_WIDGETS       1
+#define LV_USE_CALENDAR            1
+#define LV_USE_CHART               0
+#define LV_USE_COLORWHEEL          1
+#define LV_USE_IMGBTN              0
+#define LV_USE_LED                 1
+#define LV_USE_MENU                1
+#define LV_USE_METER               1
+#define LV_USE_MSGBOX              1
+#define LV_USE_SPAN                0
+#define LV_USE_SPINBOX             0
+#define LV_USE_SPINNER             0
+#define LV_USE_TABVIEW             1
+#define LV_USE_TILEVIEW            1
+#define LV_USE_WIN                 0
+
+/* 默认字体，只加载常用字号 */
+#define LV_FONT_MONTSERRAT_12      1
+#define LV_FONT_MONTSERRAT_14      1
+#define LV_FONT_MONTSERRAT_16      1
+#define LV_FONT_MONTSERRAT_20      1
+#define LV_FONT_MONTSERRAT_24      1
+#define LV_FONT_MONTSERRAT_28      1
+#define LV_FONT_MONTSERRAT_32      1
+#define LV_FONT_MONTSERRAT_48      1
+#define LV_FONT_MONTSERRAT_8       0
+#define LV_FONT_MONTSERRAT_10      0
+#define LV_FONT_MONTSERRAT_18      0
+#define LV_FONT_MONTSERRAT_22      0
+#define LV_FONT_MONTSERRAT_26      0
+#define LV_FONT_MONTSERRAT_34      0
+#define LV_FONT_MONTSERRAT_36      0
+#define LV_FONT_MONTSERRAT_40      0
+#define LV_FONT_MONTSERRAT_44      0
+
+/* 中文字体需要特殊处理，这里先关闭，后续如需要再加入 */
+#define LV_FONT_SIMSUN_16_CJK      0
+
+/* 主题 */
+#define LV_USE_THEME_DEFAULT       1
+#define LV_THEME_DEFAULT_DARK      1
+
+/* 其他 */
+#define LV_USE_USER_DATA           1
+#define LV_USE_LARGE_COORD         0
+#define LV_USE_LOG                 0
+
+#endif /* LV_CONF_H */

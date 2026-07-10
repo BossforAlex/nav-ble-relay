@@ -12,7 +12,7 @@
 
 // ===================== 项目信息 =====================
 #define PROJECT_NAME    "AutoNavDisplay"
-#define PROJECT_VERSION "0.6.4"
+#define PROJECT_VERSION "0.6.5"
 
 // ===================== 串口配置 =====================
 #ifndef SERIAL_BAUD
@@ -46,13 +46,10 @@ namespace BleUUID {
 #define SCREEN_SERIAL_ONLY 0  // v0.6.0: 默认启用 TFT
 #endif
 
-// TFT 屏幕分辨率（ILI9341 横屏 320x240）
-#ifndef TFT_WIDTH
-#define TFT_WIDTH 320
-#endif
-#ifndef TFT_HEIGHT
-#define TFT_HEIGHT 240
-#endif
+// TFT 屏幕分辨率不再在此定义，由 TFT_eSPI 库自身根据 ILI9341_DRIVER 确定。
+// 在 platformio.ini 中已指定 ILI9341_DRIVER=1 / TFT_WIDTH/TFT_HEIGHT 由库定义。
+// 这里保留占位注释，避免后续重复添加。
+
 
 // HUD 配色（iWatch 风格：深黑底 + 高饱和点缀色，夜间友好）
 namespace HudColor {

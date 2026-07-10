@@ -32,8 +32,9 @@
   #include "screen/ScreenConsole.h"
   static ScreenConsole sScreen;
 #else
-  #include "screen/ScreenTFT.h"
-  static ScreenTFT sScreen;
+  // v0.6.5: 使用 LVGL 现代化 UI
+  #include "screen/ScreenLVGL.h"
+  static ScreenLVGL sScreen;
 #endif
 
 static BleServer sBleServer;
