@@ -79,21 +79,28 @@ bool BleServer::begin(const char* deviceName) {
 
     // v0.7.1: BLE 初始化重试机制
     // 非 USB 供电时，电源不稳定可能导致 BLE 控制器初始化失败。
+    // NimBLEDevice::init() 返回 void，无法直接检查结果。
+    // 改为通过 createServer() 是否成功来验证初始化状态。
     // 重试最多 3 次，每次间隔 500ms 让电源稳定。
-    bool bleOk = false;
     for (int attempt = 1; attempt <= 3; attempt++) {
         Serial.printf("[BLE] 初始化 BLE 协议栈 (第 %d/3 次)...\n", attempt);
-        bleOk = NimBLEDevice::init(deviceName);
-        if (bleOk) {
+        NimBLEDevice::init(deviceName);
+
+        // 验证：尝试创建 Server 看 BLE 协议栈是否正常工作
+        server = NimBLEDevice::createServer();
+        if (server != nullptr) {
             Serial.printf("[BLE] ✓ BLE 协议栈初始化成功\n");
             break;
         }
+
         Serial.printf("[BLE] ✗ BLE 初始化失败 (第 %d/3 次)，500ms 后重试...\n", attempt);
+        // 清理失败的初始化状态，避免 NimBLE 内部状态错乱
+        NimBLEDevice::deinit(true);
         delay(500);
         esp_task_wdt_reset();
     }
 
-    if (!bleOk) {
+    if (server == nullptr) {
         Serial.println("[BLE] ✗✗✗ BLE 初始化全部失败！请检查供电或重启设备");
         started = false;
         return false;
@@ -108,13 +115,6 @@ bool BleServer::begin(const char* deviceName) {
     // 短暂延时让协议栈就绪
     delay(200);
 
-    // 创建 GATT Server
-    server = NimBLEDevice::createServer();
-    if (server == nullptr) {
-        Serial.println("[BLE] 创建 GATT Server 失败");
-        started = false;
-        return false;
-    }
     ServerCallbacks* serverCb = new ServerCallbacks(this);
     server->setCallbacks(serverCb);
 
