@@ -181,6 +181,7 @@ static void onBleData(const uint8_t* data, size_t len) {
         }
         return;
     }
+    size_t jsonLen = strlen(sJsonBuffer);
 
     // 根据 type 路由到对应 NavParser
     bool ok = false;
