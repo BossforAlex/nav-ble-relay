@@ -46,15 +46,54 @@ void ScreenLVGL::onFlush(lv_disp_drv_t* disp, const lv_area_t* area, lv_color_t*
     lv_disp_flush_ready(disp);
 }
 
+/* ── v0.9.1: TFT 初始化验证与重试 ──────────────────────────── */
+
+bool ScreenLVGL::tftInitWithRetry(int maxRetries) {
+    for (int attempt = 1; attempt <= maxRetries; attempt++) {
+        Serial.printf("[ScreenLVGL] TFT 初始化 (第 %d/%d 次)...\n", attempt, maxRetries);
+
+        // 每次重试前重新初始化 SPI 总线
+        SPI.end();
+        delay(100);
+        SPI.begin(TFT_SCLK, TFT_MISO, TFT_MOSI, TFT_CS);
+        SPI.setFrequency(40000000);
+        delay(50);
+
+        mTft.init();
+        mTft.setRotation(1);
+
+        // 验证：通过屏幕填充测试显示是否响应
+        mTft.fillScreen(TFT_BLACK);
+        delay(10);
+        mTft.fillScreen(TFT_RED);
+        delay(50);
+        mTft.fillScreen(TFT_BLACK);
+
+        int w = mTft.width();
+        int h = mTft.height();
+        if (w == 320 && h == 240) {
+            Serial.printf("[ScreenLVGL] ✓ TFT 初始化成功 (第 %d 次)\n", attempt);
+            return true;
+        }
+
+        Serial.printf("[ScreenLVGL] ✗ TFT 尺寸异常 (%dx%d), 重试...\n", w, h);
+        delay(300);
+        esp_task_wdt_reset();
+    }
+    return false;
+}
+
 /* ── 初始化 ────────────────────────────────────────────────── */
 
 bool ScreenLVGL::init() {
     delay(300);
     sInstance = this;
 
-    mTft.init();
-    mTft.setRotation(1);
-    mTft.fillScreen(TFT_BLACK);
+    // v0.9.1: 使用带重试的 TFT 初始化
+    if (!tftInitWithRetry(3)) {
+        Serial.println("[ScreenLVGL] TFT 初始化全部失败！检查供电和 SPI 接线");
+        return false;
+    }
 
 #ifdef TFT_BL
     pinMode(TFT_BL, OUTPUT);
@@ -149,7 +188,11 @@ void ScreenLVGL::showArrow(int amapIcon) {
         case 20: symbol = "◎";  break;  // 环岛
         default: symbol = "↑";  break;
     }
-    lv_label_set_text_static(ui_TurnArrow, symbol);
+    // v0.9.1: 使用 lv_label_set_text 而非 set_text_static
+    // set_text_static 在字体回退时可能引用已释放的指针
+    lv_label_set_text(ui_TurnArrow, symbol);
+    lv_obj_set_style_text_align(ui_TurnArrow, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_invalidate(ui_TurnArrow);
 }
 
 void ScreenLVGL::showDistance(const char* text) {
@@ -197,6 +240,9 @@ void ScreenLVGL::showLanes(int count, const int* backIcons) {
     if (count > 8) count = 8;
     lv_obj_clear_flag(ui_LaneContainer, LV_OBJ_FLAG_HIDDEN);
 
+    // v0.9.1: 计算每个车道标签的宽度（Flexbox 均分）
+    int laneW = (132 - 4) / count;  // 132=容器宽, 减去内边距
+
     for (int i = 0; i < count; i++) {
         lv_obj_t* arrow = lv_label_create(ui_LaneContainer);
         int bi = backIcons ? backIcons[i] : 1;
@@ -208,10 +254,13 @@ void ScreenLVGL::showLanes(int count, const int* backIcons) {
         else if (bi == 4) sym = "↱";
         else if (bi == 6) sym = "↶";
 
-        lv_label_set_text_static(arrow, sym);
+        // v0.9.1: 使用 lv_label_set_text 确保字体正确渲染
+        lv_label_set_text(arrow, sym);
         lv_obj_set_style_text_color(arrow, lv_color_white(), 0);
         lv_obj_set_style_text_font(arrow, &arrows_20, 0);
         lv_obj_set_style_text_align(arrow, LV_TEXT_ALIGN_CENTER, 0);
+        // v0.9.1: 设置固定宽度防止文字被裁剪
+        lv_obj_set_width(arrow, laneW > 20 ? laneW : 20);
         lv_obj_set_height(arrow, 24);
     }
 }

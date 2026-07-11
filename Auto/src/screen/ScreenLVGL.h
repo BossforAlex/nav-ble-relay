@@ -52,7 +52,8 @@ private:
     bool mInited = false;
 
     // LVGL 显示缓冲
-    static constexpr int LV_BUF_SIZE = 320 * 240 / 10;
+    // v0.9.1: 增大 LVGL 缓冲（配合 lv_conf.h）
+    static constexpr int LV_BUF_SIZE = 320 * 240 / 4;
     lv_color_t* mBuf = nullptr;
     lv_disp_draw_buf_t mDrawBuf;
     lv_disp_drv_t mDispDrv;
@@ -63,4 +64,7 @@ private:
     void updateBleDot();
     void formatDistance(int meters, char* out, size_t outSize);
     void formatRouteInfo(char* out, size_t outSize);
+
+    // v0.9.1: TFT 初始化验证与重试
+    bool tftInitWithRetry(int maxRetries = 3);
 };

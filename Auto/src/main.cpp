@@ -46,6 +46,9 @@ static Nav::NavState sNavState;
 //   2) 每包都 applyNavState + lv_timer_handler 导致栈暴涨 → WDT panic
 static bool sNavDirty = false;
 
+// v0.9.1: 批量更新防抖 —— 50ms 内收到多包数据时，只应用最后一次
+static unsigned long sNavDirtySince = 0;
+
 // BLE 数据接收缓冲区（静态，避免堆碎片）
 // v0.5.7：单 char 通道，JSON 带 "type" 字段（guide/drive/tmc/state/location）
 static char sJsonBuffer[2048];
@@ -58,6 +61,9 @@ static size_t  sChunkLen = 0;
 static int     sChunkTotal = 0;
 static int     sChunkReceived = 0;
 static unsigned long sChunkStartMs = 0;
+
+// v0.9.1: 分片重组状态保护（防止 BLE 回调上下文与主 loop 竞态）
+static portMUX_TYPE sChunkMux = portMUX_INITIALIZER_UNLOCKED;
 
 // ===================== BLE 数据回调 =====================
 // v0.5.7 重构：单 write char + INDICATE poll，JSON 用 "type" 字段路由
@@ -268,14 +274,19 @@ void setup() {
     sBleServer.setDataCallback(onBleData);
     sBleServer.setPollIntervalMs(500);
 
-    // v0.8.2: BLE 初始化后，NimBLE 协议栈和 BLE 射频仍在后台活动，
-    // 直接初始化 TFT 会导致 SPI 总线受干扰 → ILI9341 复位/初始化序列失败。
-    // 修复：等待 NimBLE 栈稳定 500ms → 手动硬件复位 TFT → 再初始化屏幕。
-    // v0.9.0: C3 串口版无 TFT，跳过硬件复位
-    delay(500);
+    // v0.9.1: BLE 初始化后，增加 SPI 总线稳定等待时间
+    // NimBLE 射频活动会干扰 HSPI 总线，需要更长的稳定时间
+    delay(1500);
     esp_task_wdt_reset();
 
 #if SCREEN_SERIAL_ONLY == 0
+    // v0.9.1: 重新初始化 SPI 总线，清除 BLE 射频干扰残留
+    SPI.end();
+    delay(50);
+    SPI.begin(TFT_SCLK, TFT_MISO, TFT_MOSI, TFT_CS);
+    SPI.setFrequency(40000000);
+    delay(50);
+
     // 手动硬件复位 TFT（RST=4），确保 ILI9341 在干净状态下重新初始化
     pinMode(TFT_RST, OUTPUT);
     digitalWrite(TFT_RST, LOW);
@@ -298,22 +309,23 @@ void setup() {
 }
 
 void loop() {
-    // 喂狗：避免长循环触发 WDT 超时
     esp_task_wdt_reset();
 
-    // 消费 BLE 事件队列（在主任务上下文中处理串口打印、JSON 解析）
+    // v0.9.1: 分段处理，每步之后喂狗，防止单步过久触发 WDT
     sBleServer.loop();
-    // v0.6.8: 消费完所有 BLE 事件后，统一刷屏一次。
-    // 避免每包都 applyNavState()（每包 5-10 次 LVGL 对象创建/销毁）
-    // 导致栈暴涨 → 堆栈碰撞 CPU1 IDLE1 → WDT panic
+    esp_task_wdt_reset();
+
     sScreen.setBleConnected(sBleServer.isConnected());
+    esp_task_wdt_reset();
+
     if (sNavDirty) {
         sNavDirty = false;
-        Serial.printf("[main] sNavDirty → setNavState (lastUpdate=%lu)\n", sNavState.lastUpdateMs);
         sScreen.setNavState(sNavState);
+        esp_task_wdt_reset();  // applyNavState 可能耗时较长
     }
-    sScreen.update();
 
-    // 短延时，让 BLE 任务有足够 CPU 时间
+    sScreen.update();
+    esp_task_wdt_reset();
+
     delay(5);
 }
