@@ -2,6 +2,7 @@
 #include "config/Config.h"
 #include <stdio.h>
 #include <string.h>
+#include <esp_task_wdt.h>
 
 /* ══════════════════════════════════════════════════════════════
  * v0.9.0 — 纯展示层（参照 ui.txt 设计规范）
