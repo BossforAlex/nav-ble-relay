@@ -269,8 +269,18 @@ void BleServer::loop() {
     // v0.5.11 修复：indicate() 会阻塞等待手机 ACK，若手机响应慢可能阻塞数秒。
     // 在调用前主动喂狗，防止长时间阻塞触发 Task WDT。
     // NimBLE 内部 indicate() 有超时机制（约 1 秒），但仍需喂狗保护。
+    // v0.9.1: indicate() 前喂狗，并监控阻塞时间
     esp_task_wdt_reset();
+    
+    unsigned long beforeIndicate = millis();
     chrPoll->indicate();
+    unsigned long afterIndicate = millis();
+    
+    // 如果 indicate 耗时超过 500ms，记录警告
+    if (afterIndicate - beforeIndicate > 500) {
+        Serial.printf("[BLE] ⚠ indicate 阻塞 %lums\n", afterIndicate - beforeIndicate);
+    }
+    
     _lastPollSentMs.store(nowMs);
     _lastActivityMs.store(nowMs);  // poll 本身也算一次活动
     _pollSentCount.fetch_add(1);

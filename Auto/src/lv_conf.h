@@ -16,7 +16,8 @@
 #define LV_INDEV_DEF_READ_PERIOD   20
 
 /* 使用 1/10 屏幕大小的单缓冲 */
-#define LV_DISP_BUF_SIZE           (320 * 240 / 10)
+/* v0.9.1: 从 1/10 屏幕增大到 1/4 屏幕缓冲，减少撕裂和渲染时间 */
+#define LV_DISP_BUF_SIZE           (320 * 240 / 4)
 
 /* v0.6.5: 为 LVGL 默认主题能链接，启用被 theme_default 引用的核心 widgets */
 #define LV_USE_PERF_MONITOR        0
