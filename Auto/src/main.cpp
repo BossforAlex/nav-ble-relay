@@ -74,12 +74,14 @@ static portMUX_TYPE sChunkMux = portMUX_INITIALIZER_UNLOCKED;
 static void onBleData(const uint8_t* data, size_t len) {
     if (len == 0 || data == nullptr) return;
 
-    // ── v0.6.4: 分片消息检测 ──
+    // ── v0.9.1: 分片消息检测（带锁保护，防止 BLE 回调与主 loop 竞态） ──
     if (len >= 3 && data[0] == 0xAA) {
         int idx   = (int)data[1];
         int total = (int)data[2];
         size_t chunkDataLen = len - 3;
         const uint8_t* chunkData = data + 3;
+
+        portENTER_CRITICAL(&sChunkMux);
 
         // 超时保护：如果 5 秒内没收齐，丢弃旧缓冲
         if (sChunkTotal > 0 && (millis() - sChunkStartMs > 5000)) {
@@ -91,44 +93,32 @@ static void onBleData(const uint8_t* data, size_t len) {
             sChunkLen = 0;
         }
 
-        // v0.6.6: 新消息开始 (idx=0) → 总是重置缓冲
-        // 这是关键修复：之前如果 chunk 错乱会丢弃整个当前状态，
-        // 导致 Flutter 端 _onPollReceived 用 Future.wait() 并行 5 个 write
-        // 时，guide+drive 分片交错后两个消息全丢
         if (idx == 0) {
-            // 第一片：重置缓冲
             sChunkLen = 0;
             sChunkTotal = total;
             sChunkReceived = 0;
             sChunkStartMs = millis();
         }
 
-        // v0.6.6 改进:分片错乱时保守处理
-        //   - 如果新片是 idx=0 (新消息开始) → 上面已重置，此处一定一致
-        //   - 如果新片是 idx>0 但和当前状态不匹配
-        //       A) 当前 sChunkTotal==0 (已被超时/前次错乱清空) → 重新开始
-        //       B) 当前 sChunkTotal>0 (在处理另一条消息中) → 丢弃这个新片
-        //          因为这条消息属于另一条并发消息，保留当前状态更重要
         if (total != sChunkTotal || idx != sChunkReceived) {
             if (sChunkTotal == 0 && idx > 0) {
-                // 状态已空，新片是中间片 → 重新开始（按 idx 推断 total=idx+1 不安全，直接丢弃）
                 if (Debug::LOG_BLE_RAW) {
                     Serial.printf("[BLE] 分片孤立 (idx=%d, 无前置), 丢弃\n", idx);
                 }
                 sChunkTotal = 0;
                 sChunkReceived = 0;
                 sChunkLen = 0;
+                portEXIT_CRITICAL(&sChunkMux);
                 return;
             }
             if (Debug::LOG_BLE_RAW) {
-                Serial.printf("[BLE] 分片错乱 (期望 %d/%d, 收到 %d/%d), 丢弃新片保留当前消息\n",
+                Serial.printf("[BLE] 分片错乱 (期望 %d/%d, 收到 %d/%d), 丢弃新片\n",
                               sChunkReceived, sChunkTotal, idx, total);
             }
-            // 关键:不重置 sChunkTotal 等,保留当前消息进度
+            portEXIT_CRITICAL(&sChunkMux);
             return;
         }
 
-        // 追加到重组缓冲
         if (sChunkLen + chunkDataLen < sizeof(sChunkBuf)) {
             memcpy(sChunkBuf + sChunkLen, chunkData, chunkDataLen);
             sChunkLen += chunkDataLen;
@@ -139,29 +129,31 @@ static void onBleData(const uint8_t* data, size_t len) {
             sChunkTotal = 0;
             sChunkReceived = 0;
             sChunkLen = 0;
+            portEXIT_CRITICAL(&sChunkMux);
             return;
         }
 
-        // 收齐所有分片 → 复制到 sJsonBuffer 继续解析
-        if (sChunkReceived >= sChunkTotal) {
-            size_t copyLen = sChunkLen < sizeof(sJsonBuffer) - 1
-                             ? sChunkLen : sizeof(sJsonBuffer) - 1;
+        bool complete = (sChunkReceived >= sChunkTotal);
+        size_t copyLen = 0;
+        if (complete) {
+            copyLen = sChunkLen < sizeof(sJsonBuffer) - 1
+                      ? sChunkLen : sizeof(sJsonBuffer) - 1;
             memcpy(sJsonBuffer, sChunkBuf, copyLen);
-            sJsonBuffer[copyLen] = '\0';
-
-            if (Debug::LOG_BLE_RAW) {
-                Serial.printf("[BLE] 分片重组完成 (%d 片, %u 字节)\n",
-                              sChunkTotal, (unsigned)sChunkLen);
-            }
-
-            // 重置分片状态
             sChunkTotal = 0;
             sChunkReceived = 0;
             sChunkLen = 0;
+        }
+        portEXIT_CRITICAL(&sChunkMux);
 
-            // 继续向下解析（不 return）
+        if (complete) {
+            sJsonBuffer[copyLen] = '\0';
+            if (Debug::LOG_BLE_RAW) {
+                Serial.printf("[BLE] 分片重组完成 (%d 片, %u 字节)\n",
+                              total, (unsigned)copyLen);
+            }
+            // 继续向下解析
         } else {
-            return; // 等待更多分片
+            return;
         }
     } else {
         // 非分片消息：直接拷贝到 sJsonBuffer
@@ -318,10 +310,18 @@ void loop() {
     sScreen.setBleConnected(sBleServer.isConnected());
     esp_task_wdt_reset();
 
+    // v0.9.1: 批量更新防抖 —— 50ms 内收到多包数据时，只应用最后一次
+    // 解决 Flutter 端 guide→drive→tmc 顺序发送时的中间态闪烁
     if (sNavDirty) {
-        sNavDirty = false;
-        sScreen.setNavState(sNavState);
-        esp_task_wdt_reset();  // applyNavState 可能耗时较长
+        if (sNavDirtySince == 0) {
+            sNavDirtySince = millis();
+        }
+        if (millis() - sNavDirtySince >= 50) {
+            sNavDirty = false;
+            sNavDirtySince = 0;
+            sScreen.setNavState(sNavState);
+            esp_task_wdt_reset();  // applyNavState 可能耗时较长
+        }
     }
 
     sScreen.update();
