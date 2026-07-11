@@ -2,20 +2,20 @@
 
 /**
  * @file ScreenLVGL.h
- * @brief v0.9.0: 基于 LVGL 的现代化 HUD 显示（CJK 字体已移除）
+ * @brief v0.9.0: 基于 LVGL 的 HUD 显示 —— 纯展示层
  *
  * 移植自 https://github.com/BossforAlex/LVGL-NAV
  * 适配到现有项目：
- *   - 保留 Screen 抽象接口
- *   - 复用现有 TFT_eSPI 接线（CS=10, DC=2, RST=4, BL=6, HSPI）
- *   - 分辨率 320x240
- *   - 由 NavState 驱动 UI 更新
+ *   - 继承 Screen 纯展示接口
+ *   - 复用现有 TFT_eSPI 接线（HSPI: CS=10, DC=2, RST=4, BL=6）
+ *   - 分辨率 320x240，三栏黄金比例布局
+ *   - 静态 UI 框架由 ui.c 提供，本层仅负责数据→控件映射
  *
- * v0.9.0 关键变更：
- *   - 移除 CJK 中文字体（~7.4MB），固件体积大幅缩减
- *   - 所有文本使用 LVGL 内置 Montserrat 字体（ASCII 数字/单位）
- *   - 中文路名等由手机端 Flutter App 预渲染为位图传输
- *   - 路名显示占位符 "---"，其余信息（箭头/速度/距离/限速）正常工作
+ * 关键变更 v0.9.0：
+ *   - 移除 CJK 中文字体（~7.4MB），所有文本用 LVGL 内置 Montserrat
+ *   - 添加单字段 showXxx() 方法，方便未来 Flutter 端直接推送单字段
+ *   - 方向箭头遵循高德 AmapAuto SDK 官方 icon 定义
+ *   - 车道 backIcon 遵循 AmapAuto 定义
  */
 
 #include "Screen.h"
@@ -27,19 +27,29 @@ class ScreenLVGL : public Screen {
 public:
     ScreenLVGL();
 
+    // ── Screen 接口实现 ──
     bool init() override;
     void update() override;
+    void log(const char* msg) override;
+
     void setNavState(const Nav::NavState& state) override;
     void setBleConnected(bool connected) override;
-    void log(const char* msg) override;
+
+    // ── 单字段展示方法（纯展示层） ──
+    void showArrow(int amapIcon) override;
+    void showDistance(const char* text) override;
+    void showSpeed(int speed) override;
+    void showSpeedLimit(int limit, bool overSpeed) override;
+    void showRoadName(const char* name) override;
+    void showLanes(int count, const int* backIcons) override;
+    void showRouteInfo(const char* text) override;
+    void showIdle() override;
 
 private:
     TFT_eSPI mTft;
     Nav::NavState mState;
     bool mBleConnected = false;
     bool mInited = false;
-    unsigned long mLastRenderMs = 0;
-    unsigned long mLastNavMs = 0;
 
     // LVGL 显示缓冲
     static constexpr int LV_BUF_SIZE = 320 * 240 / 10;
@@ -50,10 +60,7 @@ private:
     // 内部方法
     static void onFlush(lv_disp_drv_t* disp, const lv_area_t* area, lv_color_t* color_p);
     void applyNavState();
-    void setLaneArrows();
-    void setTurnSymbol(int icon);
-    void showIdleScreen();
+    void updateBleDot();
     void formatDistance(int meters, char* out, size_t outSize);
     void formatRouteInfo(char* out, size_t outSize);
-    void updateBleDot();
 };

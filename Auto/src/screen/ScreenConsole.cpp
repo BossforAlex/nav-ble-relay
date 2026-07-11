@@ -4,38 +4,31 @@
 #include <stdio.h>
 
 /**
- * ScreenConsole —— 串口直通显示模式
+ * ScreenConsole —— 串口直通显示模式（纯展示层）
  *
- * 设计目标（用户需求）：
- *   - 不模拟虚拟屏幕（不输出 ASCII 框图、不做"渲染"）
- *   - 串口直接显示真实的交互数据：
- *     1) BLE 接收到的原始 JSON（Debug::LOG_BLE_RAW 启用时）
- *     2) 解析后的结构化字段（路口距离/车速/限速/电子眼等）
- *   - 接 TFT 屏幕时 ScreenTFT 负责显示渲染
- *
- * 输出策略：
- *   - 数据变化时才打印（与变化频率解耦）
- *   - 单行紧凑输出，便于 grep / 解析
+ * 实现 Screen 纯展示接口，仅在数据更新时打印结构化日志。
+ * 方便后期更换不同屏幕驱动（TFT/OLED/串口）。
  */
 
 bool ScreenConsole::init() {
     mLastPrintedMs = 0;
-    mLastUpdateMs = 0;
     mInitialized = true;
-    Serial.println("[Screen] 串口直通显示模式已启用（仅显示数据，无模拟渲染）");
+    Serial.println("[Screen] 串口直通显示模式已启用");
     return true;
 }
 
 void ScreenConsole::update() {
-    if (!mInitialized) return;
-    // 不做"刷新率模拟"，仅依赖 setNavState/setBleConnected 主动推送。
-    // 此方法保留以满足 Screen 接口。
+    // 串口模式无需刷新
 }
+
+void ScreenConsole::log(const char* msg) {
+    Serial.printf("[System] %s\n", msg);
+}
+
+/* ── 批量更新 ──────────────────────────────────────────────── */
 
 void ScreenConsole::setNavState(const Nav::NavState& state) {
     mState = state;
-    mLastUpdateMs = millis();
-    // 数据更新即打印（节流：避免同毫秒重复）
     unsigned long now = millis();
     if (now - mLastPrintedMs < 50) return;
     mLastPrintedMs = now;
@@ -45,17 +38,56 @@ void ScreenConsole::setNavState(const Nav::NavState& state) {
 void ScreenConsole::setBleConnected(bool connected) {
     if (mBleConnected == connected) return;
     mBleConnected = connected;
-    // 不再重复打印连接/断开状态；BleServer.loop() 已输出精简版。
-    // 避免连接瞬间出现 "[BLE] 状态变化: 已连接" 等多余提示。
     mLastPrintedMs = 0;
 }
 
-void ScreenConsole::log(const char* msg) {
-    Serial.printf("[System] %s\n", msg);
+/* ── 单字段展示（串口模式下仅打印日志） ───────────────────── */
+
+void ScreenConsole::showArrow(int amapIcon) {
+    const char* names[] = {"左转","直行","右转","左前掉头","左前方","右前方",
+                           "左后方","右后方","调头","延续","","","","","","到达",
+                           "","","","旧调头","环岛"};
+    const char* name = (amapIcon >= 0 && amapIcon <= 20) ? names[amapIcon] : "?";
+    Serial.printf("[SCREEN] 箭头: %s (icon=%d)\n", name, amapIcon);
 }
 
+void ScreenConsole::showDistance(const char* text) {
+    Serial.printf("[SCREEN] 距离: %s\n", text);
+}
+
+void ScreenConsole::showSpeed(int speed) {
+    Serial.printf("[SCREEN] 时速: %d km/h\n", speed);
+}
+
+void ScreenConsole::showSpeedLimit(int limit, bool overSpeed) {
+    Serial.printf("[SCREEN] 限速: %d %s\n", limit, overSpeed ? "(超速!)" : "");
+}
+
+void ScreenConsole::showRoadName(const char* name) {
+    Serial.printf("[SCREEN] 路名: %s\n", name ? name : "(null)");
+}
+
+void ScreenConsole::showLanes(int count, const int* backIcons) {
+    Serial.printf("[SCREEN] 车道: %d 条", count);
+    if (backIcons) {
+        for (int i = 0; i < count; i++) {
+            Serial.printf(" [%d]", backIcons[i]);
+        }
+    }
+    Serial.println();
+}
+
+void ScreenConsole::showRouteInfo(const char* text) {
+    Serial.printf("[SCREEN] 全程: %s\n", text);
+}
+
+void ScreenConsole::showIdle() {
+    Serial.printf("[SCREEN] 空闲\n");
+}
+
+/* ── 核心导航数据打印 ──────────────────────────────────────── */
+
 void ScreenConsole::printNavStateLine() {
-    // 单行紧凑输出：核心导航数据
     char disBuf[16] = {0};
     char routeDisBuf[16] = {0};
     char routeTimeBuf[16] = {0};
@@ -71,7 +103,6 @@ void ScreenConsole::printNavStateLine() {
         snprintf(cameraBuf, sizeof(cameraBuf), "CAM=%s/%d", camDisBuf, mState.guide.cameraSpeed);
     }
 
-    // 路口信息：当前路 → 下一路
     char intersection[64] = "--";
     if (mState.guide.intersection[0]) {
         snprintf(intersection, sizeof(intersection), "%s", mState.guide.intersection);

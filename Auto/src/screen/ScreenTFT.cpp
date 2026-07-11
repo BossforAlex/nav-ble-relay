@@ -3,6 +3,7 @@
 #include "config/Config.h"
 #include <math.h>
 #include <stdio.h>
+#include <string.h>
 
 // ══════════════════════════════════════════════════════════════
 // v0.6.4: iWatch 极简风格 HUD 导航显示
@@ -79,6 +80,44 @@ void ScreenTFT::log(const char* msg) {
     if (Debug::LOG_SYSTEM) {
         Serial.printf("[Screen] %s\n", msg);
     }
+}
+
+// ── 单字段展示（TFT 模式下通过 renderFrame 统一渲染） ─────
+
+void ScreenTFT::showArrow(int amapIcon) {
+    mState.guide.icon = amapIcon;
+}
+
+void ScreenTFT::showDistance(const char* text) {
+    strncpy(mState.guide.distanceText, text, sizeof(mState.guide.distanceText) - 1);
+}
+
+void ScreenTFT::showSpeed(int speed) {
+    mState.guide.curSpeed = speed;
+}
+
+void ScreenTFT::showSpeedLimit(int limit, bool /*overSpeed*/) {
+    mState.guide.limitedSpeed = limit;
+}
+
+void ScreenTFT::showRoadName(const char* name) {
+    if (name) strncpy(mState.guide.curRoadName, name, sizeof(mState.guide.curRoadName) - 1);
+}
+
+void ScreenTFT::showLanes(int count, const int* backIcons) {
+    mState.driveWay.enabled = true;
+    mState.driveWay.laneCount = count;
+    for (int i = 0; i < count && i < Nav::MAX_LANES; i++) {
+        mState.driveWay.lanes[i].backIcon = backIcons ? backIcons[i] : 1;
+    }
+}
+
+void ScreenTFT::showRouteInfo(const char* /*text*/) {
+    // TFT 模式通过 renderFrame 统一渲染
+}
+
+void ScreenTFT::showIdle() {
+    mState.mapState = Nav::MapState::Idle;
 }
 
 // ── 帧渲染 ────────────────────────────────────────────────

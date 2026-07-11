@@ -41,6 +41,15 @@ public:
     void setBleConnected(bool connected) override;
     void log(const char* msg) override;
 
+    void showArrow(int amapIcon) override;
+    void showDistance(const char* text) override;
+    void showSpeed(int speed) override;
+    void showSpeedLimit(int limit, bool overSpeed) override;
+    void showRoadName(const char* name) override;
+    void showLanes(int count, const int* backIcons) override;
+    void showRouteInfo(const char* text) override;
+    void showIdle() override;
+
 private:
     TFT_eSPI  tft;
     TFT_eSprite sprite = TFT_eSprite(&tft);
