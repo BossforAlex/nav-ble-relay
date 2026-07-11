@@ -4,16 +4,19 @@
 #include <string.h>
 
 // ══════════════════════════════════════════════════════════════
-// v0.8.0: 三栏黄金比例布局（参照 UI.TXT 设计规范）
+// v0.9.0: 三栏黄金比例布局（参照 UI.TXT 设计规范）
+//
+// CJK 中文字体已移除，所有文本使用 LVGL 内置 Montserrat 字体。
+// 中文路名等文本由手机端 Flutter App 预渲染为位图后传输。
 //
 //   +-------------------+-----------------------+---------------+
 //   | 左侧导航 (100px)   | 中间时速 (140px)       | 右侧状态 (65px)|
-//   | [路名]            | [车道指引条 28px]      |  [限速80]     |
+//   | [---]             | [车道指引条 28px]      |  [限速80]     |
 //   |                   |                       |               |
 //   |    ( 箭头 )       |      ( 0 )            |               |
 //   |                   |   [大字时速]           |               |
 //   |                   |                       |    ( 链 )     |
-//   | [725米]           | [km/h]                |               |
+//   | [725 m]           | [km/h]                |               |
 //   +-------------------+-----------------------+---------------+
 //
 // 总宽: 5+100+5+140+5+65 = 320px
@@ -161,7 +164,7 @@ void ui_init(void)
     // 路名（顶部居中）
     ui_RoadNameLabel = lv_label_create(nav_panel);
     lv_obj_add_style(ui_RoadNameLabel, &style_text_white, 0);
-    lv_obj_set_style_text_font(ui_RoadNameLabel, &cjk_20, 0);
+    lv_obj_set_style_text_font(ui_RoadNameLabel, &lv_font_montserrat_20, 0);
     lv_obj_set_style_text_align(ui_RoadNameLabel, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_size(ui_RoadNameLabel, 100, 24);
     lv_obj_set_pos(ui_RoadNameLabel, 0, 8);
@@ -178,7 +181,7 @@ void ui_init(void)
     // 距离（底部居中）
     ui_DistanceLabel = lv_label_create(nav_panel);
     lv_obj_set_style_text_color(ui_DistanceLabel, lv_color_white(), 0);
-    lv_obj_set_style_text_font(ui_DistanceLabel, &cjk_24, 0);
+    lv_obj_set_style_text_font(ui_DistanceLabel, &lv_font_montserrat_24, 0);
     lv_obj_set_style_text_align(ui_DistanceLabel, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_size(ui_DistanceLabel, 100, 32);
     lv_obj_set_pos(ui_DistanceLabel, 0, 195);
@@ -215,7 +218,7 @@ void ui_init(void)
     ui_SpeedUnitLabel = lv_label_create(speed_panel);
     lv_label_set_text_static(ui_SpeedUnitLabel, "km/h");
     lv_obj_set_style_text_color(ui_SpeedUnitLabel, lv_color_hex(0xB0B0B0), 0);
-    lv_obj_set_style_text_font(ui_SpeedUnitLabel, &cjk_14, 0);
+    lv_obj_set_style_text_font(ui_SpeedUnitLabel, &lv_font_montserrat_14, 0);
     lv_obj_set_pos(ui_SpeedUnitLabel, 48, 155);
 
     // ══════════════════════════════════════════════════════════
@@ -237,7 +240,7 @@ void ui_init(void)
     ui_LimitLabel = lv_label_create(ui_LimitSign);
     lv_label_set_text_static(ui_LimitLabel, "");
     lv_obj_center(ui_LimitLabel);
-    lv_obj_set_style_text_font(ui_LimitLabel, &cjk_20, 0);
+    lv_obj_set_style_text_font(ui_LimitLabel, &lv_font_montserrat_20, 0);
 
     // 链条连接图标（底部居中）
     ui_ChainIcon = lv_img_create(status_panel);
@@ -251,7 +254,7 @@ void ui_init(void)
     ui_RouteInfoLabel = lv_label_create(ui_Screen1);
     lv_label_set_text_static(ui_RouteInfoLabel, "");
     lv_obj_set_style_text_color(ui_RouteInfoLabel, lv_color_hex(0x888888), 0);
-    lv_obj_set_style_text_font(ui_RouteInfoLabel, &cjk_14, 0);
+    lv_obj_set_style_text_font(ui_RouteInfoLabel, &lv_font_montserrat_14, 0);
     lv_obj_set_pos(ui_RouteInfoLabel, 5, 225);
     lv_obj_set_size(ui_RouteInfoLabel, 250, 16);
 

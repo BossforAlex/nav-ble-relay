@@ -2,7 +2,7 @@
 
 /**
  * @file ScreenLVGL.h
- * @brief v0.6.6: 基于 LVGL 的现代化 HUD 显示
+ * @brief v0.9.0: 基于 LVGL 的现代化 HUD 显示（CJK 字体已移除）
  *
  * 移植自 https://github.com/BossforAlex/LVGL-NAV
  * 适配到现有项目：
@@ -11,11 +11,11 @@
  *   - 分辨率 320x240
  *   - 由 NavState 驱动 UI 更新
  *
- * v0.6.6 关键改进：
- *   - 完全删除 3 秒空闲超时，绝不会自动回退到"等待数据"画面
- *   - 重新设计 UI 布局对照 a.jpg 参考图
- *   - BLE 状态点 + 链条 icon（程序绘制）
- *   - 剩余全程信息文字
+ * v0.9.0 关键变更：
+ *   - 移除 CJK 中文字体（~7.4MB），固件体积大幅缩减
+ *   - 所有文本使用 LVGL 内置 Montserrat 字体（ASCII 数字/单位）
+ *   - 中文路名等由手机端 Flutter App 预渲染为位图传输
+ *   - 路名显示占位符 "---"，其余信息（箭头/速度/距离/限速）正常工作
  */
 
 #include "Screen.h"

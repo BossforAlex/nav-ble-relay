@@ -5,11 +5,12 @@
 #include <string.h>
 
 // ══════════════════════════════════════════════════════════════
-// v0.8.0: 三栏黄金比例布局（参照 UI.TXT 设计规范）
-//   左 (100px): 导航信息 — 路名 / 转向箭头 / 剩余距离
+// v0.9.0: 三栏黄金比例布局（参照 UI.TXT 设计规范）
+//   CJK 中文字体已移除，中文路名等由 Flutter App 预渲染位图传输。
+//   左 (100px): 导航信息 — 路名(占位) / 转向箭头 / 剩余距离
 //   中 (140px): 时速 + 车道 — Flexbox 车道条 / 大字时速 / km/h
 //   右 ( 65px): 状态 — 限速红圈 / 连接图标
-//   底: 全程剩余信息
+//   底: 全程剩余信息 (ASCII 数字)
 // ══════════════════════════════════════════════════════════════
 
 ScreenLVGL::ScreenLVGL() = default;
@@ -132,17 +133,16 @@ void ScreenLVGL::updateBleDot() {
     lv_obj_invalidate(ui_BleDot);
 }
 
-// ── 距离格式化（米 → "725米" / "1.2km"） ──────────────────
+// ── 距离格式化（米 → "725 m" / "1.2 km"） ──────────────────
 
 void ScreenLVGL::formatDistance(int meters, char* out, size_t outSize) {
     if (meters < 0) meters = 0;
     if (meters < 1000) {
-        snprintf(out, outSize, "%d米", meters);
+        snprintf(out, outSize, "%d m", meters);
     } else {
-        // 显示一位小数 km
         int km = meters / 1000;
         int dec = (meters % 1000) / 100;
-        snprintf(out, outSize, "%d.%dkm", km, dec);
+        snprintf(out, outSize, "%d.%d km", km, dec);
     }
 }
 
@@ -171,17 +171,17 @@ void ScreenLVGL::formatRouteInfo(char* out, size_t outSize) {
         if (mins >= 60) {
             snprintf(timeBuf, sizeof(timeBuf), "%dh%dm", mins / 60, mins % 60);
         } else {
-            snprintf(timeBuf, sizeof(timeBuf), "%d分钟", mins);
+            snprintf(timeBuf, sizeof(timeBuf), "%dmin", mins);
         }
     } else {
         timeBuf[0] = '\0';
     }
     if (disBuf[0] && timeBuf[0]) {
-        snprintf(out, outSize, "剩 %s · %s", disBuf, timeBuf);
+        snprintf(out, outSize, "%s . %s", disBuf, timeBuf);
     } else if (disBuf[0]) {
-        snprintf(out, outSize, "剩 %s", disBuf);
+        snprintf(out, outSize, "%s", disBuf);
     } else {
-        snprintf(out, outSize, "剩 %s", timeBuf);
+        snprintf(out, outSize, "%s", timeBuf);
     }
 }
 
@@ -200,11 +200,12 @@ void ScreenLVGL::applyNavState() {
                   mState.guide.curRoadName[0] ? mState.guide.curRoadName : "(none)",
                   mState.guide.segRemainDis);
 
-    // 道路名称
+    // 道路名称（v0.9.0: CJK 字体已移除，显示占位符）
+    // 后续由 Flutter App 预渲染位图传输真实路名
     if (mState.guide.curRoadName[0]) {
-        lv_label_set_text(ui_RoadNameLabel, mState.guide.curRoadName);
+        lv_label_set_text_static(ui_RoadNameLabel, "---");
     } else {
-        lv_label_set_text_static(ui_RoadNameLabel, "导航中");
+        lv_label_set_text_static(ui_RoadNameLabel, "NAV");
     }
 
     // 转向箭头
