@@ -170,6 +170,8 @@ static void create_left_nav_panel(void) {
     lv_obj_set_style_text_align(ui_TurnArrow, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_size(ui_TurnArrow, 100, 100);
     lv_obj_set_pos(ui_TurnArrow, 0, 60);
+    // v0.9.1: 确保 label 内容居中于自身区域
+    lv_obj_align(ui_TurnArrow, LV_ALIGN_CENTER, 0, 0);
 
     // 剩余距离（底部居中，24px 字体）
     ui_DistanceLabel = lv_label_create(nav_panel);
