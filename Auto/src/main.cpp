@@ -271,15 +271,18 @@ void setup() {
     // v0.8.2: BLE 初始化后，NimBLE 协议栈和 BLE 射频仍在后台活动，
     // 直接初始化 TFT 会导致 SPI 总线受干扰 → ILI9341 复位/初始化序列失败。
     // 修复：等待 NimBLE 栈稳定 500ms → 手动硬件复位 TFT → 再初始化屏幕。
+    // v0.9.0: C3 串口版无 TFT，跳过硬件复位
     delay(500);
     esp_task_wdt_reset();
 
+#if SCREEN_SERIAL_ONLY == 0
     // 手动硬件复位 TFT（RST=4），确保 ILI9341 在干净状态下重新初始化
     pinMode(TFT_RST, OUTPUT);
     digitalWrite(TFT_RST, LOW);
     delay(20);
     digitalWrite(TFT_RST, HIGH);
     delay(150);  // ILI9341 规格要求复位后至少 120ms 才能接收命令
+#endif
 
     // ── BLE 就绪 + TFT 复位后再初始化屏幕 ──
     bool screenOk = sScreen.init();
