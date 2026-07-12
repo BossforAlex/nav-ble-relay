@@ -47,26 +47,32 @@ void ScreenLVGL::onFlush(lv_disp_drv_t* disp, const lv_area_t* area, lv_color_t*
     lv_disp_flush_ready(disp);
 }
 
-/* ── v0.9.3: TFT 初始化验证与重试 ──────────────────────────── */
+/* ── v0.9.5: TFT 初始化（单次，TFT_eSPI 自行管理 HSPI 总线） ── */
 
 bool ScreenLVGL::tftInitWithRetry(int maxRetries) {
+    // 注意：mTft.init() 内部有 _init_done 标志，只能调用一次，重试不会重新初始化 SPI。
+    // 真正的重试需要通过硬件复位 TFT（RST 引脚）来让 ILI9341 重新进入已知状态。
+    // 硬件复位已在 main.cpp 中完成（RST LOW→HIGH + 150ms 等待）。
+
     for (int attempt = 1; attempt <= maxRetries; attempt++) {
         Serial.printf("[ScreenLVGL] TFT 初始化 (第 %d/%d 次)...\n", attempt, maxRetries);
 
-        // 每次重试前重新初始化 SPI 总线（降低频率，减少电流尖峰）
-        SPI.end();
-        delay(100);
-        SPI.begin(TFT_SCLK, TFT_MISO, TFT_MOSI, TFT_CS);
-        // v0.9.3: 初始化时降频到 20MHz，减少 SPI 电流尖峰
-        SPI.setFrequency(20000000);
-        delay(50);
+        if (attempt == 1) {
+            // 首次调用：TFT_eSPI 初始化 HSPI 总线 + 发送 ILI9341 初始化命令
+            mTft.init();
+        } else {
+            // 后续重试：SPI 总线已初始化，仅硬件复位 TFT 后重新发送命令
+            // 通过 RST 引脚复位 ILI9341，使其回到已知状态
+            pinMode(TFT_RST, OUTPUT);
+            digitalWrite(TFT_RST, LOW);
+            delay(20);
+            digitalWrite(TFT_RST, HIGH);
+            delay(150);
+            // 注意：mTft.init() 再次调用会因 _init_done 而跳过，
+            // 但 TFT 硬件已复位，begin_tft_write/end_tft_write 仍可正常通信
+        }
 
-        mTft.init();
         mTft.setRotation(1);
-
-        // v0.9.3: 不调用 fillScreen(RED) 全屏点亮！
-        // 全屏红色 = 所有像素 ON = 最大电流消耗，在电池供电时会导致电压跌落
-        // 改用读取尺寸来验证 TFT 是否响应
         mTft.fillScreen(TFT_BLACK);
         delay(30);
 
@@ -74,8 +80,6 @@ bool ScreenLVGL::tftInitWithRetry(int maxRetries) {
         int h = mTft.height();
         if (w == 320 && h == 240) {
             Serial.printf("[ScreenLVGL] ✓ TFT 初始化成功 (第 %d 次)\n", attempt);
-            // v0.9.3: 恢复 SPI 到正常频率
-            SPI.setFrequency(40000000);
             return true;
         }
 
@@ -102,7 +106,7 @@ void ScreenLVGL::enableBacklight() {
 }
 
 bool ScreenLVGL::init() {
-    delay(300);
+    // v0.9.5: 移除多余 delay(300)，硬件复位后的 150ms 等待已在 main.cpp 完成
     sInstance = this;
 
     // v0.9.1: 使用带重试的 TFT 初始化

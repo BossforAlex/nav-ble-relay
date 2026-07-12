@@ -286,15 +286,13 @@ void setup() {
     esp_task_wdt_reset();
 
 #if SCREEN_SERIAL_ONLY == 0
-    // v0.9.3: 重新初始化 SPI 总线，清除 BLE 射频干扰残留
-    // 初始化时降频到 20MHz，减少电流尖峰（后续 TFT init 会恢复 40MHz）
-    SPI.end();
-    delay(50);
-    SPI.begin(TFT_SCLK, TFT_MISO, TFT_MOSI, TFT_CS);
-    SPI.setFrequency(20000000);
-    delay(50);
-
-    // 手动硬件复位 TFT（RST=4），确保 ILI9341 在干净状态下重新初始化
+    // v0.9.5: 手动硬件复位 TFT（RST=4），确保 ILI9341 在干净状态下初始化
+    // 注意：不要调用 SPI.begin()/SPI.end()！
+    // Arduino 的 SPI 对象默认使用 FSPI(SPI2)，而 TFT_eSPI 配置了 USE_HSPI_PORT(SPI3)。
+    // 在 FSPI 上操作 TFT 引脚会导致 GPIO 矩阵同时路由 FSPI 和 HSPI 到同一组物理引脚，
+    // 造成信号冲突。冷启动时 ESP32 ROM 已将 FSPI 路由到 GPIO 11/12/10，
+    // 冲突导致 TFT 初始化失败；USB 连接时 CDC 初始化可能意外清除 FSPI 路由而"侥幸"成功。
+    // TFT_eSPI 的 init() 内部已自行管理 HSPI 总线初始化，无需外部干预。
     pinMode(TFT_RST, OUTPUT);
     digitalWrite(TFT_RST, LOW);
     delay(20);
