@@ -42,4 +42,7 @@ public:
     virtual void showLanes(int count, const int* backIcons) = 0;
     virtual void showRouteInfo(const char* text) = 0;
     virtual void showIdle() = 0;
+
+    // v0.9.3: 背光独立控制（默认无操作，ScreenLVGL 重写）
+    virtual void enableBacklight() {}
 };

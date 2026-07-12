@@ -47,33 +47,35 @@ void ScreenLVGL::onFlush(lv_disp_drv_t* disp, const lv_area_t* area, lv_color_t*
     lv_disp_flush_ready(disp);
 }
 
-/* ── v0.9.1: TFT 初始化验证与重试 ──────────────────────────── */
+/* ── v0.9.3: TFT 初始化验证与重试 ──────────────────────────── */
 
 bool ScreenLVGL::tftInitWithRetry(int maxRetries) {
     for (int attempt = 1; attempt <= maxRetries; attempt++) {
         Serial.printf("[ScreenLVGL] TFT 初始化 (第 %d/%d 次)...\n", attempt, maxRetries);
 
-        // 每次重试前重新初始化 SPI 总线
+        // 每次重试前重新初始化 SPI 总线（降低频率，减少电流尖峰）
         SPI.end();
         delay(100);
         SPI.begin(TFT_SCLK, TFT_MISO, TFT_MOSI, TFT_CS);
-        SPI.setFrequency(40000000);
+        // v0.9.3: 初始化时降频到 20MHz，减少 SPI 电流尖峰
+        SPI.setFrequency(20000000);
         delay(50);
 
         mTft.init();
         mTft.setRotation(1);
 
-        // 验证：通过屏幕填充测试显示是否响应
+        // v0.9.3: 不调用 fillScreen(RED) 全屏点亮！
+        // 全屏红色 = 所有像素 ON = 最大电流消耗，在电池供电时会导致电压跌落
+        // 改用读取尺寸来验证 TFT 是否响应
         mTft.fillScreen(TFT_BLACK);
-        delay(10);
-        mTft.fillScreen(TFT_RED);
-        delay(50);
-        mTft.fillScreen(TFT_BLACK);
+        delay(30);
 
         int w = mTft.width();
         int h = mTft.height();
         if (w == 320 && h == 240) {
             Serial.printf("[ScreenLVGL] ✓ TFT 初始化成功 (第 %d 次)\n", attempt);
+            // v0.9.3: 恢复 SPI 到正常频率
+            SPI.setFrequency(40000000);
             return true;
         }
 
@@ -86,6 +88,19 @@ bool ScreenLVGL::tftInitWithRetry(int maxRetries) {
 
 /* ── 初始化 ────────────────────────────────────────────────── */
 
+// v0.9.3: 背光独立控制，init 成功后由外部调用
+void ScreenLVGL::enableBacklight() {
+#ifdef TFT_BL
+    pinMode(TFT_BL, OUTPUT);
+    // 先低电平确保关闭，再延迟后点亮（避免电流尖峰）
+    digitalWrite(TFT_BL, !TFT_BACKLIGHT_ON);
+    delay(50);
+    digitalWrite(TFT_BL, TFT_BACKLIGHT_ON);
+    delay(100);
+    Serial.println("[ScreenLVGL] 背光已点亮");
+#endif
+}
+
 bool ScreenLVGL::init() {
     delay(300);
     sInstance = this;
@@ -96,11 +111,8 @@ bool ScreenLVGL::init() {
         return false;
     }
 
-#ifdef TFT_BL
-    pinMode(TFT_BL, OUTPUT);
-    digitalWrite(TFT_BL, TFT_BACKLIGHT_ON);
-    delay(100);
-#endif
+    // v0.9.3: 背光延迟到 init 成功后由外部调用 enableBacklight()
+    // 避免在电源不稳定时点亮背光导致电压跌落
 
     int w = mTft.width();
     int h = mTft.height();

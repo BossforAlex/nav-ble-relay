@@ -45,6 +45,9 @@ public:
     void showRouteInfo(const char* text) override;
     void showIdle() override;
 
+// v0.9.3: 背光独立控制（延迟点亮，避免冷启动电流尖峰）
+    void enableBacklight();
+
 private:
     TFT_eSPI mTft;
     Nav::NavState mState;

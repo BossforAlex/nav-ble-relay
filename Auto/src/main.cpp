@@ -215,6 +215,11 @@ static void onBleData(const uint8_t* data, size_t len) {
 
 // ===================== 初始化 =====================
 void setup() {
+    // v0.9.3: 上电后等待电源稳定（冷启动时电池/LDO 需要建立时间）
+    // 串口连接时 USB 枚举提供额外延迟，冷启动需要显式等待
+    delay(800);
+    esp_task_wdt_reset();
+
     Serial.begin(SERIAL_BAUD);
 
     // 等待串口就绪，但最多 1.5 秒
@@ -266,17 +271,19 @@ void setup() {
     sBleServer.setDataCallback(onBleData);
     sBleServer.setPollIntervalMs(500);
 
-    // v0.9.1: BLE 初始化后，增加 SPI 总线稳定等待时间
+    // v0.9.3: BLE 初始化后，增加 SPI 总线稳定等待时间
     // NimBLE 射频活动会干扰 HSPI 总线，需要更长的稳定时间
-    delay(1500);
+    // 冷启动（无 USB）时 BLE 射频建立更慢，需要 2500ms+ 稳定
+    delay(2500);
     esp_task_wdt_reset();
 
 #if SCREEN_SERIAL_ONLY == 0
-    // v0.9.1: 重新初始化 SPI 总线，清除 BLE 射频干扰残留
+    // v0.9.3: 重新初始化 SPI 总线，清除 BLE 射频干扰残留
+    // 初始化时降频到 20MHz，减少电流尖峰（后续 TFT init 会恢复 40MHz）
     SPI.end();
     delay(50);
     SPI.begin(TFT_SCLK, TFT_MISO, TFT_MOSI, TFT_CS);
-    SPI.setFrequency(40000000);
+    SPI.setFrequency(20000000);
     delay(50);
 
     // 手动硬件复位 TFT（RST=4），确保 ILI9341 在干净状态下重新初始化
@@ -291,6 +298,11 @@ void setup() {
     bool screenOk = sScreen.init();
     if (!screenOk) {
         Serial.println("[Screen] 屏幕初始化失败，回退到串口直通");
+    } else {
+        // v0.9.3: 屏幕初始化成功后再点亮背光（避免电流尖峰导致复位）
+        delay(300);
+        esp_task_wdt_reset();
+        sScreen.enableBacklight();
     }
     if (bleOk) {
         sScreen.log("系统启动，等待手机 BLE 连接...");
