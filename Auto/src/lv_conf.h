@@ -94,4 +94,22 @@
 #define LV_USE_LARGE_COORD         0
 #define LV_USE_LOG                 0
 
+/* v0.9.2: 渲染质量优化 — 减少 TFT 锯齿 */
+#define LV_ANTIALIAS               1       /* 全局抗锯齿 */
+#define LV_DISP_DEF_REFR_PERIOD    20      /* 刷新周期 20ms */
+#define LV_DPI_DEF                 130     /* 默认 DPI（TFT 320x240 实际约 130） */
+#define LV_DRAW_COMPLEX            1       /* 启用复杂绘制（阴影/渐变） */
+#define LV_SHADOW_CACHE_SIZE       0       /* 无阴影缓存（节省内存） */
+#define LV_IMG_CACHE_DEF_SIZE      0       /* 无图片缓存 */
+#define LV_GRADIENT_MAX_STOPS      2       /* 渐变最大停止点 */
+#define LV_COLOR_MIX_ROUND_OFS     128     /* 颜色混合四舍五入偏移 */
+#define LV_COLOR_CHROMA_KEY        lv_color_hex(0x00FF00)  /* 色键 */
+
+/* v0.9.2: 字体渲染质量 */
+#define LV_FONT_FMT_TXT_LARGE      0       /* 不存储大字体文本格式 */
+#define LV_TXT_ENC                 1       /* 启用 UTF-8 编码 */
+#define LV_TXT_BREAK_CHARS         " ,.;:-_)}"  /* 文本换行字符 */
+#define LV_TXT_LINE_BREAK_LONG_LEN 0       /* 自动换行阈值（0=禁用） */
+#define LV_TXT_COLOR_CMD           "#"     /* 颜色命令前缀 */
+
 #endif /* LV_CONF_H */

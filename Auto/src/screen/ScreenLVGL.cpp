@@ -242,7 +242,8 @@ void ScreenLVGL::showLanes(int count, const int* backIcons) {
     lv_obj_clear_flag(ui_LaneContainer, LV_OBJ_FLAG_HIDDEN);
 
     // v0.9.1: 计算每个车道标签的宽度（Flexbox 均分）
-    int laneW = (132 - 4) / count;  // 132=容器宽, 减去内边距
+    // v0.9.2: 容器从 132px 增大到 137px
+    int laneW = (137 - 4) / count;
 
     for (int i = 0; i < count; i++) {
         lv_obj_t* arrow = lv_label_create(ui_LaneContainer);
@@ -288,7 +289,8 @@ void ScreenLVGL::showIdle() {
 
 void ScreenLVGL::updateBleDot() {
     if (!mInited) return;
-    lv_color_t c = mBleConnected ? lv_color_hex(0x00E676) : lv_color_hex(0x666666);
+    // v0.9.2: 提高对比度，原 0x00E676/0x666666 在纯黑背景上不明显
+    lv_color_t c = mBleConnected ? lv_color_hex(0x00E676) : lv_color_hex(0x888888);
     lv_obj_set_style_bg_color(ui_BleDot, c, 0);
     lv_obj_invalidate(ui_BleDot);
 }
