@@ -1,7 +1,7 @@
 name: nav_ble_relay
 description: 导航蓝牙中继 - 接收高德地图广播并通过 BLE 转发给 ESP32 屏幕
 publish_to: 'none'
-version: 1.0.0+5
+version: 1.0.0+6
 
 environment:
   sdk: '>=3.4.0 <4.0.0'

@@ -215,8 +215,14 @@ static void onBleData(const uint8_t* data, size_t len) {
 
 // ===================== 初始化 =====================
 void setup() {
+    // v0.9.4: 关键修复 — 运行时设置 WDT 超时 15 秒
+    // 平台配置中的 -D CONFIG_ESP_TASK_WDT_TIMEOUT_S=10 只是编译宏，
+    // Arduino 框架在启动时仍调用 esp_task_wdt_init(5, true)，实际超时仅 5 秒。
+    // setup() 中 BLE 初始化 + 屏幕初始化需要 ~8-10 秒，必须显式扩大超时。
+    esp_task_wdt_init(15, true);
+    esp_task_wdt_reset();
+
     // v0.9.3: 上电后等待电源稳定（冷启动时电池/LDO 需要建立时间）
-    // 串口连接时 USB 枚举提供额外延迟，冷启动需要显式等待
     delay(800);
     esp_task_wdt_reset();
 
@@ -224,7 +230,9 @@ void setup() {
 
     // 等待串口就绪，但最多 1.5 秒
     while (!Serial && millis() < 1500) { delay(10); }
+    esp_task_wdt_reset();  // v0.9.4: 串口等待后喂狗
     delay(500);  // 确保串口芯片完全就绪
+    esp_task_wdt_reset();  // v0.9.4: 串口就绪后喂狗
 
     // 打印醒目的版本标识（用户需求：确保上电即看到完整输出，防止串口丢数据）
     Serial.println();
@@ -260,8 +268,8 @@ void setup() {
     // 原因：USB CDC 未连接主机时，后台任务会抢占 BLE 射频初始化资源。
     // 屏幕背光启动瞬间电流尖峰进一步恶化 → BLE 控制器初始化失败。
     // 先启动 BLE（电源最干净），再启动屏幕。
-    // 上电后等待 1000ms 让电源和 USB 栈完全稳定。
-    delay(1000);
+    // v0.9.4: 上电后等待 500ms 让电源稳定（原 1000ms 过长）
+    delay(500);
     esp_task_wdt_reset();
 
     bool bleOk = sBleServer.begin(PROJECT_NAME);
@@ -274,7 +282,7 @@ void setup() {
     // v0.9.3: BLE 初始化后，增加 SPI 总线稳定等待时间
     // NimBLE 射频活动会干扰 HSPI 总线，需要更长的稳定时间
     // 冷启动（无 USB）时 BLE 射频建立更慢，需要 2500ms+ 稳定
-    delay(2500);
+    delay(1500);  // v0.9.4: 原 2500ms，减少以避 WDT 超时
     esp_task_wdt_reset();
 
 #if SCREEN_SERIAL_ONLY == 0
@@ -299,8 +307,8 @@ void setup() {
     if (!screenOk) {
         Serial.println("[Screen] 屏幕初始化失败，回退到串口直通");
     } else {
-        // v0.9.3: 屏幕初始化成功后再点亮背光（避免电流尖峰导致复位）
-        delay(300);
+        // v0.9.4: 背光前等待 100ms（原 300ms，减少以避 WDT 超时）
+        delay(100);
         esp_task_wdt_reset();
         sScreen.enableBacklight();
     }
