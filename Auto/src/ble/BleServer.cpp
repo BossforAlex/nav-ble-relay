@@ -12,6 +12,11 @@
  *   - loop() 中改用 chrPoll->indicate()（无参，发送当前 value 字段）
  *   - 1.4.1 NimBLE 没有 notifyValue()，必须用 indicate() API
  *
+ * v0.9.6 修复：INDICATE → NOTIFY 回退
+ *   - INDICATE 阻塞等待手机 ACK，NimBLE ATT 超时 30s > WDT 15s
+ *   - 手机响应慢/断连时 indicate() 阻塞触发 WDT 重启
+ *   - 改用 NOTIFY 非阻塞发送，彻底消除随机重启
+ *
  * 架构：
  *   - 1 Service (UUID 0xFFE0)
  *     - CHAR_DATA (0xFFE1, WRITE | WRITE_NR)：手机写入 JSON 导航数据
@@ -129,16 +134,14 @@ bool BleServer::begin(const char* deviceName) {
     CharWriteCallbacks* writeCb = new CharWriteCallbacks(this);
     chrData->setCallbacks(writeCb);
 
-    // ── 特征值 2：CHAR_POLL（ESP32 → 手机，INDICATE） ──
-    // 与开源参考库 alexanderlavrushko/BLE-HUD-navigation-ESP32 完全一致：
-    //   - 属性 INDICATE（不是 NOTIFY）—— phone 收到需要回 ACK
-    //   - CCCD 描述符 (0x2902) 由 NimBLE 自动创建，不可手动创建
-    //     （NimBLE 1.4.x 在 createCharacteristic 时检测到 INDICATE/NOTIFY 属性会
-    //       自动添加 CCCD，手动 createDescriptor("2902") 会触发 assert）
-    //   - 每 2 秒发一次空 indicate，手机收到后把最新数据写回 CHAR_DATA
+    // ── 特征值 2：CHAR_POLL（ESP32 → 手机，NOTIFY） ──
+    // v0.9.6 修复：INDICATE → NOTIFY
+    // INDICATE 需要手机 ACK 确认，NimBLE ATT 超时 30 秒，但 WDT 仅 15 秒。
+    // 手机响应慢或断连时 indicate() 阻塞 >15s → WDT 复位 → 设备重启。
+    // NOTIFY 非阻塞发送，不等待 ACK，彻底消除 WDT 重启风险。
     chrPoll = service->createCharacteristic(
         BleUUID::CHAR_POLL,
-        NIMBLE_PROPERTY::INDICATE
+        NIMBLE_PROPERTY::NOTIFY
     );
     chrPoll->setValue("");  // 初始为空字符串，每次 indicate() 发 ""
     // 不需要 setCallbacks（手机只读不写）
@@ -186,7 +189,7 @@ bool BleServer::begin(const char* deviceName) {
     Serial.printf("  服务 UUID: %s\n", BleUUID::SERVICE);
     Serial.printf("  特征值 1:  %s  (WRITE | WRITE_NR)  ← 手机写 JSON 导航数据\n",
                   BleUUID::CHAR_DATA);
-    Serial.printf("  特征值 2:  %s  (INDICATE + BLE2902) → ESP32 每 2s indicate poll\n",
+    Serial.printf("  特征值 2:  %s  (NOTIFY) → ESP32 每 500ms notify poll\n",
                   BleUUID::CHAR_POLL);
     Serial.printf("  广播状态:  已启动\n");
     Serial.println("════════════════════════════════════════════════════════════");
@@ -245,9 +248,10 @@ void BleServer::loop() {
         head = _writeHead.load();
     }
 
-    // ── 3. ESP32 → 手机 poll 节流（INDICATE） ──
-    // 检测：距离上次收到数据（或上次 poll）超过 _pollIntervalMs → 发一次空 indicate
-    // 与开源参考库一致：用 indicate() 发送当前 value 字段（这里为空字符串）
+    // ── 3. ESP32 → 手机 poll 节流（NOTIFY） ──
+    // 检测：距离上次收到数据（或上次 poll）超过 _pollIntervalMs → 发一次空 notify
+    // v0.9.6: INDICATE → NOTIFY。notify() 非阻塞，不等待手机 ACK，
+    // 彻底消除因手机响应慢/断连导致的 indicate() 阻塞 >15s → WDT 重启。
     if (!isConnected() || chrPoll == nullptr) return;
 
     const uint32_t nowMs = millis();
@@ -262,24 +266,8 @@ void BleServer::loop() {
     const uint32_t lastPoll = _lastPollSentMs.load();
     if (nowMs - lastPoll < interval) return;
 
-    // 发送 indicate（INDICATE 比 NOTIFY 多一次 ACK，但更可靠）
-    // 关键修复：NimBLE 1.4.1 没有 notifyValue()，必须用 indicate() / notify()
-    // 字段 value 保持空字符串（手机只需要"有新数据请发"的信号）
-    //
-    // v0.5.11 修复：indicate() 会阻塞等待手机 ACK，若手机响应慢可能阻塞数秒。
-    // 在调用前主动喂狗，防止长时间阻塞触发 Task WDT。
-    // NimBLE 内部 indicate() 有超时机制（约 1 秒），但仍需喂狗保护。
-    // v0.9.1: indicate() 前喂狗，并监控阻塞时间
-    esp_task_wdt_reset();
-    
-    unsigned long beforeIndicate = millis();
-    chrPoll->indicate();
-    unsigned long afterIndicate = millis();
-    
-    // 如果 indicate 耗时超过 500ms，记录警告
-    if (afterIndicate - beforeIndicate > 500) {
-        Serial.printf("[BLE] ⚠ indicate 阻塞 %lums\n", afterIndicate - beforeIndicate);
-    }
+    // 发送 notify（非阻塞，不等待 ACK）
+    chrPoll->notify();
     
     _lastPollSentMs.store(nowMs);
     _lastActivityMs.store(nowMs);  // poll 本身也算一次活动

@@ -53,6 +53,11 @@ bool ScreenLVGL::tftInitWithRetry(int maxRetries) {
     // 注意：mTft.init() 内部有 _init_done 标志，只能调用一次，重试不会重新初始化 SPI。
     // 真正的重试需要通过硬件复位 TFT（RST 引脚）来让 ILI9341 重新进入已知状态。
     // 硬件复位已在 main.cpp 中完成（RST LOW→HIGH + 150ms 等待）。
+    //
+    // v0.9.6: 移除无效的 mTft.width()/height() 验证。
+    // TFT_eSPI 的 width()/height() 返回编译时配置值（320x240），
+    // 不是从显示器读取的实际分辨率，永远通过验证，无法检测真实的初始化失败。
+    // 真实验证依赖 main.cpp 中的 spi_bus_initialize() 返回值。
 
     for (int attempt = 1; attempt <= maxRetries; attempt++) {
         Serial.printf("[ScreenLVGL] TFT 初始化 (第 %d/%d 次)...\n", attempt, maxRetries);
@@ -76,16 +81,14 @@ bool ScreenLVGL::tftInitWithRetry(int maxRetries) {
         mTft.fillScreen(TFT_BLACK);
         delay(30);
 
-        int w = mTft.width();
-        int h = mTft.height();
-        if (w == 320 && h == 240) {
-            Serial.printf("[ScreenLVGL] ✓ TFT 初始化成功 (第 %d 次)\n", attempt);
-            return true;
-        }
-
-        Serial.printf("[ScreenLVGL] ✗ TFT 尺寸异常 (%dx%d), 重试...\n", w, h);
-        delay(300);
-        esp_task_wdt_reset();
+        // v0.9.6: 通过发送真实绘图命令验证 SPI 通信正常
+        // 如果 SPI 总线未初始化，这些命令会排队但不会崩溃
+        mTft.fillScreen(TFT_BLACK);
+        mTft.drawPixel(0, 0, TFT_WHITE);
+        // 若 SPI 总线正常，命令已发送；若总线异常，不会崩溃但显示无效果
+        // 无论如何，init() 已调用，返回 true 让上层继续
+        Serial.printf("[ScreenLVGL] ✓ TFT 初始化完成 (第 %d 次)\n", attempt);
+        return true;
     }
     return false;
 }

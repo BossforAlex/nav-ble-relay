@@ -23,6 +23,7 @@
 #include <ArduinoJson.h>
 #include <string.h>
 #include <esp_task_wdt.h>
+#include <driver/spi_master.h>
 
 #include "config/Config.h"
 #include "ble/BleServer.h"
@@ -286,13 +287,32 @@ void setup() {
     esp_task_wdt_reset();
 
 #if SCREEN_SERIAL_ONLY == 0
-    // v0.9.5: 手动硬件复位 TFT（RST=4），确保 ILI9341 在干净状态下初始化
-    // 注意：不要调用 SPI.begin()/SPI.end()！
-    // Arduino 的 SPI 对象默认使用 FSPI(SPI2)，而 TFT_eSPI 配置了 USE_HSPI_PORT(SPI3)。
-    // 在 FSPI 上操作 TFT 引脚会导致 GPIO 矩阵同时路由 FSPI 和 HSPI 到同一组物理引脚，
-    // 造成信号冲突。冷启动时 ESP32 ROM 已将 FSPI 路由到 GPIO 11/12/10，
-    // 冲突导致 TFT 初始化失败；USB 连接时 CDC 初始化可能意外清除 FSPI 路由而"侥幸"成功。
-    // TFT_eSPI 的 init() 内部已自行管理 HSPI 总线初始化，无需外部干预。
+    // v0.9.6: 手动初始化 HSPI 总线（SPI3_HOST），修复冷启动 LCD 不亮
+    // 根因：ESP32-S3 ROM 启动时将 FSPI(SPI2) 路由到 GPIO 11/12/10（Flash 引脚），
+    // 与 TFT 的 HSPI(SPI3) 引脚冲突。USB 连接时 CDC 初始化意外清除 FSPI 路由，
+    // 使 HSPI 能正常工作；冷启动时 FSPI 路由残留，HSPI 初始化失败 → LCD 不亮。
+    // 修复：在 TFT 初始化前显式初始化 HSPI，确保总线正确配置。
+    {
+        spi_bus_config_t busCfg = {};
+        busCfg.mosi_io_num = TFT_MOSI;   // 11
+        busCfg.miso_io_num = -1;          // ILI9341 只写不读
+        busCfg.sclk_io_num = TFT_SCLK;    // 12
+        busCfg.quadwp_io_num = -1;
+        busCfg.quadhd_io_num = -1;
+        busCfg.max_transfer_sz = 320 * 240 * 2 + 8;
+        busCfg.flags = SPICOMMON_BUSFLAG_MASTER;
+        busCfg.intr_flags = 0;
+
+        esp_err_t ret = spi_bus_initialize(SPI3_HOST, &busCfg, SPI_DMA_CH_AUTO);
+        if (ret == ESP_OK) {
+            Serial.println("[main] HSPI 总线手动初始化成功");
+        } else {
+            Serial.printf("[main] ⚠ HSPI 初始化返回 %d (ESP_OK=%d)，TFT_eSPI 将重试\n",
+                          ret, ESP_OK);
+        }
+    }
+
+    // 硬件复位 TFT（RST=4），确保 ILI9341 在干净状态下接收命令
     pinMode(TFT_RST, OUTPUT);
     digitalWrite(TFT_RST, LOW);
     delay(20);

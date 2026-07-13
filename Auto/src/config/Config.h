@@ -12,7 +12,7 @@
 
 // ===================== 项目信息 =====================
 #define PROJECT_NAME    "AutoNavDisplay"
-#define PROJECT_VERSION "0.9.5"
+#define PROJECT_VERSION "0.9.6"
 
 // ===================== 串口配置 =====================
 #ifndef SERIAL_BAUD
@@ -26,7 +26,7 @@
 // v0.5.7 重构（参考 alexanderlavrushko/BLE-HUD-navigation-ESP32 极简模式）：
 //   1 个 Service + 2 个 Characteristic：
 //   - CHAR_DATA：WRITE | WRITE_NR，手机 → ESP32，导航数据（JSON）
-//   - CHAR_POLL：INDICATE + BLE2902，ESP32 → 手机，poll 请求（2 秒无活动则发空 indicate）
+//   - CHAR_POLL：NOTIFY，ESP32 → 手机，poll 请求（定时发空 notify）
 //
 // 原 5 个特征值 (GUIDE/DRIVE/TMC/STATE/LOCATION) 合并为 1 个 JSON 通道，
 // 通过 JSON 中的 "type" 字段路由到 NavParser 各个子解析器。
