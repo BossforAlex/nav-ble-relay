@@ -87,17 +87,17 @@ bool BleServer::begin(const char* deviceName) {
     // 改为通过 createServer() 是否成功来验证初始化状态。
     // 重试最多 3 次，每次间隔 1000ms 让电源和 USB 栈完全稳定。
     for (int attempt = 1; attempt <= 3; attempt++) {
-        Serial.printf("[BLE] 初始化 BLE 协议栈 (第 %d/3 次)...\n", attempt);
+        if (Serial) Serial.printf("[BLE] 初始化 BLE 协议栈 (第 %d/3 次)...\n", attempt);
         NimBLEDevice::init(deviceName);
 
         // 验证：尝试创建 Server 看 BLE 协议栈是否正常工作
         server = NimBLEDevice::createServer();
         if (server != nullptr) {
-            Serial.printf("[BLE] ✓ BLE 协议栈初始化成功\n");
+            if (Serial) Serial.printf("[BLE] ✓ BLE 协议栈初始化成功\n");
             break;
         }
 
-        Serial.printf("[BLE] ✗ BLE 初始化失败 (第 %d/3 次)，1000ms 后重试...\n", attempt);
+        if (Serial) Serial.printf("[BLE] ✗ BLE 初始化失败 (第 %d/3 次)，1000ms 后重试...\n", attempt);
         // 清理失败的初始化状态，避免 NimBLE 内部状态错乱
         NimBLEDevice::deinit(true);
         delay(1000);
@@ -105,7 +105,7 @@ bool BleServer::begin(const char* deviceName) {
     }
 
     if (server == nullptr) {
-        Serial.println("[BLE] ✗✗✗ BLE 初始化全部失败！请检查供电或重启设备");
+        if (Serial) Serial.println("[BLE] ✗✗✗ BLE 初始化全部失败！请检查供电或重启设备");
         started = false;
         return false;
     }
@@ -179,22 +179,24 @@ bool BleServer::begin(const char* deviceName) {
     _lastPollSentMs.store(0);
 
     // 打印详细的启动验证信息
-    Serial.println();
-    Serial.println("═══════════════ BLE GATT Server 启动验证 v0.5.8 ═══════════════");
-    Serial.printf("  设备名:    %s\n", deviceName);
-    Serial.printf("  设备地址:  %s\n",
-                  NimBLEDevice::getAddress().toString().c_str());
-    Serial.printf("  MTU:       %d 字节\n", NimBLEDevice::getMTU());
-    Serial.printf("  加密/配对: 已禁用 (sm_bonding=0 sm_mitm=0 sm_sc=0)\n");
-    Serial.printf("  服务 UUID: %s\n", BleUUID::SERVICE);
-    Serial.printf("  特征值 1:  %s  (WRITE | WRITE_NR)  ← 手机写 JSON 导航数据\n",
-                  BleUUID::CHAR_DATA);
-    Serial.printf("  特征值 2:  %s  (NOTIFY) → ESP32 每 500ms notify poll\n",
-                  BleUUID::CHAR_POLL);
-    Serial.printf("  广播状态:  已启动\n");
-    Serial.println("════════════════════════════════════════════════════════════");
-    Serial.printf("[BLE] ✓ 等待手机连接...\n");
-    Serial.flush();  // 强制刷新串口，确保用户立即看到
+    if (Serial) {
+        Serial.println();
+        Serial.println("═══════════════ BLE GATT Server 启动验证 v0.9.7 ═══════════════");
+        Serial.printf("  设备名:    %s\n", deviceName);
+        Serial.printf("  设备地址:  %s\n",
+                      NimBLEDevice::getAddress().toString().c_str());
+        Serial.printf("  MTU:       %d 字节\n", NimBLEDevice::getMTU());
+        Serial.printf("  加密/配对: 已禁用 (sm_bonding=0 sm_mitm=0 sm_sc=0)\n");
+        Serial.printf("  服务 UUID: %s\n", BleUUID::SERVICE);
+        Serial.printf("  特征值 1:  %s  (WRITE | WRITE_NR)  ← 手机写 JSON 导航数据\n",
+                      BleUUID::CHAR_DATA);
+        Serial.printf("  特征值 2:  %s  (NOTIFY) → ESP32 每 500ms notify poll\n",
+                      BleUUID::CHAR_POLL);
+        Serial.printf("  广播状态:  已启动\n");
+        Serial.println("════════════════════════════════════════════════════════════");
+        Serial.printf("[BLE] ✓ 等待手机连接...\n");
+    }
+    // v0.9.7: 移除 Serial.flush()——USB CDC 未连接时无限阻塞，导致 loop() 卡死
     return true;
 }
 
@@ -202,20 +204,23 @@ void BleServer::loop() {
     // ── 1. 处理连接事件 ──
     if (_connectPending.load()) {
         _connectPending.store(false);
-        Serial.println();
-        Serial.println("─────────────── 手机连接事件 ───────────────");
-        Serial.printf("  连接数:    %d\n", _pendingConnCount.load());
-        Serial.printf("  MTU:       %d 字节\n", NimBLEDevice::getMTU());
-        Serial.println("──────────────────────────────────────────");
-        Serial.printf("[BLE] ✓ 手机已连接，准备接收数据\n");
-        Serial.flush();
+        if (Serial) {
+            Serial.println();
+            Serial.println("─────────────── 手机连接事件 ───────────────");
+            Serial.printf("  连接数:    %d\n", _pendingConnCount.load());
+            Serial.printf("  MTU:       %d 字节\n", NimBLEDevice::getMTU());
+            Serial.println("──────────────────────────────────────────");
+            Serial.printf("[BLE] ✓ 手机已连接，准备接收数据\n");
+        }
         // 连接后重置活动计时器（让 poll 立即开始工作）
         _lastActivityMs.store(millis());
     }
     if (_disconnectPending.load()) {
         _disconnectPending.store(false);
-        Serial.printf("[BLE] 手机已断开（当前连接数: %d）\n",
-                      _pendingConnCount.load());
+        if (Serial) {
+            Serial.printf("[BLE] 手机已断开（当前连接数: %d）\n",
+                          _pendingConnCount.load());
+        }
         // 断开后继续广播，允许其他手机连接
         // 仅在广播已停止时才重启，避免 "Advertising already active" 警告 spam
         if (server != nullptr && started) {
@@ -224,7 +229,6 @@ void BleServer::loop() {
                 adv->start();
             }
         }
-        Serial.flush();
     }
 
     // ── 2. 消费写入事件队列 ──

@@ -50,9 +50,8 @@ static bool sNavDirty = false;
 // v0.9.1: 批量更新防抖 —— 50ms 内收到多包数据时，只应用最后一次
 static unsigned long sNavDirtySince = 0;
 
-// BLE 数据接收缓冲区（静态，避免堆碎片）
-// v0.5.7：单 char 通道，JSON 带 "type" 字段（guide/drive/tmc/state/location）
-static char sJsonBuffer[2048];
+// v0.9.7: 安全串口输出宏——USB CDC 未连接时 Serial.printf 会阻塞主循环
+#define SAFE_SERIAL(fmt, ...) do { if (Serial) Serial.printf(fmt, ##__VA_ARGS__); } while(0)
 
 // v0.6.4: 分片重组缓冲区
 // Flutter 端当 JSON > 400B 时，自动拆分为带 [0xAA, idx, total, ...data] 头的 chunk
@@ -87,7 +86,7 @@ static void onBleData(const uint8_t* data, size_t len) {
         // 超时保护：如果 5 秒内没收齐，丢弃旧缓冲
         if (sChunkTotal > 0 && (millis() - sChunkStartMs > 5000)) {
             if (Debug::LOG_BLE_RAW) {
-                Serial.printf("[BLE] 分片超时，丢弃 %d/%d\n", sChunkReceived, sChunkTotal);
+                SAFE_SERIAL("[BLE] 分片超时，丢弃 %d/%d\n", sChunkReceived, sChunkTotal);
             }
             sChunkTotal = 0;
             sChunkReceived = 0;
@@ -104,7 +103,7 @@ static void onBleData(const uint8_t* data, size_t len) {
         if (total != sChunkTotal || idx != sChunkReceived) {
             if (sChunkTotal == 0 && idx > 0) {
                 if (Debug::LOG_BLE_RAW) {
-                    Serial.printf("[BLE] 分片孤立 (idx=%d, 无前置), 丢弃\n", idx);
+                    SAFE_SERIAL("[BLE] 分片孤立 (idx=%d, 无前置), 丢弃\n", idx);
                 }
                 sChunkTotal = 0;
                 sChunkReceived = 0;
@@ -113,7 +112,7 @@ static void onBleData(const uint8_t* data, size_t len) {
                 return;
             }
             if (Debug::LOG_BLE_RAW) {
-                Serial.printf("[BLE] 分片错乱 (期望 %d/%d, 收到 %d/%d), 丢弃新片\n",
+                SAFE_SERIAL("[BLE] 分片错乱 (期望 %d/%d, 收到 %d/%d), 丢弃新片\n",
                               sChunkReceived, sChunkTotal, idx, total);
             }
             portEXIT_CRITICAL(&sChunkMux);
@@ -125,7 +124,7 @@ static void onBleData(const uint8_t* data, size_t len) {
             sChunkLen += chunkDataLen;
             sChunkReceived++;
         } else {
-            Serial.printf("[BLE] 分片缓冲溢出 (%u + %u > %u)\n",
+            SAFE_SERIAL("[BLE] 分片缓冲溢出 (%u + %u > %u)\n",
                           (unsigned)sChunkLen, (unsigned)chunkDataLen, (unsigned)sizeof(sChunkBuf));
             sChunkTotal = 0;
             sChunkReceived = 0;
@@ -149,9 +148,9 @@ static void onBleData(const uint8_t* data, size_t len) {
         if (complete) {
             sJsonBuffer[copyLen] = '\0';
             if (Debug::LOG_BLE_RAW) {
-                Serial.printf("[BLE] 分片重组完成 (%d 片, %u 字节)\n",
+                SAFE_SERIAL("[BLE] 分片重组完成 (%d 片, %u 字节)\n",
                               total, (unsigned)copyLen);
-            }
+            }            }
             // 继续向下解析
         } else {
             return;
@@ -168,7 +167,7 @@ static void onBleData(const uint8_t* data, size_t len) {
     DeserializationError err = deserializeJson(doc, sJsonBuffer);
     if (err) {
         if (Debug::LOG_BLE_RAW) {
-            Serial.printf("[BLE] ✗ JSON 解析失败: %s\n", err.c_str());
+            SAFE_SERIAL("[BLE] ✗ JSON 解析失败: %s\n", err.c_str());
         }
         return;
     }
@@ -176,7 +175,7 @@ static void onBleData(const uint8_t* data, size_t len) {
     const char* type = doc["type"] | "";
     if (type[0] == '\0') {
         if (Debug::LOG_BLE_RAW) {
-            Serial.printf("[BLE] ✗ 缺少 type 字段: %s\n", sJsonBuffer);
+            SAFE_SERIAL("[BLE] ✗ 缺少 type 字段: %s\n", sJsonBuffer);
         }
         return;
     }
@@ -198,7 +197,7 @@ static void onBleData(const uint8_t* data, size_t len) {
         ok = true;
     } else {
         if (Debug::LOG_BLE_RAW) {
-            Serial.printf("[BLE] ✗ 未知 type: %s\n", type);
+            SAFE_SERIAL("[BLE] ✗ 未知 type: %s\n", type);
         }
         return;
     }
@@ -207,10 +206,10 @@ static void onBleData(const uint8_t* data, size_t len) {
             sNavState.lastUpdateMs = millis();
             sNavDirty = true;  // v0.6.8: 只标记，loop() 统一刷屏
             if (Debug::LOG_BLE_RAW) {
-                Serial.printf("[BLE] ✓ %s (%d 字节)\n", type, jsonLen);
+                SAFE_SERIAL("[BLE] ✓ %s (%d 字节)\n", type, jsonLen);
             }
         } else {
-        Serial.printf("[BLE] ✗ %s 解析失败: %s\n", type, sJsonBuffer);
+        SAFE_SERIAL("[BLE] ✗ %s 解析失败: %s\n", type, sJsonBuffer);
     }
 }
 
@@ -236,31 +235,34 @@ void setup() {
     esp_task_wdt_reset();  // v0.9.4: 串口就绪后喂狗
 
     // 打印醒目的版本标识（用户需求：确保上电即看到完整输出，防止串口丢数据）
-    Serial.println();
-    Serial.println();
-    Serial.println("██████████████████████████████████████████████");
-    Serial.printf("██  %s v%s\n", PROJECT_NAME, PROJECT_VERSION);
-    Serial.printf("██  FW: v%s  (%s %s)\n", PROJECT_VERSION, __DATE__, __TIME__);
-    Serial.println("██████████████████████████████████████████████");
-    delay(50);
+    // v0.9.7: 仅当 USB CDC 已连接时才输出，否则 Serial.printf 阻塞 setup()
+    if (Serial) {
+        Serial.println();
+        Serial.println();
+        Serial.println("██████████████████████████████████████████████");
+        Serial.printf("██  %s v%s\n", PROJECT_NAME, PROJECT_VERSION);
+        Serial.printf("██  FW: v%s  (%s %s)\n", PROJECT_VERSION, __DATE__, __TIME__);
+        Serial.println("██████████████████████████████████████████████");
+        delay(50);
 
-    Serial.println();
-    Serial.println("╔══════════════════════════════════════════════╗");
-    Serial.printf("║  %s v%s\n", PROJECT_NAME, PROJECT_VERSION);
-    #ifdef BOARD_NAME
-    Serial.printf("║  Board: %s\n", BOARD_NAME);
+        Serial.println();
+        Serial.println("╔══════════════════════════════════════════════╗");
+        Serial.printf("║  %s v%s\n", PROJECT_NAME, PROJECT_VERSION);
+        #ifdef BOARD_NAME
+        Serial.printf("║  Board: %s\n", BOARD_NAME);
+        #endif
+        Serial.printf("║  Role:  BLE GATT Server (等待手机连接)\n");
+        Serial.printf("║  Name:  %s\n", PROJECT_NAME);
+        Serial.printf("║  Mode:  %s\n",
+    #if SCREEN_SERIAL_ONLY
+                      "串口直通显示"
+    #else
+                      "ILI9341 TFT 横屏"
     #endif
-    Serial.printf("║  Role:  BLE GATT Server (等待手机连接)\n");
-    Serial.printf("║  Name:  %s\n", PROJECT_NAME);
-    Serial.printf("║  Mode:  %s\n",
-#if SCREEN_SERIAL_ONLY
-                  "串口直通显示"
-#else
-                  "ILI9341 TFT 横屏"
-#endif
-    );
-    Serial.println("╚══════════════════════════════════════════════╝");
-    delay(50);
+        );
+        Serial.println("╚══════════════════════════════════════════════╝");
+        delay(50);
+    }
 
     // 启动阶段主动喂狗
     esp_task_wdt_reset();
@@ -275,7 +277,7 @@ void setup() {
 
     bool bleOk = sBleServer.begin(PROJECT_NAME);
     if (!bleOk) {
-        Serial.println("[main] BLE 初始化失败！设备将无法接收导航数据");
+        if (Serial) Serial.println("[main] BLE 初始化失败！设备将无法接收导航数据");
     }
     sBleServer.setDataCallback(onBleData);
     sBleServer.setPollIntervalMs(500);
@@ -305,9 +307,9 @@ void setup() {
 
         esp_err_t ret = spi_bus_initialize(SPI3_HOST, &busCfg, SPI_DMA_CH_AUTO);
         if (ret == ESP_OK) {
-            Serial.println("[main] HSPI 总线手动初始化成功");
+            if (Serial) Serial.println("[main] HSPI 总线手动初始化成功");
         } else {
-            Serial.printf("[main] ⚠ HSPI 初始化返回 %d (ESP_OK=%d)，TFT_eSPI 将重试\n",
+            if (Serial) Serial.printf("[main] ⚠ HSPI 初始化返回 %d (ESP_OK=%d)，TFT_eSPI 将重试\n",
                           ret, ESP_OK);
         }
     }
@@ -323,7 +325,7 @@ void setup() {
     // ── BLE 就绪 + TFT 复位后再初始化屏幕 ──
     bool screenOk = sScreen.init();
     if (!screenOk) {
-        Serial.println("[Screen] 屏幕初始化失败，回退到串口直通");
+        if (Serial) Serial.println("[Screen] 屏幕初始化失败，回退到串口直通");
     } else {
         // v0.9.4: 背光前等待 100ms（原 300ms，减少以避 WDT 超时）
         delay(100);

@@ -60,7 +60,7 @@ bool ScreenLVGL::tftInitWithRetry(int maxRetries) {
     // 真实验证依赖 main.cpp 中的 spi_bus_initialize() 返回值。
 
     for (int attempt = 1; attempt <= maxRetries; attempt++) {
-        Serial.printf("[ScreenLVGL] TFT 初始化 (第 %d/%d 次)...\n", attempt, maxRetries);
+        if (Serial) Serial.printf("[ScreenLVGL] TFT 初始化 (第 %d/%d 次)...\n", attempt, maxRetries);
 
         if (attempt == 1) {
             // 首次调用：TFT_eSPI 初始化 HSPI 总线 + 发送 ILI9341 初始化命令
@@ -87,7 +87,7 @@ bool ScreenLVGL::tftInitWithRetry(int maxRetries) {
         mTft.drawPixel(0, 0, TFT_WHITE);
         // 若 SPI 总线正常，命令已发送；若总线异常，不会崩溃但显示无效果
         // 无论如何，init() 已调用，返回 true 让上层继续
-        Serial.printf("[ScreenLVGL] ✓ TFT 初始化完成 (第 %d 次)\n", attempt);
+        if (Serial) Serial.printf("[ScreenLVGL] ✓ TFT 初始化完成 (第 %d 次)\n", attempt);
         return true;
     }
     return false;
@@ -104,7 +104,7 @@ void ScreenLVGL::enableBacklight() {
     delay(50);
     digitalWrite(TFT_BL, TFT_BACKLIGHT_ON);
     delay(100);
-    Serial.println("[ScreenLVGL] 背光已点亮");
+    if (Serial) Serial.println("[ScreenLVGL] 背光已点亮");
 #endif
 }
 
@@ -114,7 +114,7 @@ bool ScreenLVGL::init() {
 
     // v0.9.1: 使用带重试的 TFT 初始化
     if (!tftInitWithRetry(3)) {
-        Serial.println("[ScreenLVGL] TFT 初始化全部失败！检查供电和 SPI 接线");
+        if (Serial) Serial.println("[ScreenLVGL] TFT 初始化全部失败！检查供电和 SPI 接线");
         return false;
     }
 
@@ -124,7 +124,7 @@ bool ScreenLVGL::init() {
     int w = mTft.width();
     int h = mTft.height();
     if (w == 0 || h == 0) {
-        Serial.println("[ScreenLVGL] TFT 未检测到（检查 5V 供电 + SPI 接线）");
+        if (Serial) Serial.println("[ScreenLVGL] TFT 未检测到（检查 5V 供电 + SPI 接线）");
         return false;
     }
 
@@ -137,7 +137,7 @@ bool ScreenLVGL::init() {
         mBuf = (lv_color_t*)ps_malloc(sizeof(lv_color_t) * LV_BUF_SIZE);
     }
     if (mBuf == nullptr) {
-        Serial.println("[ScreenLVGL] LVGL 显示缓冲分配失败");
+        if (Serial) Serial.println("[ScreenLVGL] LVGL 显示缓冲分配失败");
         return false;
     }
 
@@ -153,7 +153,7 @@ bool ScreenLVGL::init() {
     mInited = true;
     showIdle();
 
-    Serial.printf("[ScreenLVGL] ILI9341 %dx%d + LVGL v%d.%d.%d 初始化完成\n",
+    if (Serial) Serial.printf("[ScreenLVGL] ILI9341 %dx%d + LVGL v%d.%d.%d 初始化完成\n",
                   w, h, LVGL_VERSION_MAJOR, LVGL_VERSION_MINOR, LVGL_VERSION_PATCH);
     return true;
 }
@@ -167,7 +167,7 @@ void ScreenLVGL::update() {
 }
 
 void ScreenLVGL::log(const char* msg) {
-    if (Debug::LOG_SYSTEM) {
+    if (Debug::LOG_SYSTEM && Serial) {
         Serial.printf("[ScreenLVGL] %s\n", msg);
     }
 }
