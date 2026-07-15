@@ -154,7 +154,7 @@ static void onBleData(const uint8_t* data, size_t len) {
             if (Debug::LOG_BLE_RAW) {
                 SAFE_SERIAL("[BLE] 分片重组完成 (%d 片, %u 字节)\n",
                               total, (unsigned)copyLen);
-            }            }
+            }
             // 继续向下解析
         } else {
             return;
