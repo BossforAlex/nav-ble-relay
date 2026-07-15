@@ -65,6 +65,13 @@ static unsigned long sChunkStartMs = 0;
 // v0.9.1: 分片重组状态保护（防止 BLE 回调上下文与主 loop 竞态）
 static portMUX_TYPE sChunkMux = portMUX_INITIALIZER_UNLOCKED;
 
+// v0.9.7: 安全串口输出宏——USB CDC 未连接时 Serial.printf 会阻塞主循环
+#define SAFE_SERIAL(fmt, ...) do { if (Serial) Serial.printf(fmt, ##__VA_ARGS__); } while(0)
+
+// BLE 数据接收缓冲区（静态，避免堆碎片）
+// v0.5.7：单 char 通道，JSON 带 "type" 字段（guide/drive/tmc/state/location）
+static char sJsonBuffer[2048];
+
 // ===================== BLE 数据回调 =====================
 // v0.5.7 重构：单 write char + INDICATE poll，JSON 用 "type" 字段路由
 // 期望格式：{"type": "guide"|"drive"|"tmc"|"state"|"location", "ts": ..., "data": {...}}
