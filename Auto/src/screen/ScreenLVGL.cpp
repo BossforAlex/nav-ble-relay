@@ -254,7 +254,7 @@ void ScreenLVGL::showSpeedLimit(int limit, bool overSpeed) {
         lv_label_set_text(ui_LimitLabel, buf);
         lv_obj_clear_flag(ui_LimitSign, LV_OBJ_FLAG_HIDDEN);
         lv_obj_set_style_border_color(ui_LimitSign,
-            lv_color_hex(overSpeed ? 0xFF1744 : 0xD32F2F), 0);
+            lv_color_hex(overSpeed ? 0xFF1744 : 0xFF5252), 0);
     } else {
         lv_label_set_text_static(ui_LimitLabel, "");
         lv_obj_add_flag(ui_LimitSign, LV_OBJ_FLAG_HIDDEN);
@@ -264,7 +264,11 @@ void ScreenLVGL::showSpeedLimit(int limit, bool overSpeed) {
 void ScreenLVGL::showRoadName(const char* name) {
     if (!mInited) return;
     if (name && name[0]) {
-        lv_label_set_text(ui_RoadNameLabel, name);
+        bool ascii = true;
+        for (const unsigned char* p = (const unsigned char*)name; *p; ++p) {
+            if (*p < 32 || *p > 126) { ascii = false; break; }
+        }
+        lv_label_set_text(ui_RoadNameLabel, ascii ? name : "NAV");
     } else {
         lv_label_set_text_static(ui_RoadNameLabel, "NAV");
     }
@@ -305,10 +309,10 @@ void ScreenLVGL::showLanes(int count, const int* backIcons, int turnIcon) {
         }
     };
 
-    // v0.9.9: 车道指示器宽度（父容器宽度 / count，留间距）
+    // 车道指示器宽度：支持最多 8 车道，避免小屏溢出
     int laneW = (lv_obj_get_width(ui_LaneContainer) - 4) / count;
-    if (laneW < 20) laneW = 20;
-    if (laneW > 40) laneW = 40;
+    if (laneW < 10) laneW = 10;
+    if (laneW > 28) laneW = 28;
 
     for (int i = 0; i < count; i++) {
         int bi = (backIcons && i < count) ? backIcons[i] : 0;
@@ -320,8 +324,8 @@ void ScreenLVGL::showLanes(int count, const int* backIcons, int turnIcon) {
         lv_obj_set_style_pad_all(lane, 0, 0);
         lv_obj_set_style_radius(lane, 4, 0);
         lv_obj_set_style_border_width(lane, 0, 0);
-        // 活跃车道：亮蓝填充，非活跃：暗灰填充
-        lv_color_t bgColor = active ? lv_color_hex(0x1565C0) : lv_color_hex(0x333333);
+        // 活跃车道：高对比蓝；非活跃：低亮度灰蓝
+        lv_color_t bgColor = active ? lv_color_hex(0x0288D1) : lv_color_hex(0x263238);
         lv_obj_set_style_bg_color(lane, bgColor, 0);
         lv_obj_set_style_bg_opa(lane, LV_OPA_COVER, 0);
 
@@ -344,8 +348,8 @@ void ScreenLVGL::showLanes(int count, const int* backIcons, int turnIcon) {
         lv_obj_set_style_text_align(arrow, LV_TEXT_ALIGN_CENTER, 0);
         lv_obj_center(arrow);
 
-        // 文字颜色：活跃亮白，非活跃灰色
-        lv_color_t textColor = active ? lv_color_white() : lv_color_hex(0x888888);
+        // 文字颜色：活跃亮白，非活跃仍保持可读
+        lv_color_t textColor = active ? lv_color_white() : lv_color_hex(0x90A4AE);
         lv_obj_set_style_text_color(arrow, textColor, 0);
     }
 }
@@ -372,8 +376,7 @@ void ScreenLVGL::showIdle() {
 
 void ScreenLVGL::updateBleDot() {
     if (!mInited) return;
-    // v0.9.2: 提高对比度，原 0x00E676/0x666666 在纯黑背景上不明显
-    lv_color_t c = mBleConnected ? lv_color_hex(0x00E676) : lv_color_hex(0x888888);
+    lv_color_t c = mBleConnected ? lv_color_hex(0x00E676) : lv_color_hex(0x607D8B);
     lv_obj_set_style_bg_color(ui_BleDot, c, 0);
     lv_obj_invalidate(ui_BleDot);
 }
@@ -405,7 +408,7 @@ void ScreenLVGL::formatRouteInfo(char* out, size_t outSize) {
         else snprintf(tb, sizeof(tb), "%dmin", mins);
     }
 
-    if (db[0] && tb[0]) snprintf(out, outSize, "%s . %s", db, tb);
+    if (db[0] && tb[0]) snprintf(out, outSize, "%s | %s", db, tb);
     else if (db[0]) snprintf(out, outSize, "%s", db);
     else snprintf(out, outSize, "%s", tb);
 }
@@ -420,8 +423,8 @@ void ScreenLVGL::applyNavState() {
         return;
     }
 
-    // 路名（v0.9.0: 占位符，待 Flutter 端预渲染位图传输）
-    showRoadName("---");
+    // 路名保留 ASCII 占位；中文道路名需要手机端预渲染或 CJK 字体资源。
+    showRoadName("NAV");
 
     // 转向箭头
     showArrow(mState.guide.icon);

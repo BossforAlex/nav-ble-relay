@@ -82,12 +82,14 @@ class DevicesScreen extends StatelessWidget {
                             ble.isOurDevice
                                 ? '已连接 AutoNav HUD'
                                 : '已连接（非 HUD）',
-                            style: const TextStyle(
-                                fontSize: 11, color: Colors.white),
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Theme.of(context).colorScheme.onPrimary,
+                            ),
                           ),
                           backgroundColor: ble.isOurDevice
-                              ? const Color(0xFF008375)
-                              : Colors.orange,
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(context).colorScheme.tertiary,
                           padding: EdgeInsets.zero,
                           materialTapTargetSize:
                               MaterialTapTargetSize.shrinkWrap,
@@ -169,10 +171,10 @@ class DevicesScreen extends StatelessWidget {
       return '正在扫描蓝牙设备...（找到 ${ble.allDevices.length} 个）';
     }
     if (ble.status == BleStatus.bluetoothOff) {
-      return '⚠ 蓝牙未开启';
+      return '蓝牙未开启';
     }
     if (ble.status == BleStatus.error) {
-      return '✗ 错误: ${ble.lastError}';
+      return '错误: ${ble.lastError}';
     }
     return '未启动，点击下方"开始扫描"按钮';
   }
@@ -273,8 +275,11 @@ class _DeviceTile extends StatelessWidget {
             children: [
               _typeChip(category, colorScheme),
               if (category == DeviceCategory.hud)
-                _hintChip('可转发数据',
-                    const Color(0xFF008375), Colors.white),
+                _hintChip(
+                  '可转发数据',
+                  colorScheme.primary,
+                  colorScheme.onPrimary,
+                ),
             ],
           ),
         ],
@@ -282,9 +287,14 @@ class _DeviceTile extends StatelessWidget {
       trailing: isCurrent
           ? (isConnected
               ? Chip(
-                  label: const Text('已连接',
-                      style: TextStyle(color: Colors.white, fontSize: 11)),
-                  backgroundColor: const Color(0xFF008375),
+                  label: Text(
+                    '已连接',
+                    style: TextStyle(
+                      color: colorScheme.onPrimary,
+                      fontSize: 11,
+                    ),
+                  ),
+                  backgroundColor: colorScheme.primary,
                   padding: EdgeInsets.zero,
                   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 )
@@ -303,9 +313,7 @@ class _DeviceTile extends StatelessWidget {
   }
 
   Widget _categoryIcon(DeviceCategory cat, bool isCurrent, colorScheme) {
-    final color = isCurrent
-        ? const Color(0xFF008375)
-        : colorScheme.primary;
+    final color = isCurrent ? colorScheme.primary : colorScheme.onSurfaceVariant;
     final iconData = switch (cat) {
       DeviceCategory.hud => Icons.dashboard,
       DeviceCategory.esp32 => Icons.memory,

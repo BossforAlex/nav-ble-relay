@@ -48,7 +48,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      context.read<BroadcastService>().notifyListeners();
+      context.read<BroadcastService>().refresh();
     }
   }
 
@@ -199,7 +199,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ),
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
           children: [
             // 顶部状态卡片
             const StatusCard(),
@@ -235,7 +235,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               OutlinedButton.icon(
                 onPressed: _selfTest,
                 icon: const Icon(Icons.bug_report_outlined),
-                label: const Text('测试广播 / TEST BROADCAST'),
+                label: const Text('测试广播'),
               ),
             ],
           ],
@@ -261,8 +261,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               onPressed: _start,
               icon: const Icon(Icons.play_arrow_rounded),
               label: const Text('启动服务'),
-              backgroundColor: const Color(0xFF008375),
-              foregroundColor: Colors.white,
+              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+              foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
             ),
           ],
         ],
@@ -282,11 +282,11 @@ class _DetailCards extends StatelessWidget {
         return Column(
           children: [
             _DataSection(
-              title: '导航状态 / Navigation',
+              title: '导航状态',
               icon: Icons.navigation_outlined,
               rows: [
-                _kv('状态 / State', broadcast.mapStateText),
-                _kv('路口图 / Cross', broadcast.crossMap ?? '—'),
+                _kv('状态', broadcast.mapStateText),
+                _kv('路口图', broadcast.crossMap ?? '—'),
               ],
             ),
             const SizedBox(height: 12),
@@ -407,20 +407,20 @@ class _GuideSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final g = broadcast.guideInfo;
     return _DataSection(
-      title: '引导信息 / Guidance',
+      title: '引导信息',
       icon: Icons.turn_slight_right_outlined,
       rows: [
-        _RowData('当前道路 / Road', g?.curRoadName.isNotEmpty == true ? g!.curRoadName : '—'),
-        _RowData('下条道路 / Next', g?.nextRoadName.isNotEmpty == true ? g!.nextRoadName : '—'),
-        _RowData('剩余路程 / Remain',
+        _RowData('当前道路', g?.curRoadName.isNotEmpty == true ? g!.curRoadName : '—'),
+        _RowData('下条道路', g?.nextRoadName.isNotEmpty == true ? g!.nextRoadName : '—'),
+        _RowData('剩余路程',
             (g != null && g.routeRemainDis > 0)
                 ? '${(g.routeRemainDis / 1000).toStringAsFixed(1)} 公里 / ${g.routeRemainTime ~/ 60} 分钟'
                 : '—'),
-        _RowData('当前车速 / Speed', (g != null && g.curSpeed > 0) ? '${g.curSpeed} km/h' : '—'),
-        _RowData('限速 / Limit', (g != null && g.limitedSpeed > 0) ? '${g.limitedSpeed} km/h' : '—'),
-        _RowData('摄像头 / Camera', (g != null && g.cameraDist > 0) ? '${g.cameraDist} m' : '—'),
-        _RowData('服务区 / SAPA', (g != null && g.sapaDist > 0) ? '${g.sapaName} ${g.sapaDist}m' : '—'),
-        _RowData('红绿灯 / Light', (g != null && g.trafficLightNum > 0) ? '${g.trafficLightNum}' : '—'),
+        _RowData('当前车速', (g != null && g.curSpeed > 0) ? '${g.curSpeed} km/h' : '—'),
+        _RowData('限速', (g != null && g.limitedSpeed > 0) ? '${g.limitedSpeed} km/h' : '—'),
+        _RowData('摄像头', (g != null && g.cameraDist > 0) ? '${g.cameraDist} m' : '—'),
+        _RowData('服务区', (g != null && g.sapaDist > 0) ? '${g.sapaName} ${g.sapaDist}m' : '—'),
+        _RowData('红绿灯', (g != null && g.trafficLightNum > 0) ? '${g.trafficLightNum}' : '—'),
       ],
     );
   }
@@ -436,14 +436,14 @@ class _DriveWaySection extends StatelessWidget {
     final d = broadcast.driveWayInfo;
     final enabled = d != null && d.enabled && d.lanes.isNotEmpty;
     final symbols = enabled
-        ? d!.lanes.map((l) => AmapProtocol.laneSymbolLabel(l.backIcon)).join(' ')
+        ? d.lanes.map((l) => AmapProtocol.laneSymbolLabel(l.backIcon)).join(' ')
         : '—';
     return _DataSection(
-      title: '车道指引 / Drive Way',
+      title: '车道指引',
       icon: Icons.view_array_outlined,
       rows: [
-        _RowData('车道数 / Count', enabled ? '${d!.size} 车道' : '—'),
-        _RowData('详情 / Detail', symbols),
+        _RowData('车道数', enabled ? '${d.size} 车道' : '—'),
+        _RowData('详情', symbols),
       ],
     );
   }
@@ -459,14 +459,14 @@ class _TmcSection extends StatelessWidget {
     final t = broadcast.tmcSegmentInfo;
     final enabled = t?.enabled == true;
     return _DataSection(
-      title: '路况光柱 / Traffic Bar',
+      title: '路况光柱',
       icon: Icons.traffic_outlined,
       rows: [
-        _RowData('总长 / Total',
+        _RowData('总长',
             enabled ? '${(t!.totalDistance / 1000).toStringAsFixed(1)} 公里' : '—'),
-        _RowData('剩余 / Remain',
+        _RowData('剩余',
             enabled ? '${(t!.residualDistance / 1000).toStringAsFixed(1)} 公里' : '—'),
-        _RowData('段数 / Segs', enabled ? '${t!.size}' : '—'),
+        _RowData('段数', enabled ? '${t!.size}' : '—'),
       ],
     );
   }
@@ -481,12 +481,12 @@ class _LocationSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final l = broadcast.locationInfo;
     return _DataSection(
-      title: '定位信息 / Location',
+      title: '定位信息',
       icon: Icons.my_location_outlined,
       rows: [
-        _RowData('当前车速 / Speed', (l != null && l.speed > 0) ? '${l.speed} km/h' : '—'),
-        _RowData('方向 / Bearing', (l != null && l.bearing > 0) ? '${l.bearing}°' : '—'),
-        _RowData('精度 / Acc', (l != null && l.accuracy > 0) ? '${l.accuracy} m' : '—'),
+        _RowData('当前车速', (l != null && l.speed > 0) ? '${l.speed} km/h' : '—'),
+        _RowData('方向', (l != null && l.bearing > 0) ? '${l.bearing}°' : '—'),
+        _RowData('精度', (l != null && l.accuracy > 0) ? '${l.accuracy} m' : '—'),
       ],
     );
   }

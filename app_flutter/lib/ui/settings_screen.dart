@@ -181,7 +181,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               icon: Icons.info_outline,
               children: [
                 _KVTile(label: '应用名', value: '导航BLE转发'),
-                _KVTile(label: '版本', value: '1.0.0'),
+                _KVTile(label: '版本', value: '1.0.1'),
                 _KVTile(label: '作者', value: 'BossforAlex'),
                 _KVTile(label: '开源协议', value: 'MIT License'),
                 _KVTile(

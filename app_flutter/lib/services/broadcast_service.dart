@@ -173,12 +173,6 @@ class BroadcastService extends ChangeNotifier {
     return null;
   }
 
-  /// 原生传过来的 Map 直接返回
-  Map<dynamic, dynamic> _unwrap(dynamic args) {
-    if (args is Map) return args;
-    return <dynamic, dynamic>{};
-  }
-
   /// 原生侧对 JSON 结构（车道 / 路况 / 定位）以 `{"__json__": "<json>"}`
   /// 形式透传，这里解码为 Map 供 [fromMap] 解析。
   Map<dynamic, dynamic> _unwrapJson(dynamic args) {
@@ -196,6 +190,8 @@ class BroadcastService extends ChangeNotifier {
     }
     return <dynamic, dynamic>{};
   }
+
+  void refresh() => notifyListeners();
 
   @override
   void dispose() {

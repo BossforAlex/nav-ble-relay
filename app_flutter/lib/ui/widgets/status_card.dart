@@ -20,13 +20,16 @@ class StatusCard extends StatelessWidget {
       builder: (context, ble, broadcast, _) {
         final running = ble.isRunning;
         final connected = ble.isConnected;
+        final successColor = colorScheme.primary;
+        final pendingColor = colorScheme.tertiary;
+        final stoppedColor = colorScheme.error;
 
         // 状态点颜色：已连接=绿，运行中=橙，停止=红
         final dotColor = connected
-            ? const Color(0xFF008375)
+            ? successColor
             : running
-                ? const Color(0xFFE07B39)
-                : const Color(0xFFBA1A1A);
+                ? pendingColor
+                : stoppedColor;
 
         final statusText = connected
             ? '已连接 ESP32'
@@ -35,9 +38,9 @@ class StatusCard extends StatelessWidget {
                 : '已停止';
 
         final statusTextColor = connected
-            ? const Color(0xFF008375)
+            ? successColor
             : running
-                ? const Color(0xFFE07B39)
+                ? pendingColor
                 : colorScheme.onSurfaceVariant;
 
         return Card(
@@ -81,10 +84,10 @@ class StatusCard extends StatelessWidget {
                           ? '正在扫描 ESP32...'
                           : '未启动',
                   valueColor: connected
-                      ? const Color(0xFF008375)
+                      ? successColor
                       : running
-                          ? const Color(0xFFE07B39)
-                          : const Color(0xFFBA1A1A),
+                          ? pendingColor
+                          : stoppedColor,
                 ),
                 const SizedBox(height: 8),
                 // 广播接收状态行
@@ -93,7 +96,7 @@ class StatusCard extends StatelessWidget {
                   label: '广播',
                   value: running ? broadcast.broadcastAgoText : '未启动',
                   valueColor: broadcast.broadcastReceived > 0
-                      ? const Color(0xFF008375)
+                      ? successColor
                       : colorScheme.onSurfaceVariant,
                 ),
                 // 设备名（连接时显示）
@@ -112,7 +115,7 @@ class StatusCard extends StatelessWidget {
                     icon: Icons.send,
                     label: '转发',
                     value: '${broadcast.relayCount} 次 (${broadcast.lastRelayText})',
-                    valueColor: const Color(0xFF008375),
+                    valueColor: successColor,
                   ),
                 ],
                 // v0.5.8: BLE 写入错误（诊断写入失败原因）
@@ -122,7 +125,7 @@ class StatusCard extends StatelessWidget {
                     icon: Icons.error_outline,
                     label: '错误',
                     value: ble.lastError,
-                    valueColor: Colors.red,
+                    valueColor: colorScheme.error,
                   ),
                 ],
                 // v0.5.8: 服务发现摘要（诊断特征值为何未发现）
@@ -132,7 +135,7 @@ class StatusCard extends StatelessWidget {
                     icon: Icons.search,
                     label: '发现',
                     value: ble.discoverySummary,
-                    valueColor: const Color(0xFF666666),
+                    valueColor: colorScheme.onSurfaceVariant,
                   ),
                 ],
               ],
@@ -200,8 +203,10 @@ class _InfoRow extends StatelessWidget {
           child: Text(
             value,
             textAlign: TextAlign.right,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: valueColor,
+              color: valueColor ?? theme.colorScheme.onSurface,
               fontWeight: FontWeight.w500,
             ),
           ),

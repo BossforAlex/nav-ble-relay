@@ -49,7 +49,7 @@ class NavPreview extends StatelessWidget {
 
         return Card(
           child: Padding(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -60,7 +60,7 @@ class NavPreview extends StatelessWidget {
                         color: colorScheme.primary, size: 20),
                     const SizedBox(width: 8),
                     Text(
-                      '导航引导 / Turn Preview',
+                      '导航引导',
                       style: theme.textTheme.titleSmall?.copyWith(
                         color: colorScheme.onSurfaceVariant,
                         fontWeight: FontWeight.w600,
@@ -70,95 +70,44 @@ class NavPreview extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
                 // 主预览区
-                IntrinsicHeight(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // 左侧：转向箭头 + 距离 + 道路
-                      Expanded(
-                        flex: 3,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // 大号转向箭头
-                            _TurnArrow(
-                              rotation: rotation,
-                              color: colorScheme.primary,
-                              label: turnLabel,
-                            ),
-                            const SizedBox(height: 12),
-                            // 距离
-                            Text(
-                              distanceText,
-                              style: theme.textTheme.displaySmall?.copyWith(
-                                fontSize: 40,
-                                fontWeight: FontWeight.w700,
-                                color: colorScheme.onSurface,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            // 下一道路
-                            Text(
-                              '前往 $nextRoad',
-                              style: theme.textTheme.bodyLarge?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 8),
-                            // 当前道路（路口信息）
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: colorScheme.secondaryContainer,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                curRoad,
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                  color: colorScheme.onSecondaryContainer,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final compact = constraints.maxWidth < 380;
+                    final guidance = _GuidanceBlock(
+                      rotation: rotation,
+                      turnLabel: turnLabel,
+                      distanceText: distanceText,
+                      nextRoad: nextRoad,
+                      curRoad: curRoad,
+                    );
+                    final speed = _SpeedBlock(
+                      speed: curSpeed,
+                      limitedSpeed: limitedSpeed,
+                      overSpeed: overSpeed,
+                    );
+
+                    if (compact) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          guidance,
+                          const SizedBox(height: 16),
+                          speed,
+                        ],
+                      );
+                    }
+
+                    return IntrinsicHeight(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(flex: 3, child: guidance),
+                          const SizedBox(width: 16),
+                          Expanded(flex: 2, child: speed),
+                        ],
                       ),
-                      const SizedBox(width: 16),
-                      // 右侧：车速 + 限速
-                      Expanded(
-                        flex: 2,
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            // 限速标志（圆形红色背景白字）
-                            _SpeedLimitBadge(
-                              speed: limitedSpeed,
-                              warning: overSpeed,
-                            ),
-                            const SizedBox(height: 16),
-                            // 当前车速
-                            _SpeedDisplay(
-                              speed: curSpeed,
-                              overSpeed: overSpeed,
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'km/h',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                                letterSpacing: 1.5,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+                    );
+                  },
                 ),
               ],
             ),
@@ -172,6 +121,105 @@ class NavPreview extends StatelessWidget {
     if (meters <= 0) return '';
     if (meters >= 1000) return '${(meters / 1000).toStringAsFixed(1)} km';
     return '$meters m';
+  }
+}
+
+class _GuidanceBlock extends StatelessWidget {
+  const _GuidanceBlock({
+    required this.rotation,
+    required this.turnLabel,
+    required this.distanceText,
+    required this.nextRoad,
+    required this.curRoad,
+  });
+
+  final double rotation;
+  final String turnLabel;
+  final String distanceText;
+  final String nextRoad;
+  final String curRoad;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _TurnArrow(
+          rotation: rotation,
+          color: colorScheme.primary,
+          label: turnLabel,
+        ),
+        const SizedBox(height: 12),
+        Text(
+          distanceText,
+          style: theme.textTheme.displaySmall?.copyWith(
+            fontSize: 40,
+            fontWeight: FontWeight.w700,
+            color: colorScheme.onSurface,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '前往 $nextRoad',
+          style: theme.textTheme.bodyLarge?.copyWith(
+            color: colorScheme.onSurfaceVariant,
+          ),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: colorScheme.secondaryContainer,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            curRoad,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: colorScheme.onSecondaryContainer,
+              fontWeight: FontWeight.w500,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SpeedBlock extends StatelessWidget {
+  const _SpeedBlock({
+    required this.speed,
+    required this.limitedSpeed,
+    required this.overSpeed,
+  });
+
+  final int speed;
+  final int limitedSpeed;
+  final bool overSpeed;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        _SpeedLimitBadge(speed: limitedSpeed, warning: overSpeed),
+        const SizedBox(height: 16),
+        _SpeedDisplay(speed: speed, overSpeed: overSpeed),
+        const SizedBox(height: 4),
+        Text(
+          'km/h',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -214,6 +262,7 @@ class _TurnArrow extends StatelessWidget {
               Icons.arrow_upward_rounded,
               size: 44,
               color: color,
+              semanticLabel: label,
             ),
           ),
         ),
@@ -268,13 +317,13 @@ class _SpeedLimitBadge extends StatelessWidget {
         width: 64,
         height: 64,
         decoration: BoxDecoration(
-          color: warning ? const Color(0xFFBA1A1A) : const Color(0xFFE53935),
+          color: warning ? theme.colorScheme.error : theme.colorScheme.surface,
           shape: BoxShape.circle,
-          border: Border.all(color: Colors.white, width: 3),
+          border: Border.all(color: theme.colorScheme.error, width: 3),
           boxShadow: warning
               ? [
                   BoxShadow(
-                    color: const Color(0xFFBA1A1A).withValues(alpha: 0.5),
+                    color: theme.colorScheme.error.withValues(alpha: 0.45),
                     blurRadius: 12,
                     spreadRadius: 2,
                   ),
@@ -287,15 +336,15 @@ class _SpeedLimitBadge extends StatelessWidget {
             Text(
               '限速',
               style: TextStyle(
-                color: Colors.white,
+                color: warning ? theme.colorScheme.onError : theme.colorScheme.error,
                 fontSize: 10,
                 fontWeight: FontWeight.w600,
               ),
             ),
             Text(
               '$speed',
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: warning ? theme.colorScheme.onError : theme.colorScheme.onSurface,
                 fontSize: 22,
                 fontWeight: FontWeight.w800,
               ),
@@ -317,7 +366,7 @@ class _SpeedDisplay extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final color = overSpeed
-        ? const Color(0xFFBA1A1A)
+        ? theme.colorScheme.error
         : theme.colorScheme.onSurface;
     return Text(
       '$speed',

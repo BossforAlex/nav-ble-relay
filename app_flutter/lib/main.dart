@@ -139,14 +139,18 @@ class NavBleRelayApp extends StatelessWidget {
         ),
       ),
       cardTheme: CardThemeData(
-        elevation: 2,
+        elevation: 0,
+        color: scheme.surfaceContainerLow,
+        surfaceTintColor: Colors.transparent,
+        margin: EdgeInsets.zero,
         clipBehavior: Clip.antiAlias,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: scheme.outlineVariant),
         ),
       ),
       appBarTheme: AppBarTheme(
-        centerTitle: true,
+        centerTitle: false,
         backgroundColor: scheme.surface,
         foregroundColor: scheme.onSurface,
         elevation: 0,
@@ -154,11 +158,55 @@ class NavBleRelayApp extends StatelessWidget {
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
+          minimumSize: const Size(48, 48),
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(12),
           ),
         ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size(48, 48),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      ),
+      iconButtonTheme: IconButtonThemeData(
+        style: IconButton.styleFrom(
+          minimumSize: const Size(48, 48),
+          tapTargetSize: MaterialTapTargetSize.padded,
+        ),
+      ),
+      navigationBarTheme: NavigationBarThemeData(
+        height: 72,
+        backgroundColor: scheme.surfaceContainer,
+        indicatorColor: scheme.secondaryContainer,
+        labelTextStyle: WidgetStateProperty.resolveWith((states) {
+          final selected = states.contains(WidgetState.selected);
+          return base.textTheme.labelMedium?.copyWith(
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+            color: selected ? scheme.onSecondaryContainer : scheme.onSurfaceVariant,
+          );
+        }),
+      ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: scheme.inverseSurface,
+        contentTextStyle: base.textTheme.bodyMedium?.copyWith(
+          color: scheme.onInverseSurface,
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      floatingActionButtonTheme: FloatingActionButtonThemeData(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
+      dividerTheme: DividerThemeData(
+        color: scheme.outlineVariant,
+        thickness: 1,
+        space: 1,
       ),
     );
   }
