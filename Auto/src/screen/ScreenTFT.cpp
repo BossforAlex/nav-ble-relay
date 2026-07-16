@@ -104,7 +104,7 @@ void ScreenTFT::showRoadName(const char* name) {
     if (name) strncpy(mState.guide.curRoadName, name, sizeof(mState.guide.curRoadName) - 1);
 }
 
-void ScreenTFT::showLanes(int count, const int* backIcons) {
+void ScreenTFT::showLanes(int count, const int* backIcons, int /*turnIcon*/) {
     mState.driveWay.enabled = true;
     mState.driveWay.laneCount = count;
     for (int i = 0; i < count && i < Nav::MAX_LANES; i++) {

@@ -41,7 +41,7 @@ public:
     void showSpeed(int speed) override;
     void showSpeedLimit(int limit, bool overSpeed) override;
     void showRoadName(const char* name) override;
-    void showLanes(int count, const int* backIcons) override;
+    void showLanes(int count, const int* backIcons, int turnIcon = -1) override;
     void showRouteInfo(const char* text) override;
     void showIdle() override;
 

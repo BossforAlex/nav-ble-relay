@@ -494,6 +494,8 @@ class BleService extends ChangeNotifier {
   }
 
   /// 收到 ESP32 的 indicate：立刻把缓存的最新数据 flush 一次
+  // v0.9.8: 添加并发保护 —— 防止两次 poll 同时触发 flush 导致 BLE 写交错
+  bool _flushing = false;
   void _onPollReceived(List<int> value) async {
     // ESP32 每 500ms 无活动就发空 indicate
     // 收到后立刻把所有 pending 数据写一次
@@ -508,23 +510,33 @@ class BleService extends ChangeNotifier {
     }
     _lastFlushMs = now;
 
-    // v0.6.6 关键修复:绝对禁止并行写!
-    // 之前用 Future.wait() 并行 5 个 write,当 guide+drive 同时分片时会交错
-    // 现在改为顺序 await,每个 sendXxx 内部都走 _writeChain 锁,确保单飞
-    if (_pendingGuide != null) {
-      await sendGuideInfo(_pendingGuide!, compact: false);
+    // v0.9.8: 并发保护 —— 防止两次 poll 同时触发 flush
+    if (_flushing) {
+      debugPrint('[BLE] 上一轮 flush 未完成，跳过本次 poll');
+      _throttled++;
+      _safeNotify();
+      return;
     }
-    if (_pendingDrive != null) {
-      await sendDriveWay(_pendingDrive!);
-    }
-    if (_pendingTmc != null) {
-      await sendTmcSegment(_pendingTmc!);
-    }
-    if (_pendingLocation != null) {
-      await sendLocation(_pendingLocation!);
-    }
-    if (_pendingState != null) {
-      await sendMapState(_pendingState!, _pendingCrossMap);
+    _flushing = true;
+    try {
+      // v0.6.6 关键修复:绝对禁止并行写!
+      if (_pendingGuide != null) {
+        await sendGuideInfo(_pendingGuide!, compact: false);
+      }
+      if (_pendingDrive != null) {
+        await sendDriveWay(_pendingDrive!);
+      }
+      if (_pendingTmc != null) {
+        await sendTmcSegment(_pendingTmc!);
+      }
+      if (_pendingLocation != null) {
+        await sendLocation(_pendingLocation!);
+      }
+      if (_pendingState != null) {
+        await sendMapState(_pendingState!, _pendingCrossMap);
+      }
+    } finally {
+      _flushing = false;
     }
   }
 
@@ -684,12 +696,15 @@ class BleService extends ChangeNotifier {
     // v0.6.4: 数据超过 MTU 安全阈值 → 自动分片
     const int maxPayload = 400;
     if (bytes.length <= maxPayload) {
-      return await _writeRaw(bytes, label);
+      final ok = await _writeRaw(bytes, label);
+      if (ok) { _txOk++; _safeNotify(); }
+      return ok;
     }
 
     // 分片传输
     final total = (bytes.length + maxPayload - 1) ~/ maxPayload;
     debugPrint('[BLE] $label: ${bytes.length}B 超过 MTU, 分 $total 片发送');
+    bool allOk = true;
     for (int i = 0; i < total; i++) {
       final start = i * maxPayload;
       final end = (start + maxPayload).clamp(0, bytes.length);
@@ -702,12 +717,18 @@ class BleService extends ChangeNotifier {
       final ok = await _writeRaw(chunk, '$label#${i + 1}/$total');
       if (!ok) {
         debugPrint('[BLE] ✗ $label 分片 ${i + 1}/$total 失败, 中止');
-        return false;
+        allOk = false;
+        break;
       }
     }
-    _txOk++;
-    _safeNotify();
-    return true;
+    if (allOk) {
+      _txOk++;
+      _safeNotify();
+    } else {
+      _txFail++;
+      _safeNotify();
+    }
+    return allOk;
   }
 
   /// 向 CHAR_DATA 写入原始字节（不编码 JSON）

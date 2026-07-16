@@ -31,15 +31,17 @@ public:
     virtual void setBleConnected(bool connected) = 0;
 
     // ── 单字段更新（未来 Flutter 端直接推送时使用） ──
-    // 高德导航方向箭头 icon 映射（AmapAuto SDK）：
-    //   0:←左转  1:↑直行  2:→右转  3:↶左前掉头  4:↰左前  5:↱右前
-    //   6:↶左后  7:↷右后  8:↷调头  9:↑延续  15:★到达  19:↷调头  20:◎环岛
+    // v0.9.8: 高德导航方向箭头 icon 映射（AmapAuto SDK 官方协议）
+    //   0:↑未定义  1:↑直行  2:←左转  3:→右转  4:↖左前方  5:↗右前方
+    //   6:↙左后方  7:↘右后方  8:↶左转掉头  9:↑直行  10:★途经点
+    //   11:◎环岛  12:◎出环岛  13:★服务区  14:★收费站  15:★到达
+    //   16:◎隧道  17:◎环岛(左行)  18:◎出环岛(左行)  19:↷右转掉头  20:↑顺行
     virtual void showArrow(int amapIcon) = 0;
     virtual void showDistance(const char* text) = 0;
     virtual void showSpeed(int speed) = 0;
     virtual void showSpeedLimit(int limit, bool overSpeed) = 0;
     virtual void showRoadName(const char* name) = 0;
-    virtual void showLanes(int count, const int* backIcons) = 0;
+    virtual void showLanes(int count, const int* backIcons, int turnIcon = -1) = 0;
     virtual void showRouteInfo(const char* text) = 0;
     virtual void showIdle() = 0;
 

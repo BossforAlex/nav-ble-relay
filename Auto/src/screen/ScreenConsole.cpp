@@ -67,7 +67,7 @@ void ScreenConsole::showRoadName(const char* name) {
     Serial.printf("[SCREEN] 路名: %s\n", name ? name : "(null)");
 }
 
-void ScreenConsole::showLanes(int count, const int* backIcons) {
+void ScreenConsole::showLanes(int count, const int* backIcons, int /*turnIcon*/) {
     Serial.printf("[SCREEN] 车道: %d 条", count);
     if (backIcons) {
         for (int i = 0; i < count; i++) {

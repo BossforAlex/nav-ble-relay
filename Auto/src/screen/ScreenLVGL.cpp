@@ -5,31 +5,40 @@
 #include <esp_task_wdt.h>
 
 /* ══════════════════════════════════════════════════════════════
- * v0.9.0 — 纯展示层（参照 ui.txt 设计规范）
+ * v0.9.8 — 纯展示层（参照 ui.txt 设计规范）
  *
  * 架构：
  *   ui.c: 静态 UI 框架（创建控件，不包含数据逻辑）
  *   ScreenLVGL: 数据→控件映射层（NavState → lv_label_set_text）
  *   main.cpp: 桥接层（BLE 数据 → NavParser → Screen 方法）
  *
- * 高德导航方向箭头 icon 映射（AmapAuto SDK）：
- *   icon  0: 左转     ←
- *   icon  1: 直行     ↑
- *   icon  2: 右转     →
- *   icon  3: 左前方掉头  ↶
- *   icon  4: 左前方    ↰
- *   icon  5: 右前方    ↱
- *   icon  6: 左后方    ↶
- *   icon  7: 右后方    ↷
- *   icon  8: 调头     ↷
- *   icon  9: 延续直行   ↑
+ * 高德导航方向箭头 icon 映射（AmapAuto SDK 官方协议，v0.9.8 修正）：
+ *   icon  0: 未定义     ↑
+ *   icon  1: 直行       ↑
+ *   icon  2: 左转       ←
+ *   icon  3: 右转       →
+ *   icon  4: 左前方      ↖
+ *   icon  5: 右前方      ↗
+ *   icon  6: 左后方      ↙
+ *   icon  7: 右后方      ↘
+ *   icon  8: 左转掉头    ↶
+ *   icon  9: 直行       ↑
+ *   icon 10: 到达途经点  ★
+ *   icon 11: 进入环岛    ◎
+ *   icon 12: 驶出环岛    ◎
+ *   icon 13: 到达服务区  ★
+ *   icon 14: 到达收费站  ★
  *   icon 15: 到达目的地  ★
- *   icon 19: 调头(旧版) ↷
- *   icon 20: 环岛     ◎
+ *   icon 16: 进入隧道    ◎
+ *   icon 17: 进入环岛(左行) ◎
+ *   icon 18: 驶出环岛(左行) ◎
+ *   icon 19: 右转掉头    ↷
+ *   icon 20: 顺行       ↑
  *
- * 车道 backIcon 映射 (AmapAuto)：
- *   0: 左转    1: 直行    2: 右转
- *   3: 左+直   4: 直+右   6: 调头
+ * 车道 backIcon 映射 (AmapAuto 官方协议，v0.9.8 修正)：
+ *   0: 直行        1: 左转        2: 直行和左转
+ *   3: 右转        4: 直行和右转   5: 左转掉头
+ *   6: 左转和右转   7: 直行和左转和右转
  * ══════════════════════════════════════════════════════════════ */
 
 ScreenLVGL::ScreenLVGL() = default;
@@ -191,21 +200,31 @@ void ScreenLVGL::setBleConnected(bool connected) {
 
 void ScreenLVGL::showArrow(int amapIcon) {
     if (!mInited) return;
-    const char* symbol = "↑";
+    // v0.9.8: 修正为 AmapAuto SDK 官方协议 icon 映射
+    // 参考: amap_protocol.dart iconMap (0=未定义,1=直行,2=左转,3=右转,4=左前方,...)
+    const char* symbol = "↑";  // 默认直行
     switch (amapIcon) {
-        case 0:  symbol = "←";  break;  // 左转
+        case 0:  symbol = "↑";  break;  // 未定义 → 直行
         case 1:  symbol = "↑";  break;  // 直行
-        case 2:  symbol = "→";  break;  // 右转
-        case 3:  symbol = "↶";  break;  // 左前方掉头
-        case 4:  symbol = "↰";  break;  // 左前方
-        case 5:  symbol = "↱";  break;  // 右前方
-        case 6:  symbol = "↶";  break;  // 左后方
-        case 7:  symbol = "↷";  break;  // 右后方
-        case 8:  symbol = "↷";  break;  // 调头
-        case 9:  symbol = "↑";  break;  // 延续直行
+        case 2:  symbol = "←";  break;  // 左转
+        case 3:  symbol = "→";  break;  // 右转
+        case 4:  symbol = "↖";  break;  // 左前方
+        case 5:  symbol = "↗";  break;  // 右前方
+        case 6:  symbol = "↙";  break;  // 左后方
+        case 7:  symbol = "↘";  break;  // 右后方
+        case 8:  symbol = "↶";  break;  // 左转掉头
+        case 9:  symbol = "↑";  break;  // 直行
+        case 10: symbol = "★";  break;  // 到达途经点
+        case 11: symbol = "◎";  break;  // 进入环岛
+        case 12: symbol = "◎";  break;  // 驶出环岛
+        case 13: symbol = "★";  break;  // 到达服务区
+        case 14: symbol = "★";  break;  // 到达收费站
         case 15: symbol = "★";  break;  // 到达目的地
-        case 19: symbol = "↷";  break;  // 调头（旧版）
-        case 20: symbol = "◎";  break;  // 环岛
+        case 16: symbol = "◎";  break;  // 进入隧道
+        case 17: symbol = "◎";  break;  // 进入环岛(左行)
+        case 18: symbol = "◎";  break;  // 驶出环岛(左行)
+        case 19: symbol = "↷";  break;  // 右转掉头
+        case 20: symbol = "↑";  break;  // 顺行
         default: symbol = "↑";  break;
     }
     // v0.9.1: 使用 lv_label_set_text 而非 set_text_static
@@ -251,7 +270,7 @@ void ScreenLVGL::showRoadName(const char* name) {
     }
 }
 
-void ScreenLVGL::showLanes(int count, const int* backIcons) {
+void ScreenLVGL::showLanes(int count, const int* backIcons, int turnIcon) {
     if (!mInited) return;
     lv_obj_clean(ui_LaneContainer);
     if (count <= 0) {
@@ -260,24 +279,60 @@ void ScreenLVGL::showLanes(int count, const int* backIcons) {
     if (count > 8) count = 8;
     lv_obj_clear_flag(ui_LaneContainer, LV_OBJ_FLAG_HIDDEN);
 
+    // v0.9.8: 修正为 AmapAuto SDK 官方协议 backIcon 映射
+    // 参考: amap_protocol.dart laneBackIconMap
+    //   0=直行, 1=左转, 2=直行和左转, 3=右转,
+    //   4=直行和右转, 5=左转掉头, 6=左转和右转, 7=直行和左转和右转
+    //
+    // v0.9.8: 活跃车道判定 —— 根据当前转向 icon 推断推荐车道
+    //   活跃车道高亮显示（亮白），非活跃车道变暗（灰色）
+    auto isLaneActive = [turnIcon](int backIcon) -> bool {
+        if (turnIcon < 0) return true; // 无转向信息时全部显示为活跃
+        switch (turnIcon) {
+            case 1:  case 9:  case 20: // 直行/顺行
+                return backIcon == 0 || backIcon == 2 || backIcon == 4 || backIcon == 7;
+            case 2:  // 左转
+                return backIcon == 1 || backIcon == 2 || backIcon == 6 || backIcon == 7;
+            case 3:  // 右转
+                return backIcon == 3 || backIcon == 4 || backIcon == 6 || backIcon == 7;
+            case 4:  // 左前方
+                return backIcon == 1 || backIcon == 2;
+            case 5:  // 右前方
+                return backIcon == 3 || backIcon == 4;
+            case 8:  case 19: // 左转掉头 / 右转掉头
+                return backIcon == 5;
+            default:
+                return true; // 环岛/服务区等场景全部显示
+        }
+    };
+
     // v0.9.1: 计算每个车道标签的宽度（Flexbox 均分）
     // v0.9.2: 容器从 132px 增大到 137px
     int laneW = (137 - 4) / count;
 
     for (int i = 0; i < count; i++) {
         lv_obj_t* arrow = lv_label_create(ui_LaneContainer);
-        int bi = backIcons ? backIcons[i] : 1;
+        int bi = backIcons ? backIcons[i] : 0;
         const char* sym = "↑";
-        if (bi == 0) sym = "←";
-        else if (bi == 1) sym = "↑";
-        else if (bi == 2) sym = "→";
-        else if (bi == 3) sym = "↰";
-        else if (bi == 4) sym = "↱";
-        else if (bi == 6) sym = "↶";
+        // v0.9.8: 修正 backIcon 映射（匹配 AmapAuto 官方协议）
+        switch (bi) {
+            case 0: sym = "↑";  break;  // 直行
+            case 1: sym = "←";  break;  // 左转
+            case 2: sym = "↖";  break;  // 直行和左转
+            case 3: sym = "→";  break;  // 右转
+            case 4: sym = "↗";  break;  // 直行和右转
+            case 5: sym = "↶";  break;  // 左转掉头
+            case 6: sym = "↰";  break;  // 左转和右转
+            case 7: sym = "↺";  break;  // 直行和左转和右转
+            default: sym = "↑"; break;
+        }
 
         // v0.9.1: 使用 lv_label_set_text 确保字体正确渲染
         lv_label_set_text(arrow, sym);
-        lv_obj_set_style_text_color(arrow, lv_color_white(), 0);
+        // v0.9.8: 活跃车道高亮亮白，非活跃车道变暗灰
+        bool active = isLaneActive(bi);
+        lv_color_t color = active ? lv_color_white() : lv_color_hex(0x555555);
+        lv_obj_set_style_text_color(arrow, color, 0);
         lv_obj_set_style_text_font(arrow, &arrows_20, 0);
         lv_obj_set_style_text_align(arrow, LV_TEXT_ALIGN_CENTER, 0);
         // v0.9.1: 设置固定宽度防止文字被裁剪
@@ -387,7 +442,7 @@ void ScreenLVGL::applyNavState() {
         backIcons[i] = (i < mState.driveWay.laneCount)
                        ? mState.driveWay.lanes[i].backIcon : 1;
     }
-    showLanes(laneCount, backIcons);
+    showLanes(laneCount, backIcons, mState.guide.icon);
 
     // 全程信息
     char routeBuf[64];

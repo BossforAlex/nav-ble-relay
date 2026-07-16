@@ -160,6 +160,15 @@ static void onBleData(const uint8_t* data, size_t len) {
             return;
         }
     } else {
+        // ── v0.9.8: 非分片消息到达时，重置分片状态 ──
+        // 防止上一轮分片未完成（如 Flutter 端写入失败导致丢片）导致
+        // 后续新分片消息被拒绝，ESP32 无法接收真实导航数据。
+        portENTER_CRITICAL(&sChunkMux);
+        sChunkTotal = 0;
+        sChunkReceived = 0;
+        sChunkLen = 0;
+        portEXIT_CRITICAL(&sChunkMux);
+
         // 非分片消息：直接拷贝到 sJsonBuffer
         size_t copyLen = len < sizeof(sJsonBuffer) - 1 ? len : sizeof(sJsonBuffer) - 1;
         memcpy(sJsonBuffer, data, copyLen);
