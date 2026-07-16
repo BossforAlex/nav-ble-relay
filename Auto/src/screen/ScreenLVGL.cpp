@@ -274,20 +274,19 @@ void ScreenLVGL::showLanes(int count, const int* backIcons, int turnIcon) {
     if (!mInited) return;
     lv_obj_clean(ui_LaneContainer);
     if (count <= 0) {
-        count = 4;
+        lv_obj_add_flag(ui_LaneContainer, LV_OBJ_FLAG_HIDDEN);
+        return;
     }
     if (count > 8) count = 8;
     lv_obj_clear_flag(ui_LaneContainer, LV_OBJ_FLAG_HIDDEN);
 
-    // v0.9.8: 修正为 AmapAuto SDK 官方协议 backIcon 映射
-    // 参考: amap_protocol.dart laneBackIconMap
+    // v0.9.9: 修正为 AmapAuto SDK 官方协议 backIcon 映射
     //   0=直行, 1=左转, 2=直行和左转, 3=右转,
     //   4=直行和右转, 5=左转掉头, 6=左转和右转, 7=直行和左转和右转
     //
-    // v0.9.8: 活跃车道判定 —— 根据当前转向 icon 推断推荐车道
-    //   活跃车道高亮显示（亮白），非活跃车道变暗（灰色）
+    // v0.9.9: 活跃车道判定 —— 根据当前转向 icon 推断推荐车道
     auto isLaneActive = [turnIcon](int backIcon) -> bool {
-        if (turnIcon < 0) return true; // 无转向信息时全部显示为活跃
+        if (turnIcon < 0) return true;
         switch (turnIcon) {
             case 1:  case 9:  case 20: // 直行/顺行
                 return backIcon == 0 || backIcon == 2 || backIcon == 4 || backIcon == 7;
@@ -302,19 +301,33 @@ void ScreenLVGL::showLanes(int count, const int* backIcons, int turnIcon) {
             case 8:  case 19: // 左转掉头 / 右转掉头
                 return backIcon == 5;
             default:
-                return true; // 环岛/服务区等场景全部显示
+                return true;
         }
     };
 
-    // v0.9.1: 计算每个车道标签的宽度（Flexbox 均分）
-    // v0.9.2: 容器从 132px 增大到 137px
-    int laneW = (137 - 4) / count;
+    // v0.9.9: 车道指示器宽度（父容器宽度 / count，留间距）
+    int laneW = (lv_obj_get_width(ui_LaneContainer) - 4) / count;
+    if (laneW < 20) laneW = 20;
+    if (laneW > 40) laneW = 40;
 
     for (int i = 0; i < count; i++) {
-        lv_obj_t* arrow = lv_label_create(ui_LaneContainer);
-        int bi = backIcons ? backIcons[i] : 0;
+        int bi = (backIcons && i < count) ? backIcons[i] : 0;
+        bool active = isLaneActive(bi);
+
+        // v0.9.9: 创建车道容器（带背景色区分活跃/非活跃）
+        lv_obj_t* lane = lv_obj_create(ui_LaneContainer);
+        lv_obj_set_size(lane, laneW, 24);
+        lv_obj_set_style_pad_all(lane, 0, 0);
+        lv_obj_set_style_radius(lane, 4, 0);
+        lv_obj_set_style_border_width(lane, 0, 0);
+        // 活跃车道：亮蓝填充，非活跃：暗灰填充
+        lv_color_t bgColor = active ? lv_color_hex(0x1565C0) : lv_color_hex(0x333333);
+        lv_obj_set_style_bg_color(lane, bgColor, 0);
+        lv_obj_set_style_bg_opa(lane, LV_OPA_COVER, 0);
+
+        // 方向箭头标签
+        lv_obj_t* arrow = lv_label_create(lane);
         const char* sym = "↑";
-        // v0.9.8: 修正 backIcon 映射（匹配 AmapAuto 官方协议）
         switch (bi) {
             case 0: sym = "↑";  break;  // 直行
             case 1: sym = "←";  break;  // 左转
@@ -324,20 +337,16 @@ void ScreenLVGL::showLanes(int count, const int* backIcons, int turnIcon) {
             case 5: sym = "↶";  break;  // 左转掉头
             case 6: sym = "↰";  break;  // 左转和右转
             case 7: sym = "↺";  break;  // 直行和左转和右转
-            default: sym = "↑"; break;
+            default: sym = "↑";  break;
         }
-
-        // v0.9.1: 使用 lv_label_set_text 确保字体正确渲染
         lv_label_set_text(arrow, sym);
-        // v0.9.8: 活跃车道高亮亮白，非活跃车道变暗灰
-        bool active = isLaneActive(bi);
-        lv_color_t color = active ? lv_color_white() : lv_color_hex(0x555555);
-        lv_obj_set_style_text_color(arrow, color, 0);
         lv_obj_set_style_text_font(arrow, &arrows_20, 0);
         lv_obj_set_style_text_align(arrow, LV_TEXT_ALIGN_CENTER, 0);
-        // v0.9.1: 设置固定宽度防止文字被裁剪
-        lv_obj_set_width(arrow, laneW > 20 ? laneW : 20);
-        lv_obj_set_height(arrow, 24);
+        lv_obj_center(arrow);
+
+        // 文字颜色：活跃亮白，非活跃灰色
+        lv_color_t textColor = active ? lv_color_white() : lv_color_hex(0x888888);
+        lv_obj_set_style_text_color(arrow, textColor, 0);
     }
 }
 
@@ -433,14 +442,30 @@ void ScreenLVGL::applyNavState() {
     bool over = mState.guide.curSpeed > mState.guide.limitedSpeed;
     showSpeedLimit(mState.guide.limitedSpeed, over);
 
-    // 车道
-    int laneCount = mState.driveWay.enabled ? mState.driveWay.laneCount : 0;
-    if (laneCount == 0) laneCount = 4;
-    if (laneCount > 8) laneCount = 8;
+    // v0.9.9: 车道 —— 使用 drive_way_size 作为总车道数
+    // drive_way_size 是路段总车道数（如 4 车道），
+    // drive_way_info 数组提供每个车道的方向指引
+    int laneCount = 0;
+    if (mState.driveWay.enabled) {
+        // 优先使用 drive_way_size（路段总车道数）
+        laneCount = mState.driveWay.size > 0
+                    ? mState.driveWay.size
+                    : mState.driveWay.laneCount;
+    }
     int backIcons[8];
-    for (int i = 0; i < laneCount; i++) {
-        backIcons[i] = (i < mState.driveWay.laneCount)
-                       ? mState.driveWay.lanes[i].backIcon : 1;
+    if (laneCount > 0) {
+        if (laneCount > 8) laneCount = 8;
+        for (int i = 0; i < laneCount; i++) {
+            // 从已解析的 lanes 数组中查找对应车道的数据
+            backIcons[i] = -1;
+            for (int j = 0; j < mState.driveWay.laneCount; j++) {
+                if (mState.driveWay.lanes[j].number == i) {
+                    backIcons[i] = mState.driveWay.lanes[j].backIcon;
+                    break;
+                }
+            }
+            if (backIcons[i] < 0) backIcons[i] = 0; // 无数据时默认直行
+        }
     }
     showLanes(laneCount, backIcons, mState.guide.icon);
 

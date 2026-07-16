@@ -143,7 +143,7 @@ bool BleServer::begin(const char* deviceName) {
         BleUUID::CHAR_POLL,
         NIMBLE_PROPERTY::NOTIFY
     );
-    chrPoll->setValue("");  // 初始为空字符串，每次 indicate() 发 ""
+    chrPoll->setValue("0");  // v0.9.9: 初始非空值，确保 lastValueStream 首次触发
     // 不需要 setCallbacks（手机只读不写）
 
     // 启动服务
@@ -270,7 +270,14 @@ void BleServer::loop() {
     const uint32_t lastPoll = _lastPollSentMs.load();
     if (nowMs - lastPoll < interval) return;
 
-    // 发送 notify（非阻塞，不等待 ACK）
+    // v0.9.9: 发送毫秒时间戳作为 poll 值，而非空字符串
+    // 原因：flutter_blue_plus 的 lastValueStream 是 ValueStream，
+    // 当值未变化（始终为空字符串）时不发射后续事件，
+    // 导致 Flutter 端 poll 回调只触发一次，后续永远收不到数据。
+    // 发送变化的值确保每次 poll 都能触发 Flutter 端的 _onPollReceived。
+    char pollVal[16];
+    snprintf(pollVal, sizeof(pollVal), "%lu", (unsigned long)nowMs);
+    chrPoll->setValue(pollVal);
     chrPoll->notify();
     
     _lastPollSentMs.store(nowMs);

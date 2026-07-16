@@ -477,13 +477,14 @@ class BleService extends ChangeNotifier {
     _safeNotify();
 
     if (_isOurDevice && _chrPoll != null) {
-      // 订阅 CHAR_POLL 的 indicate —— 收到 ESP32 的 indicate 后立刻 flush 缓存
-      // 注意：flutter_blue_plus 的 setNotifyValue(true) 同时支持 notify + indicate
+      // v0.9.9: 改用 onValueReceived 替代 lastValueStream
+      // 原因：lastValueStream 是 ValueStream，当值未变化时不发射事件，
+      // 导致 ESP32 发送的重复 poll 值被丢弃，Flutter 端永远收不到后续 poll
       try {
         _pollSub?.cancel();
-        _pollSub = _chrPoll!.lastValueStream.listen(_onPollReceived);
+        _pollSub = _chrPoll!.onValueReceived.listen(_onPollReceived);
         await _chrPoll!.setNotifyValue(true);
-        debugPrint('[BLE] ✓ 已订阅 CHAR_POLL indicate');
+        debugPrint('[BLE] ✓ 已订阅 CHAR_POLL notify (onValueReceived)');
       } catch (e) {
         debugPrint('[BLE] ✗ 订阅 CHAR_POLL 失败: $e');
       }

@@ -4,7 +4,13 @@
 #include <string.h>
 
 /* ══════════════════════════════════════════════════════════════
- * v0.9.2 — 静态 UI 框架（TFT 屏幕优化版）
+ * v0.9.9 — 静态 UI 框架（TFT 屏幕优化版）
+ *
+ * v0.9.9 优化：
+ *   - 速度字体 48→36px，减少占用空间
+ *   - 调整三栏宽度：左 120px / 中 120px / 右 80px
+ *   - 车道栏增大至填充中间面板
+ *   - 调整元素位置，减少空白，更紧凑合理
  *
  * v0.9.2 优化：
  *   - 纯黑背景 #000000（TFT 不漏光，对比度最大）
@@ -120,10 +126,10 @@ static void init_ui_styles(void) {
     lv_style_init(&style_text_light);
     lv_style_set_text_color(&style_text_light, lv_color_hex(0xCCCCCC));
 
-    // 超大时速字体（48px Montserrat，纯白）
+    // v0.9.9: 时速字体 36px（原 48px 过大，优化后节省 30px 垂直空间）
     lv_style_init(&style_text_huge);
     lv_style_set_text_color(&style_text_huge, lv_color_white());
-    lv_style_set_text_font(&style_text_huge, &lv_font_montserrat_48);
+    lv_style_set_text_font(&style_text_huge, &lv_font_montserrat_36);
 
     // v0.9.2: 车道指引条（明亮蓝色圆角背景，原 0x1565C0 太暗）
     lv_style_init(&style_lane_bar);
@@ -151,14 +157,15 @@ static void init_ui_styles(void) {
 }
 
 /* ══════════════════════════════════════════════════════════════
- * 左侧导航面板 (105px) —— 路名 / 转向箭头 / 剩余距离
- * v0.9.2: 面板紧贴左边缘，无间隙
+ * v0.9.9: 左侧导航面板 (120px) —— 路名 / 转向箭头 / 剩余距离
+ * 面板宽度从 105 增至 120，路名/箭头/距离布局更宽松
+ * 箭头高度 100→80px，距离上移，减少空白
  * ══════════════════════════════════════════════════════════════ */
 
 static void create_left_nav_panel(void) {
     nav_panel = lv_obj_create(ui_Screen1);
     lv_obj_add_style(nav_panel, &style_panel, 0);
-    lv_obj_set_size(nav_panel, 105, 240);
+    lv_obj_set_size(nav_panel, 120, 240);
     lv_obj_set_pos(nav_panel, 0, 0);
     lv_obj_clear_flag(nav_panel, LV_OBJ_FLAG_SCROLLABLE);
 
@@ -167,84 +174,86 @@ static void create_left_nav_panel(void) {
     lv_obj_add_style(ui_RoadNameLabel, &style_text_white, 0);
     lv_obj_set_style_text_font(ui_RoadNameLabel, &lv_font_montserrat_20, 0);
     lv_obj_set_style_text_align(ui_RoadNameLabel, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_size(ui_RoadNameLabel, 105, 24);
-    lv_obj_set_pos(ui_RoadNameLabel, 0, 8);
+    lv_obj_set_size(ui_RoadNameLabel, 120, 24);
+    lv_obj_set_pos(ui_RoadNameLabel, 0, 4);
     lv_label_set_long_mode(ui_RoadNameLabel, LV_LABEL_LONG_SCROLL_CIRCULAR);
 
-    // 转向箭头（中央，arrows_48 字体，含高德全 icon 映射字符）
+    // v0.9.9: 转向箭头（中央，48px arrows 字体，高度 100→80）
     ui_TurnArrow = lv_label_create(nav_panel);
     lv_obj_set_style_text_color(ui_TurnArrow, lv_color_white(), 0);
     lv_obj_set_style_text_font(ui_TurnArrow, &arrows_48, 0);
     lv_obj_set_style_text_align(ui_TurnArrow, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_size(ui_TurnArrow, 105, 100);
-    lv_obj_set_pos(ui_TurnArrow, 0, 60);
-    // v0.9.1: 确保 label 内容居中于自身区域
+    lv_obj_set_size(ui_TurnArrow, 120, 80);
+    lv_obj_set_pos(ui_TurnArrow, 0, 35);
     lv_obj_align(ui_TurnArrow, LV_ALIGN_CENTER, 0, 0);
 
-    // 剩余距离（底部居中，24px 高亮字体）
+    // v0.9.9: 剩余距离（位置 y=195→y=120，紧跟箭头下方）
     ui_DistanceLabel = lv_label_create(nav_panel);
     lv_obj_set_style_text_color(ui_DistanceLabel, lv_color_white(), 0);
     lv_obj_set_style_text_font(ui_DistanceLabel, &lv_font_montserrat_24, 0);
     lv_obj_set_style_text_align(ui_DistanceLabel, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_size(ui_DistanceLabel, 105, 32);
-    lv_obj_set_pos(ui_DistanceLabel, 0, 195);
+    lv_obj_set_size(ui_DistanceLabel, 120, 32);
+    lv_obj_set_pos(ui_DistanceLabel, 0, 120);
 }
 
 /* ══════════════════════════════════════════════════════════════
- * 中间时速面板 (145px) —— 车道指引 / 大字时速 / km/h
- * v0.9.2: 紧贴左侧面板，无间隙
+ * v0.9.9: 中间时速面板 (120px) —— 车道指引 / 大字时速 / km/h
+ * 面板宽度 145→120px，车速字体 48→36px，高度 100→70px
+ * 车道栏填满面板宽度，km/h 紧跟车速
  * ══════════════════════════════════════════════════════════════ */
 
 static void create_center_speed_panel(void) {
     speed_panel = lv_obj_create(ui_Screen1);
     lv_obj_add_style(speed_panel, &style_panel, 0);
-    lv_obj_set_size(speed_panel, 145, 240);
-    lv_obj_set_pos(speed_panel, 105, 0);
+    lv_obj_set_size(speed_panel, 120, 240);
+    lv_obj_set_pos(speed_panel, 120, 0);
     lv_obj_clear_flag(speed_panel, LV_OBJ_FLAG_SCROLLABLE);
 
-    // 车道指引条（顶部，Flexbox 弹性布局自动均匀排列）
+    // v0.9.9: 车道指引条（顶部，填满面板宽度，Flexbox 弹性布局）
     ui_LaneContainer = lv_obj_create(speed_panel);
     lv_obj_add_style(ui_LaneContainer, &style_lane_bar, 0);
-    lv_obj_set_size(ui_LaneContainer, 137, 28);
-    lv_obj_set_pos(ui_LaneContainer, 4, 8);
+    lv_obj_set_size(ui_LaneContainer, 114, 28);
+    lv_obj_set_pos(ui_LaneContainer, 3, 4);
     lv_obj_clear_flag(ui_LaneContainer, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_set_flex_flow(ui_LaneContainer, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(ui_LaneContainer,
         LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
-    // 大字时速数字（中央，48px Montserrat 纯白）
+    // v0.9.9: 时速数字（36px Montserrat，高度 100→70）
     ui_SpeedLabel = lv_label_create(speed_panel);
     lv_label_set_text_static(ui_SpeedLabel, "0");
     lv_obj_add_style(ui_SpeedLabel, &style_text_huge, 0);
     lv_obj_set_style_text_align(ui_SpeedLabel, LV_TEXT_ALIGN_CENTER, 0);
-    lv_obj_set_size(ui_SpeedLabel, 145, 100);
-    lv_obj_set_pos(ui_SpeedLabel, 0, 55);
+    lv_obj_set_size(ui_SpeedLabel, 120, 70);
+    lv_obj_set_pos(ui_SpeedLabel, 0, 40);
 
-    // v0.9.2: 时速单位 "km/h"（高对比度亮灰，原 0xB0B0B0 → 0xCCCCCC）
+    // v0.9.9: 时速单位 "km/h"（紧跟车速下方，y=155→110）
     ui_SpeedUnitLabel = lv_label_create(speed_panel);
     lv_label_set_text_static(ui_SpeedUnitLabel, "km/h");
     lv_obj_set_style_text_color(ui_SpeedUnitLabel, lv_color_hex(0xCCCCCC), 0);
     lv_obj_set_style_text_font(ui_SpeedUnitLabel, &lv_font_montserrat_14, 0);
-    lv_obj_set_pos(ui_SpeedUnitLabel, 52, 155);
+    lv_obj_set_style_text_align(ui_SpeedUnitLabel, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_set_size(ui_SpeedUnitLabel, 120, 20);
+    lv_obj_set_pos(ui_SpeedUnitLabel, 0, 110);
 }
 
 /* ══════════════════════════════════════════════════════════════
- * 右侧状态面板 (70px) —— 限速红圈 / 连接状态图标
- * v0.9.2: 紧贴中间面板，无间隙
+ * v0.9.9: 右侧状态面板 (80px) —— 限速红圈 / 线路信息 / 连接图标
+ * 面板宽度 70→80px，显示更宽松
  * ══════════════════════════════════════════════════════════════ */
 
 static void create_right_status_panel(void) {
     status_panel = lv_obj_create(ui_Screen1);
     lv_obj_add_style(status_panel, &style_panel, 0);
-    lv_obj_set_size(status_panel, 70, 240);
-    lv_obj_set_pos(status_panel, 250, 0);
+    lv_obj_set_size(status_panel, 80, 240);
+    lv_obj_set_pos(status_panel, 240, 0);
     lv_obj_clear_flag(status_panel, LV_OBJ_FLAG_SCROLLABLE);
 
     // 限速圆圈（顶部，白底红圈黑字，50x50 正圆）
     ui_LimitSign = lv_obj_create(status_panel);
     lv_obj_add_style(ui_LimitSign, &style_limit_circle, 0);
     lv_obj_set_size(ui_LimitSign, 50, 50);
-    lv_obj_set_pos(ui_LimitSign, 10, 10);
+    lv_obj_set_pos(ui_LimitSign, 15, 10);
     lv_obj_clear_flag(ui_LimitSign, LV_OBJ_FLAG_SCROLLABLE);
 
     ui_LimitLabel = lv_label_create(ui_LimitSign);
@@ -252,16 +261,16 @@ static void create_right_status_panel(void) {
     lv_obj_center(ui_LimitLabel);
     lv_obj_set_style_text_font(ui_LimitLabel, &lv_font_montserrat_20, 0);
 
-    // 链条连接图标（底部居中，28x16 自绘像素图）
+    // v0.9.9: 链条连接图标（限速下方，y=175→70）
     ui_ChainIcon = lv_img_create(status_panel);
-    lv_obj_set_pos(ui_ChainIcon, 21, 175);
+    lv_obj_set_pos(ui_ChainIcon, 26, 75);
     lv_obj_set_size(ui_ChainIcon, CHAIN_W, CHAIN_H);
     ui_refresh_chain_icon();
 }
 
 /* ══════════════════════════════════════════════════════════════
- * 底部：剩余全程信息（横跨左下角）
- * v0.9.2: 提高对比度，原 0x888888 → 0xAAAAAA
+ * 底部：剩余全程信息（左下角，y=225→140，上移减少空白）
+ * v0.9.9: 提高位置，y=225→140，紧贴速度区下方
  * ══════════════════════════════════════════════════════════════ */
 
 static void create_bottom_route_info(void) {
@@ -269,28 +278,28 @@ static void create_bottom_route_info(void) {
     lv_label_set_text_static(ui_RouteInfoLabel, "");
     lv_obj_set_style_text_color(ui_RouteInfoLabel, lv_color_hex(0xAAAAAA), 0);
     lv_obj_set_style_text_font(ui_RouteInfoLabel, &lv_font_montserrat_14, 0);
-    lv_obj_set_pos(ui_RouteInfoLabel, 5, 225);
-    lv_obj_set_size(ui_RouteInfoLabel, 245, 16);
+    lv_obj_set_pos(ui_RouteInfoLabel, 5, 140);
+    lv_obj_set_size(ui_RouteInfoLabel, 235, 20);
 }
 
 /* ══════════════════════════════════════════════════════════════
- * v0.9.2: 面板分隔线（1px 竖线，消除割裂感的同时保持区域可辨）
+ * v0.9.9: 面板分隔线 —— 匹配新面板宽度 (120/120/80)
  * ══════════════════════════════════════════════════════════════ */
 
 static void create_separators(void) {
-    // 分隔线 1：左侧导航 ↔ 中间时速（x=105）
+    // 分隔线 1：左侧导航 ↔ 中间时速（x=120）
     lv_obj_t* sep1 = lv_obj_create(ui_Screen1);
     lv_obj_set_size(sep1, 1, 240);
-    lv_obj_set_pos(sep1, 105, 0);
+    lv_obj_set_pos(sep1, 120, 0);
     lv_obj_set_style_bg_color(sep1, lv_color_hex(0x1A1A1A), 0);
     lv_obj_set_style_bg_opa(sep1, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(sep1, 0, 0);
     lv_obj_clear_flag(sep1, LV_OBJ_FLAG_SCROLLABLE);
 
-    // 分隔线 2：中间时速 ↔ 右侧状态（x=250）
+    // 分隔线 2：中间时速 ↔ 右侧状态（x=240）
     lv_obj_t* sep2 = lv_obj_create(ui_Screen1);
     lv_obj_set_size(sep2, 1, 240);
-    lv_obj_set_pos(sep2, 250, 0);
+    lv_obj_set_pos(sep2, 240, 0);
     lv_obj_set_style_bg_color(sep2, lv_color_hex(0x1A1A1A), 0);
     lv_obj_set_style_bg_opa(sep2, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(sep2, 0, 0);
