@@ -1,9 +1,7 @@
 /// 主界面（导航转发页）
 ///
-/// 布局：顶部状态卡片 → 中间导航预览 → 详细数据卡片
-/// 启停服务通过右下角 FAB 控制，启动后自动跳转到"发现设备"页
-///
-/// 设备列表已迁移到独立的"发现设备"页面（DevicesScreen）
+/// 布局：顶部状态卡片 → 导航预览 → 详细数据卡片
+/// 启停通过右下角 FAB 控制，启动后自动跳转"发现设备"页
 library;
 
 import 'package:flutter/material.dart';
@@ -26,9 +24,6 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _relayWired = false;
-  /// v0.6.4: 防止 BLE 写入并发 + 数据不丢失。
-  /// _relaying=true 时新数据不丢弃，而是设 _pendingRelay=true，
-  /// 当前 relay 完成后自动处理待发送数据。
   bool _relaying = false;
   bool _pendingRelay = false;
 
@@ -52,7 +47,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  /// 绑定中继：广播数据变化时转发到 BLE
   void _wireRelay() {
     if (_relayWired) return;
     final broadcast = context.read<BroadcastService>();
@@ -60,14 +54,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _relayWired = true;
   }
 
-  /// v0.6.4 修复：async + await 保证 BLE 按序到达，同时用 _pendingRelay
-  /// 标记避免高频导航数据在 relay 期间被丢弃。
-  ///
-  /// 发送顺序：先 state（设置导航状态）→ 再 guide（填充数据），
-  /// 确保 ESP32 在同一帧内拿到 mapState+guide 两个条件。
   Future<void> _relayToBle(BroadcastService broadcast) async {
     if (!mounted) return;
-    // v0.6.4: 不丢弃数据，标记 pending 等当前 relay 完成后处理
     if (_relaying) {
       _pendingRelay = true;
       return;
@@ -104,12 +92,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         broadcast.relayCount++;
       }
       broadcast.lastRelayAt = DateTime.now();
-      // 不调用 broadcast.notifyListeners()，避免 self-trigger 无限循环。
-      // UI 更新由 BroadcastService 自身数据变更时触发。
     } finally {
       _relaying = false;
     }
-    // v0.6.4: relay 期间有新的导航数据到达，立即处理
     if (_pendingRelay && mounted) {
       _relayToBle(context.read<BroadcastService>());
     }
@@ -120,8 +105,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final broadcast = context.read<BroadcastService>();
     await broadcast.start();
     await ble.start();
-    // 启动后自动跳转到"发现设备"页，让用户能立即看到扫描到的 ESP32
-    // 并点击连接（用户反馈：启动时蓝牙与广播读取的 bug 修复）
     if (!mounted) return;
     final navState = context.findAncestorStateOfType<MainNavigationState>();
     navState?.switchToTab(1);
@@ -152,13 +135,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  /// v0.5.8: BLE 直连测试 — 发一条测试 JSON 到 ESP32，验证 BLE 写入通道
   Future<void> _bleTest() async {
     final ble = context.read<BleService>();
     if (!ble.isConnected) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('BLE 未连接，无法测试'), duration: Duration(seconds: 2)),
+        const SnackBar(
+          content: Text('BLE 未连接，无法测试'),
+          duration: Duration(seconds: 2),
+        ),
       );
       return;
     }
@@ -176,7 +161,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  /// v0.5.8: 模拟导航广播 — 绕过 Android 原生层，直接生成 180km/h 导航数据
   void _simulateNav() {
     context.read<BroadcastService>().simulateNavigation();
     if (!mounted) return;
@@ -192,56 +176,76 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final ble = context.watch<BleService>();
     final running = ble.isRunning;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('导航转发'),
-      ),
+      appBar: AppBar(title: const Text('导航转发')),
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
           children: [
-            // 顶部状态卡片
             const StatusCard(),
             const SizedBox(height: 16),
-            // 中间导航预览
             const NavPreview(),
             const SizedBox(height: 16),
-            // 详细数据卡片
             const _DetailCards(),
             if (running) ...[
               const SizedBox(height: 16),
-              // v0.5.8: 诊断按钮组
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _bleTest,
-                      icon: const Icon(Icons.bluetooth_connected, size: 18),
-                      label: const Text('BLE 测试'),
-                    ),
+              // 诊断工具卡片
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.bug_report_outlined,
+                            color: colorScheme.onSurfaceVariant, size: 18),
+                          const SizedBox(width: 8),
+                          Text('诊断工具',
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: _bleTest,
+                              icon: const Icon(Icons.bluetooth_connected, size: 16),
+                              label: const Text('BLE 测试'),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: _simulateNav,
+                              icon: const Icon(Icons.speed, size: 16),
+                              label: const Text('模拟导航'),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      OutlinedButton.icon(
+                        onPressed: _selfTest,
+                        icon: const Icon(Icons.bug_report_outlined),
+                        label: const Text('测试广播'),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _simulateNav,
-                      icon: const Icon(Icons.speed, size: 18),
-                      label: const Text('模拟导航'),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              OutlinedButton.icon(
-                onPressed: _selfTest,
-                icon: const Icon(Icons.bug_report_outlined),
-                label: const Text('测试广播'),
+                ),
               ),
             ],
           ],
         ),
       ),
-      // 启停服务移到右下角悬浮按钮
       floatingActionButton: Column(
         mainAxisAlignment: MainAxisAlignment.end,
         crossAxisAlignment: CrossAxisAlignment.end,
@@ -252,8 +256,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               onPressed: _stop,
               icon: const Icon(Icons.stop_rounded),
               label: const Text('停止'),
-              backgroundColor: Theme.of(context).colorScheme.errorContainer,
-              foregroundColor: Theme.of(context).colorScheme.onErrorContainer,
+              backgroundColor: colorScheme.errorContainer,
+              foregroundColor: colorScheme.onErrorContainer,
             ),
           ] else ...[
             FloatingActionButton.extended(
@@ -261,8 +265,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               onPressed: _start,
               icon: const Icon(Icons.play_arrow_rounded),
               label: const Text('启动服务'),
-              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-              foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+              backgroundColor: colorScheme.primaryContainer,
+              foregroundColor: colorScheme.onPrimaryContainer,
             ),
           ],
         ],
@@ -285,8 +289,8 @@ class _DetailCards extends StatelessWidget {
               title: '导航状态',
               icon: Icons.navigation_outlined,
               rows: [
-                _kv('状态', broadcast.mapStateText),
-                _kv('路口图', broadcast.crossMap ?? '—'),
+                _RowData('状态', broadcast.mapStateText),
+                _RowData('路口图', broadcast.crossMap ?? '—'),
               ],
             ),
             const SizedBox(height: 12),
@@ -302,8 +306,6 @@ class _DetailCards extends StatelessWidget {
       },
     );
   }
-
-  _RowData _kv(String label, String value) => _RowData(label, value);
 }
 
 class _RowData {
@@ -338,8 +340,7 @@ class _DataSection extends StatelessWidget {
               children: [
                 Icon(icon, size: 18, color: colorScheme.primary),
                 const SizedBox(width: 8),
-                Text(
-                  title,
+                Text(title,
                   style: theme.textTheme.titleSmall?.copyWith(
                     color: colorScheme.onSurfaceVariant,
                     fontWeight: FontWeight.w600,
@@ -374,8 +375,7 @@ class _KVRow extends StatelessWidget {
         children: [
           Expanded(
             flex: 2,
-            child: Text(
-              label,
+            child: Text(label,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -383,8 +383,7 @@ class _KVRow extends StatelessWidget {
           ),
           Expanded(
             flex: 3,
-            child: Text(
-              value,
+            child: Text(value,
               textAlign: TextAlign.right,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurface,

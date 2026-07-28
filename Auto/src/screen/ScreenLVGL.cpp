@@ -310,48 +310,46 @@ void ScreenLVGL::showLanes(int count, const int* backIcons, int turnIcon) {
     };
 
     // 车道指示器宽度：支持最多 8 车道，避免小屏溢出
-    int laneW = (lv_obj_get_width(ui_LaneContainer) - 4) / count;
-    if (laneW < 10) laneW = 10;
-    if (laneW > 28) laneW = 28;
+        int laneW = (lv_obj_get_width(ui_LaneContainer) - 4) / count;
+        if (laneW < 10) laneW = 10;
+        if (laneW > 28) laneW = 28;
 
-    for (int i = 0; i < count; i++) {
-        int bi = (backIcons && i < count) ? backIcons[i] : 0;
-        bool active = isLaneActive(bi);
+        for (int i = 0; i < count; i++) {
+            int bi = (backIcons && i < count) ? backIcons[i] : 0;
+            bool active = isLaneActive(bi);
 
-        // v0.9.9: 创建车道容器（带背景色区分活跃/非活跃）
-        lv_obj_t* lane = lv_obj_create(ui_LaneContainer);
-        lv_obj_set_size(lane, laneW, 24);
-        lv_obj_set_style_pad_all(lane, 0, 0);
-        lv_obj_set_style_radius(lane, 4, 0);
-        lv_obj_set_style_border_width(lane, 0, 0);
-        // 活跃车道：高对比蓝；非活跃：低亮度灰蓝
-        lv_color_t bgColor = active ? lv_color_hex(0x0288D1) : lv_color_hex(0x263238);
-        lv_obj_set_style_bg_color(lane, bgColor, 0);
-        lv_obj_set_style_bg_opa(lane, LV_OPA_COVER, 0);
+            lv_obj_t* lane = lv_obj_create(ui_LaneContainer);
+            lv_obj_set_size(lane, laneW, 24);
+            lv_obj_set_style_pad_all(lane, 0, 0);
+            lv_obj_set_style_radius(lane, 5, 0);
+            lv_obj_set_style_border_width(lane, 0, 0);
+            // 活跃车道：电光蓝；非活跃：深灰蓝
+            lv_color_t bgColor = active ? lv_color_hex(0x4FC3F7) : lv_color_hex(0x1A2330);
+            lv_obj_set_style_bg_color(lane, bgColor, 0);
+            lv_obj_set_style_bg_opa(lane, LV_OPA_COVER, 0);
 
-        // 方向箭头标签
-        lv_obj_t* arrow = lv_label_create(lane);
-        const char* sym = "↑";
-        switch (bi) {
-            case 0: sym = "↑";  break;  // 直行
-            case 1: sym = "←";  break;  // 左转
-            case 2: sym = "↖";  break;  // 直行和左转
-            case 3: sym = "→";  break;  // 右转
-            case 4: sym = "↗";  break;  // 直行和右转
-            case 5: sym = "↶";  break;  // 左转掉头
-            case 6: sym = "↰";  break;  // 左转和右转
-            case 7: sym = "↺";  break;  // 直行和左转和右转
-            default: sym = "↑";  break;
+            lv_obj_t* arrow = lv_label_create(lane);
+            const char* sym = "↑";
+            switch (bi) {
+                case 0: sym = "↑";  break;
+                case 1: sym = "←";  break;
+                case 2: sym = "↖";  break;
+                case 3: sym = "→";  break;
+                case 4: sym = "↗";  break;
+                case 5: sym = "↶";  break;
+                case 6: sym = "↰";  break;
+                case 7: sym = "↺";  break;
+                default: sym = "↑";  break;
+            }
+            lv_label_set_text(arrow, sym);
+            lv_obj_set_style_text_font(arrow, &arrows_20, 0);
+            lv_obj_set_style_text_align(arrow, LV_TEXT_ALIGN_CENTER, 0);
+            lv_obj_center(arrow);
+
+            // 活跃车道：纯白；非活跃：暗灰蓝
+            lv_color_t textColor = active ? lv_color_white() : lv_color_hex(0x607D8B);
+            lv_obj_set_style_text_color(arrow, textColor, 0);
         }
-        lv_label_set_text(arrow, sym);
-        lv_obj_set_style_text_font(arrow, &arrows_20, 0);
-        lv_obj_set_style_text_align(arrow, LV_TEXT_ALIGN_CENTER, 0);
-        lv_obj_center(arrow);
-
-        // 文字颜色：活跃亮白，非活跃仍保持可读
-        lv_color_t textColor = active ? lv_color_white() : lv_color_hex(0x90A4AE);
-        lv_obj_set_style_text_color(arrow, textColor, 0);
-    }
 }
 
 void ScreenLVGL::showRouteInfo(const char* text) {

@@ -1,4 +1,7 @@
 /// 顶部状态卡片：BLE 连接状态 + 设备名 + 广播接收状态
+///
+/// Cockpit-style status bar with animated status dot, connection info,
+/// and relay diagnostics.
 library;
 
 import 'package:flutter/material.dart';
@@ -20,11 +23,10 @@ class StatusCard extends StatelessWidget {
       builder: (context, ble, broadcast, _) {
         final running = ble.isRunning;
         final connected = ble.isConnected;
-        final successColor = colorScheme.primary;
-        final pendingColor = colorScheme.tertiary;
+        final successColor = colorScheme.tertiary;
+        final pendingColor = colorScheme.primary;
         final stoppedColor = colorScheme.error;
 
-        // 状态点颜色：已连接=绿，运行中=橙，停止=红
         final dotColor = connected
             ? successColor
             : running
@@ -49,31 +51,39 @@ class StatusCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // 顶部：状态点 + 状态文字 + 设备名
+                // 顶部：状态点 + 状态文字 + 设备名 + 主题切换
                 Row(
                   children: [
                     _StatusDot(color: dotColor),
                     const SizedBox(width: 10),
                     Expanded(
-                      child: Text(
-                        statusText,
+                      child: Text(statusText,
                         style: theme.textTheme.titleMedium?.copyWith(
                           color: statusTextColor,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),
                     // 主题切换按钮
-                    IconButton(
-                      icon: const Icon(Icons.brightness_6_outlined),
-                      tooltip: '切换主题',
-                      onPressed: () => context
-                          .read<SettingsService>()
-                          .cycleThemeMode(),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: IconButton(
+                        icon: const Icon(Icons.brightness_6_outlined, size: 20),
+                        tooltip: '切换主题',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () =>
+                            context.read<SettingsService>().cycleThemeMode(),
+                      ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
+                // 分隔线
+                Divider(color: colorScheme.outlineVariant.withValues(alpha: 0.3)),
+                const SizedBox(height: 14),
                 // BLE 状态行
                 _InfoRow(
                   icon: Icons.bluetooth,
@@ -108,7 +118,7 @@ class StatusCard extends StatelessWidget {
                     value: ble.deviceName,
                   ),
                 ],
-                // v0.5.8: relay 计数（诊断 broadcast→BLE 是否通畅）
+                // 转发计数
                 if (connected && broadcast.relayCount > 0) ...[
                   const SizedBox(height: 8),
                   _InfoRow(
@@ -118,7 +128,7 @@ class StatusCard extends StatelessWidget {
                     valueColor: successColor,
                   ),
                 ],
-                // v0.5.8: BLE 写入错误（诊断写入失败原因）
+                // BLE 写入错误
                 if (connected && ble.lastError.isNotEmpty) ...[
                   const SizedBox(height: 8),
                   _InfoRow(
@@ -128,7 +138,7 @@ class StatusCard extends StatelessWidget {
                     valueColor: colorScheme.error,
                   ),
                 ],
-                // v0.5.8: 服务发现摘要（诊断特征值为何未发现）
+                // 服务发现摘要
                 if (connected && ble.discoverySummary.isNotEmpty) ...[
                   const SizedBox(height: 8),
                   _InfoRow(
@@ -147,27 +157,60 @@ class StatusCard extends StatelessWidget {
   }
 }
 
-/// 状态点
-class _StatusDot extends StatelessWidget {
+/// 状态点 — 带脉冲动画
+class _StatusDot extends StatefulWidget {
   const _StatusDot({required this.color});
   final Color color;
 
   @override
+  State<_StatusDot> createState() => _StatusDotState();
+}
+
+class _StatusDotState extends State<_StatusDot>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _pulse;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    );
+    _pulse = Tween<double>(begin: 0.6, end: 1.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+    _controller.repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 12,
-      height: 12,
-      decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: color.withValues(alpha: 0.4),
-            blurRadius: 8,
-            spreadRadius: 1,
+    return AnimatedBuilder(
+      animation: _pulse,
+      builder: (context, child) {
+        return Container(
+          width: 12,
+          height: 12,
+          decoration: BoxDecoration(
+            color: widget.color,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: widget.color.withValues(alpha: 0.4 * _pulse.value),
+                blurRadius: 10 * _pulse.value,
+                spreadRadius: 1,
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -191,23 +234,29 @@ class _InfoRow extends StatelessWidget {
     final theme = Theme.of(context);
     return Row(
       children: [
-        Icon(icon, size: 18, color: theme.colorScheme.onSurfaceVariant),
-        const SizedBox(width: 8),
-        Text(
-          '$label / ',
+        Container(
+          width: 28, height: 28,
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+            borderRadius: BorderRadius.circular(7),
+          ),
+          child: Icon(icon, size: 15,
+            color: (valueColor ?? theme.colorScheme.onSurfaceVariant)),
+        ),
+        const SizedBox(width: 10),
+        Text('$label / ',
           style: theme.textTheme.bodyMedium?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
           ),
         ),
         Expanded(
-          child: Text(
-            value,
+          child: Text(value,
             textAlign: TextAlign.right,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: theme.textTheme.bodyMedium?.copyWith(
               color: valueColor ?? theme.colorScheme.onSurface,
-              fontWeight: FontWeight.w500,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ),
