@@ -74,7 +74,7 @@
 #define LV_FONT_MONTSERRAT_48      1
 #define LV_FONT_MONTSERRAT_8       0
 #define LV_FONT_MONTSERRAT_10      0
-#define LV_FONT_MONTSERRAT_18      0
+#define LV_FONT_MONTSERRAT_18      1
 #define LV_FONT_MONTSERRAT_22      0
 #define LV_FONT_MONTSERRAT_26      0
 #define LV_FONT_MONTSERRAT_34      0
